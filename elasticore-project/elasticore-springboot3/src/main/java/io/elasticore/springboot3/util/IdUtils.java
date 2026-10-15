@@ -2,7 +2,7 @@ package io.elasticore.springboot3.util;
 
 import com.aventrix.jnanoid.jnanoid.NanoIdUtils;
 
-import java.util.Random;
+import java.security.SecureRandom;
 
 /**
  * Utility class for generating unique identifiers with custom formatting.
@@ -21,6 +21,12 @@ public class IdUtils {
     };
 
     /**
+     * The source of the random part. An ID is often a record's key in a URL, and
+     * java.util.Random, used here before, lets one ID predict the next.
+     */
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    /**
      * Generates a new unique ID consisting of:
      * <ul>
      *   <li>A prefix based on the caller's class name</li>
@@ -30,8 +36,7 @@ public class IdUtils {
      * @return the generated unique ID
      */
     public static String newId() {
-        Random random = new Random();
-        return getCallerClassName() + NanoIdUtils.randomNanoId(random, alphabet, 9);
+        return getCallerClassName() + NanoIdUtils.randomNanoId(RANDOM, alphabet, 9);
     }
 
     /**
@@ -44,8 +49,7 @@ public class IdUtils {
      * @return the generated unique ID
      */
     public static String newId(int size) {
-        Random random = new Random();
-        return getCallerClassName() + NanoIdUtils.randomNanoId(random, alphabet, size-3);
+        return getCallerClassName() + NanoIdUtils.randomNanoId(RANDOM, alphabet, size-3);
     }
 
     /**

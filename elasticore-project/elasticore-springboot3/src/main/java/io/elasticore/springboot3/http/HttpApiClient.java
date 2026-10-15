@@ -37,7 +37,9 @@ import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import java.io.IOException;
 import java.lang.reflect.Field;
+import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.URI;
@@ -46,8 +48,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -841,7 +846,7 @@ public class HttpApiClient {
         if (timeout == null) {
             timeout = HttpTimeoutConfig.defaults();
         }
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        SimpleClientHttpRequestFactory factory = ignoreSSL ? trustingEveryCertificate() : new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(timeout.getConnectTimeout());
         factory.setReadTimeout(timeout.getReadTimeout());
 
@@ -851,25 +856,61 @@ public class HttpApiClient {
             log.debug("RestTemplate configured with proxy: {}:{}", proxyHost, proxyPort);
         }
 
-        if (ignoreSSL) {
-            try {
-                TrustManager[] trustAllCerts = new TrustManager[]{
-                    new X509TrustManager() {
-                        public X509Certificate[] getAcceptedIssuers() { return null; }
-                        public void checkClientTrusted(X509Certificate[] certs, String authType) {}
-                        public void checkServerTrusted(X509Certificate[] certs, String authType) {}
-                    }
-                };
-                SSLContext sslContext = SSLContext.getInstance("TLS");
-                sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
-                HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
-                HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
-            } catch (Exception e) {
-                log.error("Failed to configure SSL trust all: {}", e.getMessage());
-            }
-        }
-
         return new RestTemplate(factory);
+    }
+
+    /**
+     * A request factory whose HTTPS connections accept any certificate and any host name.
+     *
+     * The trust is set on each connection this factory opens. It used to be set as the
+     * JVM-wide default, so one port with ignoreSSL switched certificate checks off for
+     * every other HTTPS connection in the application - other ports, other libraries -
+     * from its first multipart call on. If no TLS context can be made, the factory
+     * validates as usual.
+     */
+    private static SimpleClientHttpRequestFactory trustingEveryCertificate() {
+        final SSLContext sslContext;
+        try {
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                new X509TrustManager() {
+                    public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+                    public void checkClientTrusted(X509Certificate[] certs, String authType) {}
+                    public void checkServerTrusted(X509Certificate[] certs, String authType) {}
+                }
+            };
+            sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+        } catch (Exception e) {
+            log.error("Failed to configure SSL trust all: {}", e.getMessage());
+            return new SimpleClientHttpRequestFactory();
+        }
+        return new SimpleClientHttpRequestFactory() {
+            @Override
+            protected void prepareConnection(HttpURLConnection connection, String httpMethod) throws IOException {
+                if (connection instanceof HttpsURLConnection) {
+                    HttpsURLConnection https = (HttpsURLConnection) connection;
+                    https.setSSLSocketFactory(sslContext.getSocketFactory());
+                    https.setHostnameVerifier((hostname, session) -> true);
+                }
+                super.prepareConnection(connection, httpMethod);
+            }
+        };
+    }
+
+    /**
+     * The headers as a log line may show them: the values of credential headers -
+     * Authorization, cookies, API keys, tokens - are masked.
+     */
+    static Map<String, List<String>> withCredentialsMasked(HttpHeaders headers) {
+        Map<String, List<String>> shown = new LinkedHashMap<>();
+        headers.forEach((name, values) -> {
+            String lower = name.toLowerCase(Locale.ROOT);
+            boolean credential = lower.contains("authorization") || lower.contains("cookie")
+                    || lower.contains("token") || lower.contains("secret")
+                    || lower.contains("api-key") || lower.contains("apikey");
+            shown.put(name, credential ? Collections.singletonList("****") : values);
+        });
+        return shown;
     }
 
     /**
@@ -961,7 +1002,7 @@ public class HttpApiClient {
                         partHeaders.setContentType(new MediaType("application", "json", StandardCharsets.UTF_8));
                         HttpEntity<String> partEntity = new HttpEntity<>(jsonValue, partHeaders);
                         body.add(partName, partEntity);
-                        log.info("Added JSON part '{}' with Content-Type: {}, length: {}",
+                        log.debug("Added JSON part '{}' with Content-Type: {}, length: {}",
                             partName, partHeaders.getContentType(), jsonValue.length());
                     } catch (Exception e) {
                         log.warn("Failed to serialize object to JSON for part '{}': {}", partName, e.getMessage());
@@ -998,20 +1039,21 @@ public class HttpApiClient {
 
         HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 
-        // Add logging interceptor for debugging
+        // The request as sent, at DEBUG like the WebClient calls, with credentials masked:
+        // these lines used to go out at INFO with the Authorization header in them, which
+        // put a port's API key in every application log.
         restTemplate.getInterceptors().add((request, body1, execution) -> {
-            log.info("=== RestTemplate Multipart Request ===");
-            log.info("URI: {}", request.getURI());
-            log.info("Method: {}", request.getMethod());
-            log.info("Headers: {}", request.getHeaders());
-            log.info("Body length: {} bytes", body1.length);
+            if (log.isDebugEnabled()) {
+                log.debug("Multipart request {} {} headers {} body {} bytes", request.getMethod(), request.getURI(),
+                        withCredentialsMasked(request.getHeaders()), body1.length);
+            }
             return execution.execute(request, body1);
         });
 
-        log.info("Sending multipart request via RestTemplate to: {} [{}]", url, httpMethod);
+        log.debug("Sending multipart request via RestTemplate to: {} [{}]", url, httpMethod);
 
         ResponseEntity<T> response = restTemplate.exchange(url, httpMethod, requestEntity, responseType);
-        log.info("RestTemplate response status: {}", response.getStatusCode());
+        log.debug("RestTemplate response status: {}", response.getStatusCode());
         return response.getBody();
     }
 

@@ -83,6 +83,8 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'io.projectreactor:reactor-test'
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.11.0'
+    // An HTTPS MockWebServer with a certificate nobody trusts (MultipartTlsTest)
+    testImplementation 'com.squareup.okhttp3:okhttp-tls:4.11.0'
     testImplementation 'org.springframework:spring-test'
     testImplementation 'org.mockito:mockito-core'
     testImplementation 'org.mockito:mockito-junit-jupiter'

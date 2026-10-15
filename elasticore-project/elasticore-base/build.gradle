@@ -16,11 +16,13 @@ java {
 dependencies {
 
 
-    implementation 'com.fasterxml.jackson.core:jackson-core:2.13.0'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.0'
+    // Jackson 2.x still runs on Java 8. 2.13 went out with the security fixes since
+    // missing, SnakeYAML 1.x's among them.
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.22.3'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.3'
 
-    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.13.0'
-    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.13.0'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.22.3'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.22.3'
 
     implementation 'org.projectlombok:lombok:1.18.26'
     implementation 'com.github.jsqlparser:jsqlparser:4.0'
