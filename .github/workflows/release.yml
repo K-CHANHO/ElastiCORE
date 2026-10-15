@@ -15,15 +15,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
+  central:
     name: Publish to Maven Central
     runs-on: ubuntu-latest
     timeout-minutes: 120
     # The environment holds the Central token and the signing key; its rules say
     # which tags may use them and who approves.
     environment: release
-    permissions:
-      contents: write   # the GitHub release
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      state: ${{ steps.central.outputs.state }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,10 +41,12 @@ jobs:
             echo "::error::A release tag is v{major}.{minor}.{YYMMDD}, optionally -alpha{n}, -beta{n} or -rc{n}; $tag is not"
             exit 1
           fi
-          declared=$(sed -n 's/^elasticoreVersion=//p' gradle.properties | tr -d '\r')
-          if [ "$declared" != "$version" ]; then
-            echo "::error::gradle.properties says $declared, the tag says $version"; exit 1
-          fi
+          for property in elasticoreVersion elasticoreReleasedVersion; do
+            declared=$(sed -n "s/^$property=//p" gradle.properties | tr -d '\r')
+            if [ "$declared" != "$version" ]; then
+              echo "::error::$property in gradle.properties is $declared, the tag says $version"; exit 1
+            fi
+          done
           history=elasticore-project/elasticore-base/src/main/resources/elasticore-guide/elasticore-history.md
           if ! grep -qxF "## $version" "$history"; then
             echo "::error::$history has no '## $version' section"; exit 1
@@ -53,7 +56,8 @@ jobs:
             if git merge-base --is-ancestor "$GITHUB_SHA" "$branch"; then held=yes; fi
           done
           if [ "$held" != yes ]; then
-            echo "::error::$tag points at a commit that is on neither main nor a release branch"; exit 1
+            echo "::error::$tag points at a commit that is on neither main nor a release branch - push the branch first"
+            exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
@@ -82,7 +86,9 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASSWORD }}
-        run: ./gradlew centralBundle --console=plain
+        run: |
+          set -o pipefail
+          ./gradlew centralBundle --console=plain 2>&1 | tee bundle.log
 
       # USER_MANAGED (the default): Central validates the upload and it waits there
       # for Publish on central.sonatype.com. The environment variable
@@ -104,19 +110,34 @@ jobs:
           token=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 -w0)
           echo "::add-mask::$token"
           api=https://central.sonatype.com/api/v1/publisher
-          id=$(printf 'Authorization: Bearer %s\n' "$token" | curl --silent --show-error --fail-with-body --header @- \
-                 --form "bundle=@build/central-bundle.zip;type=application/octet-stream" \
-                 "$api/upload?name=elasticore-$VERSION&publishingType=$PUBLISHING_TYPE")
+          body="$RUNNER_TEMP/central-response"
+          # Central's own words, when it refuses something, as an annotation.
+          refused() {
+            echo "::error title=$1 (HTTP $2)::$(head -c 3000 "$body" | tr '\r\n' '  ' | sed 's/%/%25/g')"
+          }
+
+          code=$(printf 'Authorization: Bearer %s\n' "$token" | curl --silent --show-error --header @- \
+                   --output "$body" --write-out '%{http_code}' \
+                   --form "bundle=@build/central-bundle.zip;type=application/octet-stream" \
+                   "$api/upload?name=elasticore-$VERSION&publishingType=$PUBLISHING_TYPE")
+          if [ "$code" != 201 ]; then refused "Central refused the upload" "$code"; exit 1; fi
+          id=$(tr -d '[:space:]' < "$body")
+          if [ -z "$id" ]; then echo "::error::Central accepted the upload but returned no deployment id"; exit 1; fi
           echo "Deployment $id ($PUBLISHING_TYPE)"
+
           # Validation takes minutes; reaching Maven Central can take half an hour.
-          # A status request that fails is asked again: the deployment goes on regardless.
+          # A request that fails on the way is asked again; a refusal ends the step.
           for attempt in $(seq 1 120); do
             sleep 30
-            if ! status=$(printf 'Authorization: Bearer %s\n' "$token" | curl --silent --show-error --fail-with-body \
-                            --header @- --request POST "$api/status?id=$id"); then
-              echo "$(date -u +%H:%M:%S) status request failed, asking again"; continue
-            fi
-            state=$(jq -r '.deploymentState' <<< "$status")
+            code=$(printf 'Authorization: Bearer %s\n' "$token" | curl --silent --show-error --header @- \
+                     --output "$body" --write-out '%{http_code}' \
+                     --request POST "$api/status?id=$id") || code=000
+            case "$code" in
+              200) ;;
+              429|5??|000) echo "$(date -u +%H:%M:%S) status request failed (HTTP $code), asking again"; continue ;;
+              *) refused "Central refused the status request" "$code"; exit 1 ;;
+            esac
+            state=$(jq -r '.deploymentState' < "$body")
             echo "$(date -u +%H:%M:%S) $state"
             case "$state" in
               PUBLISHED)
@@ -124,19 +145,51 @@ jobs:
               VALIDATED)
                 if [ "$PUBLISHING_TYPE" = USER_MANAGED ]; then echo "state=$state" >> "$GITHUB_OUTPUT"; exit 0; fi ;;
               FAILED)
-                jq . <<< "$status"
-                echo "::error title=Central refused the deployment::$(jq -c '.errors' <<< "$status" | sed 's/%/%25/g')"
+                jq . < "$body"
+                echo "::error title=Central refused the deployment::$(jq -c '.errors' < "$body" | sed 's/%/%25/g')"
                 exit 1 ;;
             esac
           done
           echo "::error::Deployment $id is still not done after an hour - see https://central.sonatype.com/publishing/deployments"
           exit 1
 
-      - name: GitHub release
+      # Reading a job log takes a signed-in GitHub account, so the failing tests and
+      # Gradle's own explanation are put in the run summary as annotations.
+      - name: Failure summary
+        if: failure()
+        run: |
+          if [ -f build.log ]; then
+            sed 's/%/%25/g' build.log \
+              | awk '/ FAILED$/ {if (n > 0) print buf; buf = $0; n = 4; next}
+                     n > 0     {buf = buf "%0A" $0; if (--n == 0) print buf}
+                     END       {if (n > 0) print buf}' \
+              | head -9 | while IFS= read -r failure; do echo "::error title=Failed::${failure}"; done
+          fi
+          for log in build.log bundle.log; do
+            [ -f "$log" ] || continue
+            wrong=$(sed -n '/What went wrong:/,/^\* Try:/p' "$log" | head -40 | sed 's/%/%25/g' | awk 'BEGIN {ORS = "%0A"} {print}')
+            if [ -n "$wrong" ]; then echo "::error title=What went wrong ($log)::${wrong}"; fi
+          done
+
+  # A job of its own, so the only token that can write to the repository is never
+  # in a job that runs the build.
+  github:
+    name: GitHub release
+    needs: central
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Release notes from the history, and the release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-          STATE: ${{ steps.central.outputs.state }}
+          VERSION: ${{ needs.central.outputs.version }}
+          STATE: ${{ needs.central.outputs.state }}
         run: |
           set -euo pipefail
           notes="$RUNNER_TEMP/notes.md"
@@ -162,17 +215,3 @@ jobs:
               echo "then publish the draft GitHub release once the artifacts are on Maven Central."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
-
-      # Reading a job log takes a signed-in GitHub account, so the failing tests and
-      # Gradle's own explanation are put in the run summary as annotations.
-      - name: Failure summary
-        if: failure()
-        run: |
-          [ -f build.log ] || exit 0
-          sed 's/%/%25/g' build.log \
-            | awk '/ FAILED$/ {if (n > 0) print buf; buf = $0; n = 4; next}
-                   n > 0     {buf = buf "%0A" $0; if (--n == 0) print buf}
-                   END       {if (n > 0) print buf}' \
-            | head -9 | while IFS= read -r failure; do echo "::error title=Failed::${failure}"; done
-          wrong=$(sed -n '/What went wrong:/,/^\* Try:/p' build.log | head -40 | sed 's/%/%25/g' | awk 'BEGIN {ORS = "%0A"} {print}')
-          if [ -n "$wrong" ]; then echo "::error title=What went wrong::${wrong}"; fi

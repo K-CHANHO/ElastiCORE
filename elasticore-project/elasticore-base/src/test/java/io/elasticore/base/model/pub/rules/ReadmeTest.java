@@ -58,9 +58,12 @@ public class ReadmeTest {
     }
 
     @Test
-    @DisplayName("the install snippet names the version this build produces")
+    @DisplayName("the install snippet names the version on Maven Central")
     public void theInstallVersionIsCurrent() throws IOException {
-        String declared = versionFromBuildGradle();
+        String declared = releasedVersion();
+        // The README installs from Maven Central, where a snapshot never is.
+        assertTrue(!declared.endsWith("-SNAPSHOT"),
+                "elasticoreReleasedVersion is the last release, never a snapshot: " + declared);
         String readme = read(new File(repositoryRoot(), "README.md"));
 
         List<String> stale = new ArrayList<String>();
@@ -80,7 +83,8 @@ public class ReadmeTest {
         // Copying a version that no longer resolves is the first thing a new
         // user does, and the error they get names a missing artifact rather
         // than a stale document.
-        assertTrue(stale.isEmpty(), "the README installs " + stale + " but this build is " + declared);
+        assertTrue(stale.isEmpty(), "the README installs " + stale + " but the last release is " + declared
+                + " (elasticoreReleasedVersion in gradle.properties)");
     }
 
     @Test
@@ -109,20 +113,19 @@ public class ReadmeTest {
     }
 
     /**
-     * The version this build produces, from the one file that holds it.
+     * The version the README must name: the last one released to Maven Central.
      *
-     * It used to be a literal in build.gradle. The plugin is a build of its
-     * own - a plugin cannot be applied by a sibling module of the build that
-     * produces it - so the value moved to gradle.properties where both builds
-     * read it, and this test moved with it. That the move was noticed here
-     * rather than by a user installing a version that does not resolve is the
-     * whole reason this check exists.
+     * It used to be the version this build produces, which was right while the
+     * README told people to build and install locally. Since the README installs
+     * from Maven Central, the build's own version is a -SNAPSHOT between
+     * releases that no repository has - so gradle.properties keeps the last
+     * release apart, as elasticoreReleasedVersion, and the README follows that.
      */
-    private String versionFromBuildGradle() throws IOException {
+    private String releasedVersion() throws IOException {
         String text = read(new File(repositoryRoot(), "gradle.properties"));
 
-        Matcher m = Pattern.compile("(?m)^\\s*elasticoreVersion\\s*=\\s*(\\S+)").matcher(text);
-        assertTrue(m.find(), "gradle.properties names no elasticoreVersion");
+        Matcher m = Pattern.compile("(?m)^\\s*elasticoreReleasedVersion\\s*=\\s*(\\S+)").matcher(text);
+        assertTrue(m.find(), "gradle.properties names no elasticoreReleasedVersion");
         return m.group(1);
     }
 

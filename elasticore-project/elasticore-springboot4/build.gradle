@@ -104,7 +104,8 @@ publishing {
     }
     // Where to publish is the publisher's to say: -P flags or the
     // user's ~/.gradle/gradle.properties, never a file in this repository.
-    // Without elasticorePublishUrl only publishToMavenLocal is available.
+    // Without elasticorePublishUrl there is no such repository; publishToMavenLocal
+    // and the Maven Central bundle (centralBundle, gradle/publishing.gradle) still work.
     def publishUrl = project.findProperty('elasticorePublishUrl')
     if (publishUrl) {
         repositories {

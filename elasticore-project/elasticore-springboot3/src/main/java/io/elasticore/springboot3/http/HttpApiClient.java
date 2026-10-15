@@ -898,19 +898,29 @@ public class HttpApiClient {
     }
 
     /**
-     * The headers as a log line may show them: the values of credential headers -
-     * Authorization, cookies, API keys, tokens - are masked.
+     * The headers as a log line may show them: the values of every header that may
+     * carry a credential - Authorization, cookies, sessions, passwords, tokens,
+     * secrets, signatures and anything named a key (api_key, Ocp-Apim-Subscription-Key,
+     * x-functions-key) - are masked. Masking a harmless header costs nothing; showing
+     * a key puts it in every log the application ships.
      */
     static Map<String, List<String>> withCredentialsMasked(HttpHeaders headers) {
         Map<String, List<String>> shown = new LinkedHashMap<>();
         headers.forEach((name, values) -> {
             String lower = name.toLowerCase(Locale.ROOT);
-            boolean credential = lower.contains("authorization") || lower.contains("cookie")
-                    || lower.contains("token") || lower.contains("secret")
-                    || lower.contains("api-key") || lower.contains("apikey");
+            boolean credential = lower.contains("auth") || lower.contains("cookie") || lower.contains("session")
+                    || lower.contains("password") || lower.contains("token") || lower.contains("secret")
+                    || lower.contains("signature") || lower.contains("key");
             shown.put(name, credential ? Collections.singletonList("****") : values);
         });
         return shown;
+    }
+
+    /** A URL as a log line may show it: the query string, where some APIs take their key, is masked. */
+    static String withQueryMasked(Object url) {
+        String text = String.valueOf(url);
+        int query = text.indexOf('?');
+        return query < 0 ? text : text.substring(0, query) + "?****";
     }
 
     /**
@@ -1044,13 +1054,13 @@ public class HttpApiClient {
         // put a port's API key in every application log.
         restTemplate.getInterceptors().add((request, body1, execution) -> {
             if (log.isDebugEnabled()) {
-                log.debug("Multipart request {} {} headers {} body {} bytes", request.getMethod(), request.getURI(),
-                        withCredentialsMasked(request.getHeaders()), body1.length);
+                log.debug("Multipart request {} {} headers {} body {} bytes", request.getMethod(),
+                        withQueryMasked(request.getURI()), withCredentialsMasked(request.getHeaders()), body1.length);
             }
             return execution.execute(request, body1);
         });
 
-        log.debug("Sending multipart request via RestTemplate to: {} [{}]", url, httpMethod);
+        log.debug("Sending multipart request via RestTemplate to: {} [{}]", withQueryMasked(url), httpMethod);
 
         ResponseEntity<T> response = restTemplate.exchange(url, httpMethod, requestEntity, responseType);
         log.debug("RestTemplate response status: {}", response.getStatusCode());

@@ -117,19 +117,29 @@ public class MultipartTlsTest {
     @Test
     public void credentialHeadersAreMaskedAndTheRestAreShown() {
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization", SECRET);
-        headers.add("X-Api-Key", "k");
-        headers.add("Cookie", "SESSION=c");
-        headers.add("X-Auth-Token", "t");
+        String[] credentials = {"Authorization", "Proxy-Authorization", "X-Api-Key", "api_key", "Ocp-Apim-Subscription-Key",
+                "x-functions-key", "Cookie", "X-Session-Id", "X-Auth-Token", "X-Client-Secret", "X-Password",
+                "X-Signature"};
+        for (String name : credentials) {
+            headers.add(name, "s3cr3t");
+        }
         headers.add("Accept", "application/json");
+        headers.add("Content-Type", "multipart/form-data");
 
         Map<String, List<String>> shown = HttpApiClient.withCredentialsMasked(headers);
 
-        assertEquals(Collections.singletonList("****"), shown.get("Authorization"));
-        assertEquals(Collections.singletonList("****"), shown.get("X-Api-Key"));
-        assertEquals(Collections.singletonList("****"), shown.get("Cookie"));
-        assertEquals(Collections.singletonList("****"), shown.get("X-Auth-Token"));
+        for (String name : credentials) {
+            assertEquals(Collections.singletonList("****"), shown.get(name), name + " is shown");
+        }
         assertEquals(Collections.singletonList("application/json"), shown.get("Accept"));
+        assertEquals(Collections.singletonList("multipart/form-data"), shown.get("Content-Type"));
+    }
+
+    @Test
+    public void aLoggedUrlKeepsItsPathButNotItsQuery() {
+        assertEquals("https://api.example.com/v1/upload?****",
+                HttpApiClient.withQueryMasked("https://api.example.com/v1/upload?serviceKey=s3cr3t&page=1"));
+        assertEquals("https://api.example.com/v1/upload", HttpApiClient.withQueryMasked("https://api.example.com/v1/upload"));
     }
 
     private String send(boolean ignoreSSL) {

@@ -22,7 +22,8 @@ public class IdUtils {
 
     /**
      * The source of the random part. An ID is often a record's key in a URL, and
-     * java.util.Random, used here before, lets one ID predict the next.
+     * java.util.Random, used here before - seeded from the clock on every call - is
+     * a predictable generator, not one to make such keys with.
      */
     private static final SecureRandom RANDOM = new SecureRandom();
 
