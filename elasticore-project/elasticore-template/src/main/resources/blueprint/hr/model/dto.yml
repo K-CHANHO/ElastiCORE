@@ -1,0 +1,23 @@
+dto:
+  EmployeeDTO:
+    meta: dto @template(Employee)
+    fields:
+      deptName: string @ref(department.name)
+      deptCode: string @ref(department.code)
+      managerName: string @ref(manager.firstName)
+      directReports: --
+      skills: --
+
+  EmployeeSrchDTO:
+    meta: dto @searchable(entity=Employee, pageSize=25)
+    fields:
+      deptCode: string @search(eq) @ref(department.code)
+      deptName: string @search(like) @ref(department.name)
+
+  DepartmentDTO:
+    meta: dto @template(Department)
+    fields:
+
+  ProjectDTO:
+    meta: dto @template(Project)
+    fields:

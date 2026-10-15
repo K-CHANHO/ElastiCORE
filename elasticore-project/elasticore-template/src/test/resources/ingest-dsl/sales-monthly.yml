@@ -1,0 +1,51 @@
+# ElastiCORE Runtime Ingest DSL sample (월별 매출 정산 - 가상 예시)
+#
+# Shaped like a source-to-target mapping table and a target table DDL;
+# the layout, the names and the values are all made up.
+#
+# This DSL is loaded at runtime via DslLoader; it is NOT code-generated
+# (@runtime(map) meta annotation prevents codegen).
+#
+# Field name           = EntityConverter input Map key (developer pre-normalized)
+# @fn(...)             = transform function chain (comma-separated)
+# @target(X)           = output Map key; here it points to the target entity field name
+entity:
+  SalesMonthly:
+    meta: entity @runtime(map) @target(SalesMonth)
+    desc: "Monthly sales settlement ingest DSL (synthetic sample)"
+
+    fields:
+      # --- Identity / required ---
+      orderNo:        string  @id                                  @target(orderNo)
+      orderDate:      string  @fn(ymd)                             @target(orderDate)
+      orderStatus:    string                                       @target(orderStatus)
+      storeCd:        string                                       @target(storeCd)
+      qty:            number  @fn(toNum)                           @target(qty)
+      returnQty:      number  @fn(toNum)                           @target(returnQty)
+
+      # --- Names / codes ---
+      storeNm:        string                                       @target(storeNm)
+      customerNm:     string                                       @target(customerNm)
+      productCd:      string                                       @target(productCd)
+      productNm:      string                                       @target(productNm)
+      categoryCd:     string                                       @target(categoryCd)
+      memo:           string                                       @target(memo)
+
+      # --- Amounts (toNum handles commas/whitespace automatically) ---
+      unitPrice:      number  @fn(toNum)                           @target(unitPrice)
+      salesAmt:       number  @fn(toNum)                           @target(salesAmt)
+      discountAmt:    number  @fn(toNum)                           @target(discountAmt)
+      couponAmt:      number  @fn(toNum)                           @target(couponAmt)
+      pointAmt:       number  @fn(toNum)                           @target(pointAmt)
+      shippingFee:    number  @fn(toNum)                           @target(shippingFee)
+      taxAmt:         number  @fn(toNum)                           @target(taxAmt)
+      netAmt:         number  @fn(toNum)                           @target(netAmt)
+      feeRate:        number  @fn(toNum)                           @target(feeRate)
+      feeAmt:         number  @fn(toNum)                           @target(feeAmt)
+
+    # Fixed values (the mapping table's default-value column).
+    # Keyed by target entity field name; injected into every converted row.
+    staticValues:
+      payMethod:    "카드"
+      channelCd:    "X01"
+      settleType:   "MS"

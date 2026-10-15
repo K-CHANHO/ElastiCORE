@@ -1,0 +1,16 @@
+entity:
+  AuditEntity:
+    meta: entity @abstract
+    fields:
+      createdBy: string(50) @updatable(false)
+      createDate: datetime @updatable(false)
+      lastModifiedBy: string(50)
+      lastModifiedDate: datetime
+
+  # Regression test: abstract parent with a field whose type (PaymentMethod enum) lives in the
+  # SAME domain but is inherited by a child entity in ANOTHER domain. Verifies that Q.java
+  # import generation walks inherited fields from @extend parents across domains.
+  AuditableWithEnum:
+    meta: entity @abstract @extend(AuditEntity)
+    fields:
+      inheritedPaymentMethod: PaymentMethod

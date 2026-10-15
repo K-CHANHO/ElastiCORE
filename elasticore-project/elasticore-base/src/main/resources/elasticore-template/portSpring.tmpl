@@ -1,0 +1,30 @@
+package ${packageName};
+
+import java.util.*;
+import ${entityPackageName}.*;
+import ${dtoPackageName}.*;
+import ${enumPackageName}.*;
+import io.elasticore.springboot3.http.HttpQuery;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.service.annotation.*;
+
+
+/**
+ * ${description}
+ *
+ * A Spring HTTP service client (Spring Boot 4): Spring implements this
+ * interface. ${configClassName} registers it as group "${groupName}"; its base
+ * URL and timeouts are spring.http.serviceclient.${groupName}.* .
+ *
+ * Generated and managed by ElastiCORE.
+ */
+@HttpExchange
+public interface ${className} {
+
+    ${methodList}
+
+}

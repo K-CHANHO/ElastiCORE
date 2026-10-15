@@ -1,0 +1,40 @@
+//ecd:-1056777775H20250616105415_V1.0
+syntax = "proto3";
+
+option java_package = "io.elasticore.blueprint.proto";
+option java_multiple_files = true;
+
+service DummyOutputService {
+
+  /*
+   * grpc 데모
+  */
+  rpc findByID (MapTestInput) returns (DummyOutput);
+  
+  /*
+   * 브랜드별 차량 정보 조회
+  */
+  rpc findByBrand (_Empty) returns (DummyOutput);
+  
+}
+
+
+message DummyOutput {
+  string brand = 1;
+  string description = 2;
+}
+
+message _Empty {
+}
+
+message MapTestInput {
+  string id = 1;
+  map<string, StringList> attrs = 2;
+
+  message StringList {
+    repeated string value = 1;
+  }
+}
+
+
+

@@ -1,0 +1,39 @@
+package ${packageName};
+
+import ${enumPackageName}.*;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
+import io.swagger.v3.oas.annotations.media.Schema;
+import ${j2eePkgName}.validation.constraints.NotBlank;
+import ${j2eePkgName}.validation.constraints.NotNull;
+import ${j2eePkgName}.validation.constraints.Size;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import java.util.*;
+import java.time.*;
+import ${importList};
+
+
+/**
+ * ${className}
+ *
+ * Modify this code only as specified in the ElastiCORE guidelines
+ * to avoid regeneration conflicts.
+ *
+ * Generated and managed by ElastiCORE.
+ */
+${classAnnotationList}
+@Getter
+@Setter
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+public ${abstract} class ${className} ${extendInfo} ${implementInfo}  {
+
+	${fieldList}
+
+	/*-- print-if:${isSearchDTO} --*/
+    private String sortColumn; // Column to sort by
+    private Boolean sortAscending; // Sort order (true: ascending, false: descending)
+    /*-- print-if:end --*/
+}

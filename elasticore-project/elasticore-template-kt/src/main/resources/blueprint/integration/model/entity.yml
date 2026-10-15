@@ -1,0 +1,47 @@
+entity:
+  # Regression test bundle - cross-domain parent chain and cross-domain enum references:
+  #   1. @extend(AuditableWithEnum) chains to AuditableWithEnum @extend(AuditEntity) in the 'shop' domain
+  #      -> verifies cross-domain @extend resolves its import across domains.
+  #   2. relatedOrderStatus: OrderStatus - direct cross-domain enum field reference in integration
+  #      -> verifies entity and Q.java imports for a non-inherited cross-domain enum.
+  #   3. inheritedPaymentMethod: PaymentMethod comes via inheritance from AuditableWithEnum
+  #      -> verifies Q.java import scanning walks inherited fields (not only direct fields)
+  #         across domain boundaries.
+  ApiLog:
+    meta: entity @expose(50) @extend(AuditableWithEnum)
+    fields:
+      logId: long @id @sequence
+      endpoint: string(500)! @search(like)
+      method: string(10)!
+      requestBody: text
+      responseBody: text
+      statusCode: int @search(eq)
+      duration: long
+      createdAt: datetime @search(between)
+      relatedOrderStatus: OrderStatus @search(eq)
+
+  SyncRecord:
+    meta: entity @expose(30)
+    fields:
+      recordId: string(36) @id @genid
+      sourceSystem: string(50)! @search(eq)
+      targetSystem: string(50)! @search(eq)
+      entityType: string(50) @search(like)
+      entityId: string(100)
+      syncStatus: SyncStatus @search(in)
+      syncDate: datetime @search(between)
+      errorMessage: text
+      retryCount: int @default(0)
+
+enumeration:
+  SyncStatus:
+    meta: enum @db(code) @json(code)
+    fields:
+      code: string(3) @code
+      name: string(20)
+    enum:
+      PENDING: PND,Pending
+      IN_PROGRESS: IPR,In Progress
+      SUCCESS: SUC,Success
+      FAILED: FAL,Failed
+      SKIPPED: SKP,Skipped

@@ -1,0 +1,36 @@
+port:
+  SyncGrpcService:
+    meta: proto @server @client
+    methods:
+      getSyncStatus:
+        meta: method
+        params:
+          request: SyncStatusRequest
+        return: SyncStatusReply
+
+      pushRecord:
+        meta: method
+        params:
+          request: SyncPushRequest
+        return: SyncStatusReply
+
+dto:
+  SyncStatusRequest:
+    meta: dto
+    fields:
+      recordId: string
+      sourceSystem: string
+
+  SyncPushRequest:
+    meta: dto
+    fields:
+      recordId: string
+      payload: string
+      attempt: int
+
+  SyncStatusReply:
+    meta: dto
+    fields:
+      recordId: string
+      status: string
+      message: string

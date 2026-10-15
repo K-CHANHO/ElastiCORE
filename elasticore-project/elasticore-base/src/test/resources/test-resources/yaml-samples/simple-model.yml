@@ -1,0 +1,24 @@
+User:
+  fields:
+    id: long @id @sequence
+    username: string @search(like) @length(50)
+    email: string @search(eq) @length(100)
+    firstName: string @length(50)
+    lastName: string @length(50)
+    createdAt: datetime
+    updatedAt: datetime
+
+Product:
+  fields:
+    id: long @id @sequence
+    name: string @search(like) @length(200)
+    description: string @length(1000)
+    price: decimal
+    category: Category @ref(Category)
+    createdAt: datetime
+    
+Category:
+  fields:
+    id: long @id @sequence
+    name: string @search(like) @length(100)
+    description: string @length(500)

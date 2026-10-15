@@ -1,0 +1,30 @@
+package ${packageName};
+
+import ${enumPackageName}.*;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import org.hibernate.annotations.*;
+import org.hibernate.annotations.Parameter;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import ${j2eePkgName}.persistence.*;
+import java.util.*;
+import java.time.*;
+import ${importList};
+
+
+/**
+ * <pre>${description}</pre>
+ * hash:${hashCode}
+*/
+
+${classAnnotationList}
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public ${abstract} class ${className} ${extendInfo} ${implementInfo}  {
+
+	${fieldList}
+}

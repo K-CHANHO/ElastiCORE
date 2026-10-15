@@ -1,0 +1,71 @@
+dto:
+  ProductDTO:
+    meta: dto @template(Product)
+    fields:
+      categoryName: string @ref(category.name)
+      categoryCatId: long @ref(category.catId)
+      lastModifiedDate: --
+      createDate: --
+      thumbnail: --
+      manualContent: --
+
+  ProductInputDTO:
+    meta: dto @template(Product)
+    fields:
+      orderItems: --
+      createDate: --
+      lastModifiedDate: --
+      thumbnail: --
+      manualContent: --
+
+  ProductSrchDTO:
+    meta: dto @searchable(entity=Product, pageSize=20)
+    fields:
+      categoryName: string @search(like) @ref(category.name)
+
+  CategoryDTO:
+    meta: dto @template(Category)
+    fields:
+      subCategories: List<CategoryDTO>
+
+  OrderDTO:
+    meta: dto @template(Order)
+    fields:
+      customerFirstName: string @ref(customer.firstName)
+      customerEmail: string @ref(customer.email)
+      items: List<OrderItemDTO>
+
+  OrderItemDTO:
+    meta: dto @template(OrderItem)
+    fields:
+      productName: string @ref(product.name)
+      productSku: string @ref(product.sku)
+
+  CustomerDTO:
+    meta: dto @template(Customer)
+    fields:
+      orders: --
+      vipProfile: --
+
+  OrderSrchDTO:
+    meta: dto @searchable(entity=Order, pageSize=30)
+    fields:
+      customerName: string @search(like) @ref(customer.firstName)
+
+  CouponView:
+    meta: dto @template(Coupon)
+    fields:
+
+  CouponQuery:
+    meta: dto @searchable(entity=Coupon, pageSize=20)
+    fields:
+      title: string @search(like)
+
+  GiftCardDTO:
+    meta: dto @template(GiftCard)
+    fields:
+
+  GiftCardSrchDTO:
+    meta: dto @searchable(entity=GiftCard, pageSize=10)
+    fields:
+      cardNo: string @search(eq)

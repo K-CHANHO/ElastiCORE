@@ -1,0 +1,20 @@
+repository:
+  ProductRepository:
+    findByCategory:
+      "@": "@query"
+      categoryId: long
+      "->": List<Product>
+      "--": "SELECT p FROM Product p WHERE p.category.catId = :categoryId"
+
+    findByPriceRange:
+      "@": "@query"
+      minPrice: bigdecimal
+      maxPrice: bigdecimal
+      "->": List<Product>
+      "--": "SELECT p FROM Product p WHERE p.price BETWEEN :minPrice AND :maxPrice ORDER BY p.price"
+
+    findActiveByName:
+      "@": "@query"
+      name: string
+      "->": List<Product>
+      "--": "SELECT p FROM Product p WHERE p.name LIKE %:name% AND p.active = true"

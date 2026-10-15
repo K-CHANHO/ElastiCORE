@@ -1,0 +1,13 @@
+{
+  "name": "elasticore-generated-ts",
+  "private": true,
+  "description": "Type-checks and runs the TypeScript ElastiCORE generates. Pinned so the check is the same check everywhere it runs.",
+  "devDependencies": {
+    "typescript": "5.4.5",
+    "@types/node": "20.14.2"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "tsc -p tsconfig.run.json && node --test build/check/*.test.js"
+  }
+}

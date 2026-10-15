@@ -1,0 +1,114 @@
+entity:
+  Address:
+    meta: entity @embeddable
+    fields:
+      street: string(200)
+      city: string(100)
+      state: string(50)
+      zipCode: string(10)
+      country: string(50) @default("US")
+
+  Category:
+    meta: entity @expose(30) @extend(AuditEntity) @Index(name="idx_shop_cat_name", columnList="name")
+    fields:
+      catId: long @id @sequence
+      name: string(100)! @search(like)
+      description: text
+      sortOrder: int @default(0) @min(0) @max(999)
+      active: boolean @default(true)
+      parentCategory: Category @ManyToOne
+      subCategories: List<Category> @OneToMany(mappedBy="parentCategory") @dtype(List<CategoryDTO>)
+
+  Product:
+    meta: entity @expose(20) @extend(AuditEntity) @audited @pageable @table(shop_products) @Index(name="idx_shop_prod_sku", columnList="sku", unique="true")
+    fields:
+      productId: string(36) @id @genid
+      name: string(200)! @search(like)
+      sku: string(50)! @search(eq)
+      description: text
+      price: bigdecimal(12.2)! @min(0) @search(between)
+      costPrice: bigdecimal(12.2) @min(0)
+      stockQuantity: int @default(0) @min(0) @search(>=)
+      weight: float
+      rating: double @default(0.0) @min(0) @max(5)
+      active: boolean @default(true) @search(eq)
+      launchDate: date @search(between)
+      lastRestocked: datetime
+      uuid: string(36)
+      metadata: text
+      thumbnail: string(500)
+      manualContent: text
+      # ----- @columnDef / @jdbcType verification fields (Phase 1: string-based) -----
+      metadataRaw: string @columnDef('jsonb')                          # auto -> SqlTypes.JSON
+      oldPayload:  string @columnDef('json')                           # auto -> SqlTypes.JSON
+      customXml:   string @columnDef('xml')                            # auto -> SqlTypes.SQLXML
+      forceLong:   string @columnDef('jsonb') @jdbcType('LONG32VARCHAR') # explicit override
+      tags: string[] @env:stringarray
+      category: Category @dtype(CategoryDTO) @ManyToOne @fetchjoin @notaudited
+      orderItems: List<OrderItem> @OneToMany(mappedBy="product") @notaudited
+
+  Customer:
+    meta: entity @expose(25) @extend(AuditEntity) @Index(name="idx_shop_cust_email", columnList="email", unique="true")
+    fields:
+      customerId: long @id @sequence
+      firstName: string(50)! @search(like)
+      lastName: string(50)! @search(like)
+      email: string(100)! @search(eq)
+      phone: string(20)
+      dateOfBirth: date @search(between)
+      loyaltyPoints: long @default(0) @min(0)
+      customerType: CustomerType @search(eq)
+      billingAddress: Address @Embedded
+      vipProfile: VipProfile @OneToOne @cascade(ALL)
+      orders: List<Order> @OneToMany(mappedBy="customer") @dtype(List<OrderDTO>)
+
+  VipProfile:
+    meta: entity @service
+    fields:
+      profileId: long @id @sequence
+      tier: string(20) @default("SILVER")
+      discountRate: double @default(0.0) @min(0) @max(50)
+      enrollDate: date
+      customer: Customer @OneToOne(mappedBy="vipProfile")
+
+  Order:
+    meta: entity @expose(30) @extend(AuditEntity) @audited @Index(name="idx_shop_ord_date", columnList="order_date")
+    fields:
+      orderId: string(36) @id @genid
+      orderDate: datetime! @search(between)
+      totalAmount: bigdecimal(14.2) @default(0)
+      status: OrderStatus @search(in)
+      paymentMethod: PaymentMethod @search(eq)
+      customer: Customer @ManyToOne @fetchjoin @NotAudited
+      items: List<OrderItem> @OneToMany(mappedBy="order") @cascade(ALL) @dtype(List<OrderItemDTO>) @NotAudited
+      shippingAddress: Address @Embedded
+      notes: text
+      trackingNumber: string(50)
+      version: long @jpa:Version
+
+  OrderItem:
+    meta: entity @service
+    fields:
+      orderItemId: string(36) @id @genid
+      order: Order @ManyToOne @fetchjoin
+      itemSeq: int
+      product: Product @ManyToOne @fetchjoin
+      quantity: int! @min(1) @max(9999)
+      unitPrice: bigdecimal(12.2)!
+      discount: bigdecimal(8.2) @default(0)
+
+  # Service-pair coverage: no @service/@expose (2.x still writes the service
+  # by default), DTOs named apart from the entity.
+  Coupon:
+    meta: entity
+    fields:
+      couponCode: string(20) @id
+      title: string(100)! @search(like)
+      discountRate: int @min(0) @max(100)
+
+  # @service(false): 2.x writes no service pair, DTOs or not.
+  GiftCard:
+    meta: entity @service(false)
+    fields:
+      cardNo: string(20) @id
+      balance: bigdecimal(12.2)

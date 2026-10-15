@@ -1,0 +1,18 @@
+ElastiCORE
+Copyright 2023-2026 The ElastiCORE Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+
+Third-party content
+-------------------
+
+The pet store sample's images and catalog text are NOT under the Apache License:
+
+  elasticore-project/elasticore-sample-petstore/src/main/resources/static/images/
+  elasticore-project/elasticore-sample-petstore/src/main/resources/data.sql (catalog text)
+
+They come from the Java EE 7 Petstore by Antonio Goncalves
+(https://github.com/agoncal/agoncal-application-petstore-ee7) and are licensed
+under the Creative Commons Attribution-ShareAlike 3.0 Unported License
+(https://creativecommons.org/licenses/by-sa/3.0/).

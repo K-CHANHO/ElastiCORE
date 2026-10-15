@@ -1,0 +1,10 @@
+domain: testdomain
+namespace:
+  entity: io.elasticore.testdomain.entity
+  dto: io.elasticore.testdomain.dto
+  repository: io.elasticore.testdomain.repository
+  service: io.elasticore.testdomain.service
+mode: JPA
+jpa:
+  database: h2
+  showSql: true

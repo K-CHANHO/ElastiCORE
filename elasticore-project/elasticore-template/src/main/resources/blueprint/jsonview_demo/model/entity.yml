@@ -1,0 +1,43 @@
+entity:
+
+  # ================================================================
+  # Demo Entity 1: BlogPost (auto-inference demo)
+  # Shows how @jsonview(auto) infers views from existing annotations
+  # - @id @sequence fields: excluded from Create view
+  # - @updatable(false) fields: excluded from Update view
+  # ================================================================
+  BlogPost:
+    meta: entity @expose(20) @pageable
+    fields:
+      id: long @id @sequence
+      title: string(200)!
+      content: text
+      summary: string(500)
+      status: string(20) @default("DRAFT")
+      viewCount: int @default(0) @updatable(false)
+      author: string(100)! @updatable(false)
+      publishedAt: datetime
+      modifiedAt: datetime
+
+  # ================================================================
+  # Demo Entity 2: Member (manual @view demo)
+  # Shows explicit @view annotations for fine-grained control
+  # - @view(r): Read only
+  # - @view(c): Create only (e.g., password - never shown in response)
+  # - @view(cr): Create + Read (e.g., username - cannot change)
+  # - @view(cru): All views
+  # - @view(cu): Create + Update (e.g., bio - not in response)
+  # ================================================================
+  Member:
+    meta: entity @expose(20) @jsonview @pageable
+    fields:
+      id: long @id @sequence @view(r)
+      username: string(50)! @view(cr)
+      password: string(200) @view(c)
+      email: string(100)! @view(cru)
+      nickname: string(50) @view(cru)
+      role: string(20) @default("USER") @view(r)
+      loginCount: int @default(0) @view(r)
+      lastLoginAt: datetime @view(r)
+      bio: string(500) @view(cu)
+      createdAt: datetime @view(r)

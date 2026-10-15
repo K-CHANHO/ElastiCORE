@@ -1,0 +1,32 @@
+//ecd:841768546H20260808162632_V2.2
+syntax = "proto3";
+
+option java_package = "io.elasticore.blueprint.domain.integration.grpc";
+option java_multiple_files = true;
+
+service SyncGrpcService {
+
+  rpc getSyncStatus (SyncStatusRequest) returns (SyncStatusReply);
+  
+  rpc pushRecord (SyncPushRequest) returns (SyncStatusReply);
+}
+
+message SyncStatusRequest {
+  string recordId = 1;
+  string sourceSystem = 2;
+}
+
+message SyncStatusReply {
+  string recordId = 1;
+  string status = 2;
+  string message = 3;
+}
+
+message SyncPushRequest {
+  string recordId = 1;
+  string payload = 2;
+  int64 attempt = 3;
+}
+
+
+

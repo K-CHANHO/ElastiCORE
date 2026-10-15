@@ -1,0 +1,100 @@
+package ${packageName};
+
+import ${entityPackageName}.*;
+import ${dtoPackageName}.*;
+import ${repositoryPackageName}.*;
+
+import ${j2eePkgName}.persistence.TypedQuery;
+import ${j2eePkgName}.persistence.criteria.*;
+import ${j2eePkgName}.persistence.EntityManager;
+import ${j2eePkgName}.transaction.Transactional;
+
+import lombok.AllArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@Service
+@AllArgsConstructor
+public class ${className} {
+
+    protected final ${domainName}RepositoryHelper helper;
+
+
+    /**
+     * Retrieves all t${entityClassName} entities, converts them to ${dtoClassName} objects, and returns them as a list.
+     *
+     * @return a list of ${dtoClassName} objects
+     */
+    public List<${dtoClassName}> findAll() {
+        return helper.get${entityClassName}().findAll().stream()
+                .map(${mapperName}::toDTO)
+                .collect(Collectors.toList());
+    }
+
+
+
+
+    /**
+     * Finds a ${entityClassName} entity by its ID and converts it to a ${dtoClassName}.
+     *
+     * @param id the ID of the FaxResult entity
+     * @return an Optional containing the ${dtoClassName} if found, or an empty Optional if not found
+     */
+    @Transactional
+    public Optional<${dtoClassName}> findById(${pkType} id) {
+        return helper.get${entityClassName}().findById(id).map(${mapperName}::toDTO);
+    }
+
+
+    /**
+     * Saves a new ${entityClassName} entity based on the given DTO and returns the saved entity as a DTO.
+     *
+     * @param dto the ${dtoClassName} to save
+     * @return the saved ${dtoClassName}
+     */
+    public ${dtoClassName} save(${dtoClassName} dto) {
+        ${entityClassName} entity = ${mapperName}.toEntity(dto);
+        ${childRefInfo}
+        ${entityClassName} result = helper.get${entityClassName}().save(entity);
+        return ${mapperName}.toDTO(result);
+    }
+
+
+    /**
+     * Updates an existing ${entityClassName} entity based on the given DTO and returns the updated entity as a DTO.
+     *
+     * @param dto the ${dtoClassName} with updated information
+     * @return the updated ${dtoClassName}
+     */
+    public ${dtoClassName} update(${dtoClassName} dto) {
+        ${entityClassName} entity = helper.get${entityClassName}().findById(dto.get${pkName}()).orElse(null);
+        if(entity==null)
+          throw new IllegalArgumentException("Invalid ${dtoClassName} ID");
+        ${mapperName}.mapping(dto, entity, ${isSkipNull});
+        ${childRefInfo}
+
+        ${entityClassName} result = helper.get${entityClassName}().save(entity);
+        return ${mapperName}.toDTO(result);
+    }
+
+
+    /**
+     * Deletes a ${entityClassName} entity by its ID.
+     *
+     * @param id the ID of the ${entityClassName} entity to delete
+     */
+    public void deleteById(${pkType} id) {
+        helper.get${entityClassName}().deleteById(id);
+    }
+
+
+
+}

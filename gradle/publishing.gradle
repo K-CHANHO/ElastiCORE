@@ -1,0 +1,50 @@
+// Applied by every published artifact: elasticore-base (from the root build),
+// elasticore-springboot3, elasticore-springboot4 and the Gradle plugin build.
+//
+// The POM carries what a public repository such as Maven Central requires -
+// name, description, URL, license, developers, SCM - from this one place.
+//
+// Signing is on only when a key is given (never in this repository):
+//   signingKey      = the ASCII-armored private key; it spans lines, so pass it
+//                     as ORG_GRADLE_PROJECT_signingKey="$(cat key.asc)" or -P
+//   signingPassword = its passphrase (-P or ~/.gradle/gradle.properties)
+// Without them, builds and publishToMavenLocal work as before.
+
+apply plugin: 'signing'
+
+def projectUrl = 'https://github.com/xsko/ElastiCORE'
+
+publishing.publications.withType(MavenPublication).configureEach {
+    pom {
+        name = project.name
+        description = project.provider { project.description ?: project.name }
+        url = projectUrl
+        licenses {
+            license {
+                name = 'The Apache License, Version 2.0'
+                url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                distribution = 'repo'
+            }
+        }
+        developers {
+            developer {
+                id = 'elasticore'
+                name = 'The ElastiCORE Authors'
+                url = projectUrl
+            }
+        }
+        scm {
+            url = projectUrl
+            connection = 'scm:git:https://github.com/xsko/ElastiCORE.git'
+            developerConnection = 'scm:git:ssh://git@github.com/xsko/ElastiCORE.git'
+        }
+    }
+}
+
+def signingKey = project.findProperty('signingKey')
+if (signingKey) {
+    signing {
+        useInMemoryPgpKeys(signingKey, project.findProperty('signingPassword'))
+        sign publishing.publications
+    }
+}

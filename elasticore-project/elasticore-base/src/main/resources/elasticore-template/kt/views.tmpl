@@ -1,0 +1,24 @@
+package ${packageName}
+
+/**
+ * JsonView definitions for field visibility control per operation.
+ *
+ * - Create: Fields visible during entity creation (POST)
+ * - Update: Fields visible during entity update (PUT/PATCH)
+ * - Read: Fields visible in read/response operations (GET, all responses)
+ *
+ * Fields without @JsonView are visible in ALL operations.
+ *
+ * Generated and managed by ElastiCORE.
+ */
+class Views {
+
+    /** Fields visible during entity creation (POST) */
+    interface Create
+
+    /** Fields visible during entity update (PUT/PATCH) */
+    interface Update
+
+    /** Fields visible in read/response operations (GET, all responses) */
+    interface Read
+}

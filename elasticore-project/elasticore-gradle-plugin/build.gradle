@@ -1,0 +1,127 @@
+plugins {
+    id 'java-gradle-plugin'
+    id 'maven-publish'
+}
+
+// Its own build now, so the values the root used to supply are set here.
+// The version comes from the repository's gradle.properties, which both
+// builds read - see the note there.
+group = 'io.elasticore'
+description = 'Gradle plugin that registers the ElastiCORE generation tasks'
+
+// An included build has its own gradle.properties, so the repository's is read
+// directly rather than duplicated here. Duplicated, it would be the copy that
+// is one bump behind, which is the failure this whole arrangement avoids.
+def repositoryProperties = new Properties()
+file("${rootDir}/../../gradle.properties").withInputStream { repositoryProperties.load(it) }
+version = repositoryProperties.getProperty('elasticoreVersion')
+
+repositories {
+    mavenCentral()
+}
+
+// The rule guide tells a user to fetch this plugin from a Maven repository, and until this
+// block existed nothing published it anywhere - the guide recommended an
+// artifact that could not be obtained. java-gradle-plugin adds the plugin
+// marker publication itself; only the destination is named here, the same one
+// the root build uses.
+publishing {
+    // Same as the root build: the destination comes from -P or ~/.gradle/gradle.properties.
+    def publishUrl = project.findProperty('elasticorePublishUrl')
+    if (publishUrl) {
+        repositories {
+            maven {
+                name = 'release'
+                url = publishUrl
+                credentials {
+                    username = project.findProperty('elasticorePublishUsername')
+                    password = project.findProperty('elasticorePublishPassword')
+                }
+            }
+        }
+    }
+}
+
+// Gradle 8.8 runs the plugin on the daemon's JVM, which is 17 here. The
+// framework it launches still targets 8; that is the launched process, not
+// this one, so the two do not have to agree.
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+    withSourcesJar()
+    withJavadocJar()
+}
+
+// What the root build sets for its modules, set here for this build of its own.
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+tasks.withType(Javadoc).configureEach {
+    options.encoding = 'UTF-8'
+}
+tasks.withType(Jar).configureEach {
+    exclude '**/.*/**'
+}
+
+// POM metadata and signing, shared with the framework's artifacts
+apply from: file('../../gradle/publishing.gradle')
+
+dependencies {
+    // The root build applies the java plugin to every subproject before this
+    // file is read, so java-gradle-plugin's own contribution of these does not
+    // reach the compile classpath. Named explicitly rather than relying on
+    // plugin ordering nobody can see from here.
+    implementation gradleApi()
+    implementation localGroovy()
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+gradlePlugin {
+    plugins {
+        elasticore {
+            id = 'io.elasticore'
+            implementationClass = 'io.elasticore.gradle.ElastiCorePlugin'
+            displayName = 'ElastiCORE'
+            description = 'Registers the ElastiCORE generation tasks a project would otherwise hand-write'
+        }
+    }
+}
+
+// Versions.java is generated so the framework version the plugin resolves is
+// the version the plugin was built with. Written by hand it would be a second
+// place to bump, and the one people forget.
+def generatedSrc = layout.buildDirectory.dir('generated/version')
+
+task generateVersionClass {
+    def out = generatedSrc
+    def elasticoreVersion = project.version.toString()
+    inputs.property('version', elasticoreVersion)
+    outputs.dir(out)
+
+    doLast {
+        def pkg = out.get().dir('io/elasticore/gradle').asFile
+        pkg.mkdirs()
+        new File(pkg, 'Versions.java').setText("""package io.elasticore.gradle;
+
+/** Generated. The framework version this plugin was built against. */
+final class Versions {
+    static final String ELASTICORE = "${elasticoreVersion}";
+
+    private Versions() {
+    }
+}
+""", 'UTF-8')
+    }
+}
+
+// The task, not just its directory: then everything that reads the sources
+// (compileJava, sourcesJar, javadoc) runs it first.
+sourceSets.main.java.srcDir(generateVersionClass)
+
+// The root build used to configure this for every subproject.
+test {
+    useJUnitPlatform()
+}

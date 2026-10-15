@@ -1,0 +1,10 @@
+# The shop's measures - what the business means by revenue, an order, the average order.
+# Exported to the Apache Ossie semantic model (blueprint/semantic_model.yml) as metrics,
+# so a BI or AI tool asks for "revenue" and gets this definition, not its own guess.
+metrics:
+  revenue:         sum(PurchaseOrder.total) where status != CANCELLED @terms(sales, 매출액) -- 매출 (취소 제외, VAT 포함·할인 후 금액)
+  orderCount:      count(PurchaseOrder) where status != CANCELLED @terms(orders, 주문 건수) -- 주문 수 (취소 제외)
+  averageOrder:    revenue / orderCount @terms(AOV, 객단가) -- 주문 1건 평균 금액
+  shippedOrders:   count(PurchaseOrder) where status = SHIPPED -- 배송된 주문 수
+  cancelledOrders: count(PurchaseOrder) where status = CANCELLED -- 취소된 주문 수
+  customerCount:   count(Customer) where role = USER @terms(members, 회원 수) -- 고객 수 (관리자 제외)

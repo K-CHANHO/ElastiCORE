@@ -1,0 +1,120 @@
+port:
+  TestDbmsService:
+    meta: dbms
+    methods:
+      countAllLogs:
+        meta: method
+        params:
+        return: int
+        nativeQuery: true
+        query: |
+          SELECT COUNT(*) FROM intg_api_log
+
+      getLogById:
+        meta: method
+        params:
+          logId: long
+        return: DbmsResultDTO
+        nativeQuery: true
+        query: |
+          SELECT log_id as logId, endpoint, method, status_code as statusCode,
+                 duration, CAST(created_at AS VARCHAR) as createdAt
+          FROM intg_api_log WHERE log_id = :logId
+
+      findLogsByMethod:
+        meta: method
+        params:
+          method: string
+        return: List<DbmsResultDTO>
+        nativeQuery: true
+        query: |
+          SELECT log_id as logId, endpoint, method, status_code as statusCode,
+                 duration, CAST(created_at AS VARCHAR) as createdAt
+          FROM intg_api_log WHERE method = :method ORDER BY log_id
+
+      searchLogs:
+        meta: method
+        params:
+          input: DbmsSearchInput
+        return: List<DbmsResultDTO>
+        nativeQuery: true
+        query: |
+          SELECT log_id as logId, endpoint, method, status_code as statusCode,
+                 duration, CAST(created_at AS VARCHAR) as createdAt
+          FROM intg_api_log WHERE 1=1
+          AND endpoint LIKE CONCAT('%', :keyword, '%') /* if:keyword */
+          AND status_code = :status /* if:status */
+          /* if:minId */
+          AND log_id >= :minId
+          /* if-end */
+          /* if:maxId */
+          AND log_id <= :maxId
+          /* if-end */
+          ORDER BY log_id
+
+      searchLogsPaged:
+        meta: method
+        params:
+          input: DbmsSearchInput
+        return: Page<DbmsResultDTO>
+        pageable: true
+        ref: searchLogs
+
+      getLogStats:
+        meta: method
+        params:
+        return: DbmsStatsDTO
+        nativeQuery: true
+        query: |
+          SELECT COUNT(*) as totalCount,
+                 COALESCE(AVG(CAST(duration AS DOUBLE PRECISION)), 0) as avgDuration,
+                 COALESCE(MAX(duration), 0) as maxDuration,
+                 COALESCE(MIN(duration), 0) as minDuration
+          FROM intg_api_log
+
+      updateLogStatus:
+        meta: method
+        params:
+          logId: long
+          statusCode: int
+        return: int
+        nativeQuery: true
+        query: |
+          UPDATE intg_api_log SET status_code = :statusCode WHERE log_id = :logId
+
+      insertLogBatch:
+        meta: method
+        params:
+          items: list<DbmsResultDTO>
+        return: int
+        nativeQuery: true
+        query: |
+          INSERT INTO intg_api_log (endpoint, method, status_code, duration)
+          VALUES (:endpoint, :method, :statusCode, :duration)
+
+      getEndpointById:
+        meta: method
+        params:
+          logId: long
+        return: string
+        nativeQuery: true
+        query: |
+          SELECT endpoint FROM intg_api_log WHERE log_id = :logId
+
+      countByStatus:
+        meta: method
+        params:
+          statusCode: int
+        return: long
+        nativeQuery: true
+        query: |
+          SELECT COUNT(*) FROM intg_api_log WHERE status_code = :statusCode
+
+      existsByEndpoint:
+        meta: method
+        params:
+          endpoint: string
+        return: int
+        nativeQuery: true
+        query: |
+          SELECT CASE WHEN EXISTS(SELECT 1 FROM intg_api_log WHERE endpoint = :endpoint) THEN 1 ELSE 0 END

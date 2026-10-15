@@ -1,0 +1,133 @@
+package io.elasticore.springboot3.validation;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.context.support.StaticMessageSource;
+import org.springframework.validation.FieldError;
+
+import java.util.Locale;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+/**
+ * An API error in the caller's language: the request's locale, the domain's
+ * bundle and a translation beside it, the application's own messages, and
+ * the default the code carries when no one translated it.
+ */
+@ExtendWith(OutputCaptureExtension.class)
+public class ErrorMessagesTest {
+
+    private final ErrorMessages messages = new ErrorMessages(null, "i18n/sample-messages");
+
+    @AfterEach
+    void reset() {
+        LocaleContextHolder.resetLocaleContext();
+        RequestContextHolder.resetRequestAttributes();
+    }
+
+    /**
+     * No Accept-Language: Spring's resolver answers the server machine's
+     * locale (here Korean); the error is said in the default wording instead.
+     */
+    @Test
+    public void aRequestThatNamesNoLanguageGetsTheDefaultWording() {
+        Locale machine = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.KOREAN);
+            LocaleContextHolder.setLocale(Locale.KOREAN);
+            // What a container answers for a request without the header: its own locale.
+            MockHttpServletRequest headerless = new MockHttpServletRequest() {
+                @Override
+                public Locale getLocale() {
+                    return Locale.KOREAN;
+                }
+            };
+            RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(headerless));
+            assertEquals("Not found", messages.text("error.not-found.title", "x"));
+
+            // No header, but the application chose Korean (a session, a cookie): kept.
+            RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+            assertEquals("없음", messages.text("error.not-found.title", "x"));
+
+            MockHttpServletRequest korean = new MockHttpServletRequest();
+            korean.addHeader("Accept-Language", "ko");
+            RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(korean));
+            assertEquals("없음", messages.text("error.not-found.title", "x"));
+        } finally {
+            Locale.setDefault(machine);
+        }
+    }
+
+    /** No messages.properties in the application: looked for once, and no warning on every error. */
+    @Test
+    public void aBundleThatIsNotThereIsNotReportedOnEveryLookup(CapturedOutput output) {
+        LocaleContextHolder.setLocale(Locale.GERMAN);
+        for (int i = 0; i < 3; i++) messages.text("error.not-found.title", "x");
+        assertEquals(-1, output.getAll().indexOf("not found for MessageSource"), output.getAll());
+    }
+
+    @Test
+    public void theRequestLanguageChoosesTheTranslation() {
+        LocaleContextHolder.setLocale(Locale.KOREAN);
+        assertEquals("주문 상태가 SHIPPED이면 배송할 수 없습니다 ([PLACED])",
+                messages.text("state.Order.status.ship", "default", "SHIPPED", "[PLACED]"));
+
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        assertEquals("Order cannot ship when status is SHIPPED; it must be [PLACED]",
+                messages.text("state.Order.status.ship", "default", "SHIPPED", "[PLACED]"));
+    }
+
+    /** A language no one translated gets the bundle's default, never the server machine's language. */
+    @Test
+    public void anUntranslatedLanguageGetsTheDefaultBundle() {
+        Locale machine = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.KOREAN);
+            LocaleContextHolder.setLocale(Locale.FRENCH);
+            assertEquals("Not found", messages.text("error.not-found.title", "x"));
+        } finally {
+            Locale.setDefault(machine);
+        }
+    }
+
+    @Test
+    public void aTranslatorKeepsApostrophesOfAMessageWithoutValues() {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        assertEquals("The total can't be negative", messages.text("invariant.Order.total-ge-0", "x"));
+    }
+
+    @Test
+    public void noTranslationAnywhereIsTheDefaultAsWritten() {
+        LocaleContextHolder.setLocale(Locale.KOREAN);
+        assertEquals("Order {0} as is", messages.text("no.such.code", "Order {0} as is", "ignored"));
+        assertEquals("plain", messages.text(null, "plain"));
+    }
+
+    @Test
+    public void theApplicationsMessageSourceIsConsultedLast() {
+        StaticMessageSource app = new StaticMessageSource();
+        app.addMessage("custom.code", Locale.KOREAN, "앱 메시지");
+        app.addMessage("error.not-found.title", Locale.KOREAN, "shadowed");
+        ErrorMessages withApp = new ErrorMessages(app, "i18n/sample-messages");
+
+        LocaleContextHolder.setLocale(Locale.KOREAN);
+        assertEquals("앱 메시지", withApp.text("custom.code", "x"));
+        // The domain bundle's translation is found before the application's MessageSource.
+        assertEquals("없음", withApp.text("error.not-found.title", "x"));
+    }
+
+    @Test
+    public void aFieldErrorFallsBackToItsDefaultMessage() {
+        LocaleContextHolder.setLocale(Locale.KOREAN);
+        FieldError error = new FieldError("customerDTO", "login", null, false,
+                new String[]{"NotNull.customerDTO.login", "NotNull"}, null, "must not be null");
+        assertEquals("must not be null", messages.text(error));
+    }
+}

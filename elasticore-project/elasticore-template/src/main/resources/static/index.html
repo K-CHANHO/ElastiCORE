@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ElastiCORE Feature Test Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; min-height: 100vh; }
+
+        .header { background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); border: 1px solid #334155; padding: 32px; border-radius: 16px; margin-bottom: 24px; text-align: center; }
+        .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; background: linear-gradient(90deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .header p { color: #94a3b8; font-size: 14px; }
+
+        .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: #1e293b; border: 1px solid #334155; padding: 20px; border-radius: 12px; text-align: center; }
+        .stat-value { font-size: 36px; font-weight: 700; line-height: 1; }
+        .stat-label { font-size: 12px; color: #64748b; margin-top: 8px; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-value.green { color: #22c55e; }
+        .stat-value.red { color: #ef4444; }
+        .stat-value.blue { color: #3b82f6; }
+        .stat-value.purple { color: #a78bfa; }
+
+        .progress-container { margin-bottom: 24px; }
+        .progress-bar { background: #1e293b; border-radius: 8px; overflow: hidden; height: 10px; border: 1px solid #334155; }
+        .progress-fill { height: 100%; transition: width 0.6s ease; border-radius: 8px; }
+        .progress-fill.green { background: linear-gradient(90deg, #22c55e, #16a34a); }
+        .progress-fill.yellow { background: linear-gradient(90deg, #eab308, #ca8a04); }
+        .progress-fill.red { background: linear-gradient(90deg, #ef4444, #dc2626); }
+        .progress-text { text-align: right; font-size: 13px; color: #94a3b8; margin-top: 4px; }
+
+        .controls { display: flex; gap: 12px; margin-bottom: 24px; align-items: center; flex-wrap: wrap; }
+        .btn { padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; }
+        .btn-primary:hover { background: linear-gradient(135deg, #2563eb, #1d4ed8); transform: translateY(-1px); }
+        .btn-primary:disabled { background: #475569; cursor: not-allowed; transform: none; }
+        .btn-secondary { background: #334155; color: #e2e8f0; border: 1px solid #475569; }
+        .btn-secondary:hover { background: #475569; }
+        .status-text { color: #94a3b8; font-size: 14px; }
+
+        .category-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+        .cat-btn { padding: 6px 14px; border: 1px solid #475569; border-radius: 6px; background: #1e293b; color: #94a3b8; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+        .cat-btn:hover { border-color: #3b82f6; color: #e2e8f0; }
+        .cat-btn.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+        .cat-btn .badge { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+        .cat-btn .badge.pass { background: #166534; color: #22c55e; }
+        .cat-btn .badge.fail { background: #7f1d1d; color: #ef4444; }
+
+        .test-list { background: #1e293b; border: 1px solid #334155; border-radius: 12px; overflow: hidden; }
+        .test-item { display: flex; align-items: center; padding: 14px 20px; border-bottom: 1px solid #293548; cursor: pointer; transition: background 0.15s; }
+        .test-item:last-child { border-bottom: none; }
+        .test-item:hover { background: #293548; }
+        .test-icon { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; margin-right: 14px; flex-shrink: 0; }
+        .test-icon.pass { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .test-icon.fail { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .test-icon.pending { background: rgba(148,163,184,0.15); color: #94a3b8; }
+        .test-info { flex: 1; }
+        .test-name { font-weight: 500; font-size: 14px; }
+        .test-msg { font-size: 12px; color: #64748b; margin-top: 2px; }
+        .test-meta { display: flex; align-items: center; gap: 12px; }
+        .test-cat { font-size: 11px; color: #64748b; background: #334155; padding: 2px 8px; border-radius: 4px; }
+        .test-duration { font-size: 12px; color: #475569; }
+        .test-detail { padding: 12px 20px 16px 62px; color: #94a3b8; font-size: 13px; background: #162032; border-bottom: 1px solid #293548; display: none; font-family: monospace; white-space: pre-wrap; }
+
+        .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #475569; border-top: 2px solid #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .empty-state { text-align: center; padding: 60px 20px; color: #64748b; }
+        .empty-state h3 { margin-bottom: 8px; color: #94a3b8; }
+
+        @media (max-width: 768px) {
+            .stats-bar { grid-template-columns: repeat(2, 1fr); }
+            body { padding: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>ElastiCORE Feature Test Dashboard</h1>
+        <p>Comprehensive test suite for all ElastiCORE DSL features - Entity, DTO, Search, Port, JoinSpec, Mapper, and more</p>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat-card">
+            <div class="stat-value blue" id="total">-</div>
+            <div class="stat-label">Total Tests</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value green" id="passed">-</div>
+            <div class="stat-label">Passed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value red" id="failed">-</div>
+            <div class="stat-label">Failed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value purple" id="rate">-%</div>
+            <div class="stat-label">Pass Rate</div>
+        </div>
+    </div>
+
+    <div class="progress-container">
+        <div class="progress-bar">
+            <div class="progress-fill green" id="progressBar" style="width:0%"></div>
+        </div>
+        <div class="progress-text" id="progressText"></div>
+    </div>
+
+    <div class="controls">
+        <button class="btn btn-primary" id="runAllBtn" onclick="runAll()">Run All Tests</button>
+        <button class="btn btn-secondary" onclick="clearResults()">Clear</button>
+        <span class="status-text" id="statusText"></span>
+    </div>
+
+    <div class="category-buttons" id="categoryButtons"></div>
+
+    <div class="test-list" id="testList">
+        <div class="empty-state">
+            <h3>No tests executed yet</h3>
+            <p>Click "Run All Tests" or select a category to begin testing</p>
+        </div>
+    </div>
+
+    <script>
+        let allResults = [];
+        let categoryData = {};
+
+        async function loadCategories() {
+            try {
+                const resp = await fetch('/api/tests/categories');
+                const cats = await resp.json();
+                const container = document.getElementById('categoryButtons');
+                container.innerHTML = cats.map(cat =>
+                    `<button class="cat-btn" onclick="runCategory('${cat.name}')" data-cat="${cat.name}">
+                        ${cat.name.replace(/_/g, ' ')}
+                        <span class="badge" id="badge-${cat.name}" style="display:none"></span>
+                    </button>`
+                ).join('');
+            } catch(e) {
+                console.error('Failed to load categories:', e);
+            }
+        }
+
+        async function runAll() {
+            const btn = document.getElementById('runAllBtn');
+            const status = document.getElementById('statusText');
+            btn.disabled = true;
+            status.innerHTML = '<span class="spinner"></span>Running all tests...';
+
+            try {
+                const resp = await fetch('/api/tests/run-all');
+                const data = await resp.json();
+                allResults = data.results || [];
+                categoryData = data.categoryStats || {};
+                renderResults(data);
+                status.textContent = `Completed in ${allResults.reduce((s, r) => s + r.durationMs, 0)}ms`;
+            } catch(e) {
+                status.textContent = 'Error: ' + e.message;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function runCategory(cat) {
+            const status = document.getElementById('statusText');
+            status.innerHTML = `<span class="spinner"></span>Running ${cat} tests...`;
+
+            // Update active button
+            document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector(`[data-cat="${cat}"]`)?.classList.add('active');
+
+            try {
+                const resp = await fetch(`/api/tests/run/${cat}`);
+                const data = await resp.json();
+
+                // Merge results
+                allResults = allResults.filter(r => r.category !== cat).concat(data.results || []);
+                renderResults({
+                    total: allResults.length,
+                    passed: allResults.filter(r => r.passed).length,
+                    failed: allResults.filter(r => !r.passed).length,
+                    rate: allResults.length ? Math.round(allResults.filter(r => r.passed).length * 10000 / allResults.length) / 100 : 0,
+                    results: allResults,
+                    categoryStats: data.categoryStats
+                });
+                status.textContent = `${cat} tests completed`;
+            } catch(e) {
+                status.textContent = 'Error: ' + e.message;
+            }
+        }
+
+        function renderResults(data) {
+            // Update stats
+            document.getElementById('total').textContent = data.total;
+            document.getElementById('passed').textContent = data.passed;
+            document.getElementById('failed').textContent = data.failed;
+            document.getElementById('rate').textContent = data.rate + '%';
+
+            // Update progress bar
+            const bar = document.getElementById('progressBar');
+            const pctText = document.getElementById('progressText');
+            bar.style.width = data.rate + '%';
+            bar.className = 'progress-fill ' + (data.rate === 100 ? 'green' : data.rate >= 70 ? 'yellow' : 'red');
+            pctText.textContent = `${data.passed} of ${data.total} tests passed (${data.rate}%)`;
+
+            // Update category badges
+            if (data.categoryStats) {
+                Object.entries(data.categoryStats).forEach(([cat, stat]) => {
+                    const badge = document.getElementById(`badge-${cat}`);
+                    if (badge) {
+                        badge.style.display = 'inline-block';
+                        badge.textContent = `${stat.passed}/${stat.total}`;
+                        badge.className = 'badge ' + (stat.failed > 0 ? 'fail' : 'pass');
+                    }
+                });
+            }
+
+            // Render test list
+            const list = document.getElementById('testList');
+            if (!data.results || data.results.length === 0) {
+                list.innerHTML = '<div class="empty-state"><h3>No tests found</h3><p>Check that test executors are registered</p></div>';
+                return;
+            }
+
+            list.innerHTML = data.results.map((r, i) => `
+                <div class="test-item" onclick="toggleDetail(${i})">
+                    <div class="test-icon ${r.passed ? 'pass' : 'fail'}">${r.passed ? '\u2713' : '\u2717'}</div>
+                    <div class="test-info">
+                        <div class="test-name">${escapeHtml(r.testName)}</div>
+                        <div class="test-msg">${escapeHtml(r.message || '')}</div>
+                    </div>
+                    <div class="test-meta">
+                        <span class="test-cat">${r.category}</span>
+                        <span class="test-duration">${r.durationMs}ms</span>
+                    </div>
+                </div>
+                <div class="test-detail" id="detail-${i}">${escapeHtml(r.errorDetail || 'No additional details')}</div>
+            `).join('');
+        }
+
+        function toggleDetail(idx) {
+            const el = document.getElementById('detail-' + idx);
+            el.style.display = el.style.display === 'none' || !el.style.display ? 'block' : 'none';
+        }
+
+        function clearResults() {
+            allResults = [];
+            categoryData = {};
+            document.getElementById('total').textContent = '-';
+            document.getElementById('passed').textContent = '-';
+            document.getElementById('failed').textContent = '-';
+            document.getElementById('rate').textContent = '-%';
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressText').textContent = '';
+            document.getElementById('statusText').textContent = '';
+            document.getElementById('testList').innerHTML =
+                '<div class="empty-state"><h3>No tests executed yet</h3><p>Click "Run All Tests" or select a category to begin testing</p></div>';
+            document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.badge').forEach(b => b.style.display = 'none');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        // Load categories on page load
+        loadCategories();
+    </script>
+</body>
+</html>

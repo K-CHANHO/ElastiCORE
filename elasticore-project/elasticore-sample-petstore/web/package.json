@@ -1,0 +1,13 @@
+{
+  "name": "petstore-web",
+  "private": true,
+  "description": "The pet store's browser side: the client ElastiCORE generates (src/main/ts) and the pages that use it.",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "build": "npm run check && esbuild src/main.ts --bundle --minify --sourcemap --target=es2020 --outfile=../src/main/resources/static/app.js"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "typescript": "5.9.3"
+  }
+}

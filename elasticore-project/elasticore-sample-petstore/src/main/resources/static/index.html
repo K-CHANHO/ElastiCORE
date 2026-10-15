@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YAPS Pet Store</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#/">YAPS <span>Pet Store</span></a>
+    <nav class="cats">
+      <a href="#/category/1000">Fish</a><a href="#/category/1001">Dogs</a><a href="#/category/1002">Reptiles</a>
+      <a href="#/category/1003">Cats</a><a href="#/category/1004">Birds</a>
+    </nav>
+    <form id="search" class="search"><input id="q" type="search" placeholder="Search pets" aria-label="Search"></form>
+    <div class="who"><a href="/dsl-guide.html">DSL Guide</a> <span id="who"></span> <a class="cart" href="#/cart">Cart (<span id="cart-count">0</span>)</a></div>
+  </header>
+  <div id="flash" class="flash" role="status"></div>
+  <main id="view"><p class="empty">Loading...</p></main>
+  <footer>
+    A sample of <a href="https://github.com/elasticore">ElastiCORE 3.0</a> on Spring Boot 4, after the
+    <a href="https://github.com/agoncal/agoncal-application-petstore-ee7">Java EE 7 pet store</a>.
+    Catalog text and images: CC BY-SA 3.0, Antonio Goncalves.
+    &middot; <a href="/dsl-guide.html">How the domain is said in the DSL</a> &middot; <a href="/swagger-ui.html">API</a>
+  </footer>
+  <script src="/app.js"></script>
+</body>
+</html>

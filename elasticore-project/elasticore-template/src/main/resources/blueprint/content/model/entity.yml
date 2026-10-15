@@ -1,0 +1,91 @@
+entity:
+  ContentBase:
+    meta: entity @abstract
+    fields:
+      createdBy: string(50) @updatable(false)
+      createDate: datetime @updatable(false)
+      lastModifiedBy: string(50)
+      lastModifiedDate: datetime
+
+  ContentCategory:
+    meta: entity @expose(30) @extend(ContentBase)
+    fields:
+      categoryId: long @id @sequence
+      name: string(100)! @search(like)
+      slug: string(100)! @search(eq)
+      description: text
+      sortOrder: int @default(0)
+      parent: ContentCategory @ManyToOne
+      children: List<ContentCategory> @OneToMany(mappedBy="parent") @dtype(List<ContentCategoryDTO>)
+      childCount: long @formula("(select count(*) from cms_content_category c where c.parent_category_id = category_id)") -- 하위 카테고리 수
+      parentName: string(100) @formula("(select p.name from cms_content_category p where p.category_id = parent_category_id)") -- 상위 카테고리명
+
+  Tag:
+    meta: entity @expose(50)
+    fields:
+      tagId: long @id @sequence
+      name: string(50)! @search(like)
+      color: string(7) @default("#3B82F6")
+
+  Article:
+    meta: entity @expose(30) @extend(ContentBase) @audited @Index(name="idx_cms_art_slug", columnList="slug", unique="true") @Index(name="idx_cms_art_pub_date", columnList="publish_date")
+    fields:
+      articleId: string(36) @id @genid
+      title: string(300)! @search(like)
+      slug: string(300)! @search(eq)
+      summary: string(500)
+      body: text
+      bodyText: text
+      publishDate: datetime @search(between)
+      viewCount: long @default(0) @search(>=) @min(0)
+      featured: boolean @default(false) @search(eq)
+      articleStatus: ArticleStatus @search(in)
+      category: ContentCategory @ManyToOne @fetchjoin @notaudited
+      tags: List<Tag> @ManyToMany @cascade(ALL) @notaudited
+      attachments: List<Attachment> @OneToMany(mappedBy="article") @cascade(ALL) @dtype(List<AttachmentDTO>) @notaudited
+      ratings: int[] @env:integerarray
+      labels: string[] @env:stringarray
+
+  Comment:
+    meta: entity @expose(30) @extend(ContentBase)
+    fields:
+      commentId: long @id @sequence
+      content: text!
+      authorName: string(100)! @search(like)
+      authorEmail: string(100) @search(eq)
+      approved: boolean @default(false) @search(eq)
+      article: Article @ManyToOne @fetchjoin
+      parentComment: Comment @ManyToOne @db(test_id)
+      replies: List<Comment> @OneToMany(mappedBy="parentComment") @dtype(List<CommentDTO>)
+
+  Attachment:
+    meta: entity @service
+    fields:
+      attachId: long @id @sequence
+      fileName: string(255)!
+      fileSize: long @min(0)
+      contentType: string(100)
+      storageKey: string(500)
+      article: Article @ManyToOne
+
+  # Auto-DTO example WITHOUT a dto.yml override: the @ManyToOne relation renders as
+  # a nested ArticleDTO (READ_ONLY in the OpenAPI schema, populated on read) plus a
+  # flattened articleArticleId FK field used for write input.
+  Bookmark:
+    meta: entity @service
+    fields:
+      bookmarkId: long @id @sequence
+      memo: string(200)
+      article: Article @ManyToOne
+
+enumeration:
+  ArticleStatus:
+    meta: enum @db(code) @json(code)
+    fields:
+      code: string(3) @code
+      name: string(20)
+    enum:
+      DRAFT: DRF,Draft
+      REVIEW: REV,Review
+      PUBLISHED: PUB,Published
+      ARCHIVED: ARC,Archived

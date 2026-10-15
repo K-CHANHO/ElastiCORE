@@ -1,0 +1,29 @@
+repository:
+  Category:
+    methods:
+      # JPQL: answers with the root, so it is on the domain's port too
+      - id: findBySortRange
+        params:
+          minOrder: int
+          maxOrder: int
+        return: List<Category>
+        query: "SELECT c FROM Category c WHERE c.sortOrder BETWEEN :minOrder AND :maxOrder ORDER BY c.sortOrder"
+
+      # Derived from the name: no query, Spring Data reads it
+      - id: findByName
+        params:
+          name: string
+        return: Optional<Category>
+
+      # A page is a screen's question: the application's query port
+      - id: findByActive
+        params:
+          active: boolean
+        return: Page<Category>
+        pageable: true
+
+  Order:
+    methods:
+      - id: countByCustomer
+        return: List<CustomerOrderCountDTO>
+        query: "SELECT o.customer.customerId AS customerId, COUNT(o) AS orderCount FROM Order o GROUP BY o.customer.customerId"

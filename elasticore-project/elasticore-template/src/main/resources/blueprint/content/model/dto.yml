@@ -1,0 +1,31 @@
+dto:
+  ArticleDTO:
+    meta: dto @template(Article)
+    fields:
+      categoryName: string @ref(category.name)
+      categorySlug: string @ref(category.slug)
+      attachments: List<AttachmentDTO>
+      body: --
+      bodyText: --
+
+  ArticleSrchDTO:
+    meta: dto @searchable(entity=Article, pageSize=30)
+    fields:
+      categoryName: string @search(like) @ref(category.name)
+      categoryId: long @search(eq) @ref(category.categoryId)
+
+  ContentCategoryDTO:
+    meta: dto @template(ContentCategory)
+    fields:
+      children: List<ContentCategoryDTO>
+
+  CommentDTO:
+    meta: dto @template(Comment)
+    fields:
+      articleTitle: string @ref(article.title)
+      replies: List<CommentDTO>
+
+  AttachmentDTO:
+    meta: dto @template(Attachment)
+    fields:
+      articleId: string @ref(article.articleId)

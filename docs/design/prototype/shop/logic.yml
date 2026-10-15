@@ -1,0 +1,161 @@
+# Paper prototype of the business-logic DSL, on the ddd sample's shop domain.
+# Every name here resolves to something the existing blueprint already declares:
+#   Order / Customer / Product   -> entity.yml
+#   OrderStatus, CustomerType    -> enum.yml
+#   Placed, Cancelled            -> Order's @event(Placed, Cancelled)
+#   ShopReportService            -> port (dbms)
+# Nothing in this file is a new layer; it fills the places the generator
+# already leaves open (OrderUseCase, OrderCoreService, OrderService).
+
+# ---------------------------------------------------------------- lifecycle
+state:
+  Order:
+    field: status                    # OrderStatus: the enum's values are the states
+    initial: PENDING
+    transitions:
+      confirm:
+        from: PENDING
+        to: CONFIRMED
+        guard: items.size() > 0 && customer.active
+        emits: Placed
+      process:
+        from: CONFIRMED
+        to: PROCESSING
+      ship:
+        from: PROCESSING
+        to: SHIPPED
+        requires: trackingNumber != null       # violating this is an error, not "not possible"
+      deliver:
+        from: SHIPPED
+        to: DELIVERED
+      cancel:
+        from: [PENDING, CONFIRMED, PROCESSING]
+        to: CANCELLED
+        emits: Cancelled
+      refund:
+        from: [DELIVERED, CANCELLED]
+        to: REFUNDED
+    final: [DELIVERED, REFUNDED]     # CANCELLED is not final: it can still be refunded
+
+# ---------------------------------------------------------------- decisions
+decision:
+  ShippingFee:
+    desc: What delivery costs, by destination, weight and customer standing
+    inputs:
+      country: string
+      weight: float
+      customerType: CustomerType
+    output: bigdecimal
+    hitPolicy: first
+    rules:                             # a row is one flow mapping: {when, then}
+      - {when: 'customerType == WHOLESALE',            then: 0}
+      - {when: 'country == "US" && weight < 5.0',      then: 5.00}
+      - {when: 'country == "US"',                      then: 12.00}
+      - {when: 'customerType == BUSINESS',             then: 15.00}
+      - {else: 20.00}
+
+  LoyaltyPoints:
+    desc: Points earned by an order, one per whole currency unit, doubled for business
+    inputs:
+      totalAmount: bigdecimal
+      customerType: CustomerType
+    output: long
+    hitPolicy: first
+    rules:
+      - {when: 'customerType == BUSINESS',   then: 'floor(totalAmount) * 2'}
+      - {else: 'floor(totalAmount)'}
+
+# ---------------------------------------------------------------- use cases
+usecase:
+  PlaceOrder:
+    desc: A customer turns a pending order into one the shop has accepted
+    on: Order
+    input:                              # inline DTO -> PlaceOrderInput is generated
+      orderId: string(36)!
+      country: string(50)!
+      weight: float!
+    output: OrderDTO
+    effects:
+      reads:  [Customer, Product]
+      writes: [Order]
+      emits:  [Placed]
+    requires:
+      - order.status == PENDING              : NOT_PENDING
+      - order.customer.active                : CUSTOMER_INACTIVE
+      - order.items.size() > 0               : EMPTY_ORDER
+      - order.items.all(i, i.quantity > 0)   : BAD_QUANTITY
+    steps:
+      - custom: priceItems                    # unitPrice/discount per line: yours to write
+      - decide: order.shippingFee = ShippingFee(input.country, input.weight, order.customer.customerType)
+      - custom: computeTotal                  # totalAmount = lines + shippingFee
+      - transition: order.confirm             # state machine; guard failure is an error
+    ensures:
+      - result.status == CONFIRMED
+      - result.totalAmount >= 0
+    examples:
+      - name: wholesale pays no shipping
+        given:
+          Customer: {customerId: 7, active: true, customerType: WHOLESALE}
+          Order:    {orderId: o-1, status: PENDING, customer: 7,
+                     items: [{product: p-1, quantity: 2, unitPrice: 10.00}]}
+        when:  {orderId: o-1, country: "US", weight: 3.0}
+        then:  {status: CONFIRMED, shippingFee: 0}
+      - name: an empty order is refused
+        given:
+          Customer: {customerId: 7, active: true, customerType: INDIVIDUAL}
+          Order:    {orderId: o-2, status: PENDING, customer: 7, items: []}
+        when:  {orderId: o-2, country: "US", weight: 0.0}
+        error: EMPTY_ORDER
+
+  CancelOrder:
+    desc: The customer or the shop withdraws an order before it ships
+    on: Order
+    input:
+      orderId: string(36)!
+      reason: string(200)
+    output: OrderDTO
+    effects:
+      writes: [Order]
+      emits:  [Cancelled]
+    requires:
+      - order.status in [PENDING, CONFIRMED, PROCESSING] : NOT_CANCELLABLE
+    steps:
+      - set: order.notes = input.reason
+      - transition: order.cancel
+    ensures:
+      - result.status == CANCELLED
+
+  AwardLoyaltyPoints:
+    desc: Credit the customer with the points an accepted order earns
+    on: Customer
+    input:
+      orderId: string(36)!
+    output: CustomerDTO
+    effects:
+      reads:  [Order]
+      writes: [Customer]
+    steps:
+      - decide: earned = LoyaltyPoints(order(input.orderId).totalAmount, customer.customerType)
+      - set: customer.loyaltyPoints = customer.loyaltyPoints + earned
+    ensures:
+      - result.loyaltyPoints >= 0
+
+# ---------------------------------------------------------------- reactions
+policy:
+  AwardPointsWhenPlaced:
+    on: Order.Placed
+    do: AwardLoyaltyPoints
+    with: {orderId: event.orderId}
+    async: true                          # after commit, own transaction
+
+# ---------------------------------------------------------------- an LLM step
+ai:
+  ClassifyCancelReason:
+    desc: Read the free-text reason on a cancelled order and name its category
+    input:  {text: string}
+    output: CancelReason                 # enum: would be declared in enum.yml
+    instructions: |
+      Choose the single category that fits best.
+      Prefer OTHER over guessing; never invent a category.
+    fallback: OTHER
+    effects: {}

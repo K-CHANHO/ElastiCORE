@@ -1,0 +1,9 @@
+entity:
+  HrAuditEntity:
+    meta: entity @abstract
+    fields:
+      createdBy: string(50) @updatable(false)
+      createDate: datetime @updatable(false) @search(between)
+      lastModifiedBy: string(50)
+      lastModifiedDate: datetime
+      version: long @jpa:Version

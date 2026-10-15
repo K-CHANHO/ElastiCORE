@@ -1,0 +1,35 @@
+port:
+  MockApiPortService:
+    meta: http @url("http://localhost:8080/api/mock") @timeout(connect=3000, read=15000)
+    methods:
+      getEcho:
+        meta: method @get("/echo/{message}")
+        params:
+          message: string
+        return: HttpTestResponse
+
+      postData:
+        meta: method @post("/data")
+        params:
+          body: HttpTestRequest @body
+        return: HttpTestResponse
+
+      updateUser:
+        meta: method @put("/users/{userId}")
+        params:
+          userId: long
+          body: HttpUserRequest @body
+        return: HttpUserResponse
+
+      deleteUser:
+        meta: method @delete("/users/{userId}")
+        params:
+          userId: long
+        return: HttpTestResponse
+
+      patchUser:
+        meta: method @HttpEndpoint(url="/users/{userId}/status", method="PATCH")
+        params:
+          userId: long
+          body: HttpTestRequest @body
+        return: HttpUserResponse

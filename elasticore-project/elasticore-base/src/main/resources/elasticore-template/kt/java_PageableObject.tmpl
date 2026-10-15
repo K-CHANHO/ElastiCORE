@@ -1,0 +1,35 @@
+package ${packageName}
+
+import io.swagger.v3.oas.annotations.media.Schema
+import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Pageable
+
+/**
+ * Provides pagination and sorting support for search-related DTOs.
+ *
+ * Implementing classes must supply page number, page size, and optionally
+ * sorting information to enable pageable queries.
+ *
+ * Modify this code only as specified in the ElastiCORE guidelines
+ * to avoid regeneration conflicts.
+ *
+ * Generated and managed by ElastiCORE.
+ */
+interface PageableObject : SortableObject {
+
+    val pageNumber: Int
+
+    val pageSize: Int
+
+    @Schema(hidden = true)
+    fun getPageable(): Pageable {
+        // A negative page or an empty one is the caller's mistake: a 400.
+        if (pageNumber < 0)
+            throw io.elasticore.springboot3.validation.BadRequestException("pageNumber must be 0 or more, not $pageNumber")
+        if (pageSize < 1)
+            throw io.elasticore.springboot3.validation.BadRequestException("pageSize must be 1 or more, not $pageSize")
+        val sort = getSort()
+        return if (sort != null) PageRequest.of(pageNumber, pageSize, sort)
+        else PageRequest.of(pageNumber, pageSize)
+    }
+}

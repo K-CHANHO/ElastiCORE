@@ -1,0 +1,38 @@
+//ecd:1930066730H20250521115448_V1.0
+syntax = "proto3";
+
+option java_package = "io.elasticore.blueprint.proto";
+option java_multiple_files = true;
+
+service CarInfoPortService {
+
+  /*
+   * 브랜드별 차량 정보 조회
+  */
+  rpc findByBrand (CarInfo2Input) returns (CarInfo2Output);
+  
+}
+
+
+message CarInfo2Output {
+  string brand = 1;
+  string description = 2;
+  string modelId = 3;
+}
+
+message CarInfo2Input {
+  string brand = 1;
+  CarInfo23Input inputType = 2;
+  BoardType boType = 3;
+
+  message CarInfo23Input {
+    string brand = 1;
+  }
+}
+
+
+enum BoardType {
+  PUBLIC = 0;
+  PRIVATE = 1;
+}
+

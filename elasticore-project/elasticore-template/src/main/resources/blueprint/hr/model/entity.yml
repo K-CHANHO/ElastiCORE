@@ -1,0 +1,95 @@
+entity:
+  Department:
+    meta: entity @expose(20) @extend(HrAuditEntity) @Index(name="idx_hr_dept_code", columnList="code", unique="true")
+    fields:
+      deptId: long @id @sequence
+      code: string(10)! @search(eq)
+      name: string(100)! @search(like)
+      nameInsensitive: string(100) @search(%__%)
+      description: text
+      budget: bigdecimal(14.2) @search(between)
+      headCount: int @default(0) @search(>=)
+      maxCapacity: int @default(100) @search(<=)
+      floorNumber: int @search(>)
+      minSalary: bigdecimal(10.2) @search(<)
+      status: DeptStatus @search(in)
+      namePrefix: string(50) @search(_%)
+      nameSuffix: string(50) @search(%_)
+      namePrefixCI: string(50) @search(__%)
+      nameSuffixCI: string(50) @search(%__)
+      nameExactCI: string(50) @search(__=)
+      active: boolean @default(true) @search(eq)
+      internalCode: string(30) @column(internal_code)
+      externalCode: string(30) @column("external_code")
+      legacyCode: string(30) @column(name="legacy_code")
+
+  SkillBase:
+    meta: entity @abstract
+    fields:
+      skillName: string(100)!
+      proficiency: int @min(1) @max(10)
+
+  Skill:
+    meta: entity @expose @extend(SkillBase)
+    fields:
+      skillId: long @id @sequence
+      category: string(50) @search(eq)
+
+  Employee:
+    meta: entity @expose(25) @extend(HrAuditEntity) @audited @Index(name="idx_hr_emp_email", columnList="email", unique="true") @Index(name="idx_hr_emp_dept", columnList="department_dept_id")
+    fields:
+      empId: string(36) @id @genid
+      firstName: string(50)! @search(like)
+      lastName: string(50)! @search(like)
+      email: string(100)! @search(eq)
+      phone: string(20) @search(%__%)
+      hireDate: date! @search(between)
+      salary: bigdecimal(12.2)! @search(between)
+      bonusRate: double @default(0.0) @min(0) @max(100)
+      active: boolean @default(true) @search(eq)
+      department: Department @ManyToOne @fetchjoin @notaudited
+      skills: List<Skill> @ManyToMany @cascade(ALL) @notaudited
+      manager: Employee @ManyToOne
+      directReports: List<Employee> @OneToMany(mappedBy="manager") @dtype(List<EmployeeDTO>) @notaudited
+
+  ProjectAssignment:
+    meta: entity @service
+    fields:
+      empId: string(36) @id
+      projectCode: string(20) @id
+      role: string(50)
+      assignDate: date
+      hoursAllocated: int @min(0) @max(2000)
+
+  Project:
+    meta: entity @expose(20)
+    fields:
+      projectCode: string(20) @id
+      name: string(100)! @search(like)
+      startDate: date @search(between)
+      endDate: date @search(between)
+      budget: bigdecimal(14.2) @search(between)
+      status: ProjectStatus @search(in)
+
+enumeration:
+  DeptStatus:
+    meta: enum @db(code) @json(code)
+    fields:
+      code: string(1) @code
+      name: string(20)
+    enum:
+      ACTIVE: A,Active
+      INACTIVE: I,Inactive
+      MERGED: M,Merged
+
+  ProjectStatus:
+    meta: enum @db(code) @json(code)
+    fields:
+      code: string(3) @code
+      name: string(20)
+    enum:
+      PLANNED: PLN,Planned
+      ACTIVE: ACT,Active
+      ON_HOLD: HLD,On Hold
+      COMPLETED: CMP,Completed
+      CANCELLED: CXL,Cancelled

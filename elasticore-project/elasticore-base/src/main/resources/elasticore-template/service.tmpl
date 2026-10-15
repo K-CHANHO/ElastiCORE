@@ -1,0 +1,490 @@
+package ${packageName};
+
+import ${entityPackageName}.${entityClassName};
+import ${dtoPackageName}.*;
+import ${repositoryPackageName}.*;
+import io.elasticore.springboot3.mapper.MappingContext;
+
+import ${j2eePkgName}.persistence.EntityNotFoundException;
+import ${j2eePkgName}.persistence.TypedQuery;
+import ${j2eePkgName}.persistence.criteria.*;
+import ${j2eePkgName}.persistence.EntityManager;
+
+import lombok.AllArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.lang.reflect.Field;
+
+import ${importList};
+
+/**
+ * Comprehensive service layer for managing ${entityClassName} entities.
+ *
+ * Provides full CRUD operations, dynamic search with specification support,
+ * pagination, sorting, and advanced query functions such as min/max/sum.
+ * Delegates repository operations via ${domainName}RepositoryHelper.
+ *
+ * Modify this code only as specified in the ElastiCORE guidelines
+ * to avoid regeneration conflicts.
+ *
+ * Generated and managed by ElastiCORE.
+ */
+
+@Service
+@AllArgsConstructor
+@Transactional(readOnly = true)
+public class ${className} {
+
+    protected final ${domainName}RepositoryHelper helper;
+
+    /**
+     * Creates a Specification that applies JOIN FETCH to related entities to optimize query performance.
+     * Prevents N+1 queries by eagerly loading relationships in a single query.
+     *
+     * @return a Specification that applies JOIN FETCH based on autoJoin configuration
+     */
+    protected Specification<${entityClassName}> withJoinFetches() {
+        return (root, query, cb) -> {
+/*-- print-if:${needJoinProcess} --*/
+            if (!Long.class.equals(query.getResultType())) {
+                // JOIN FETCH optimization enabled
+                ${allRelationshipFetches}
+                ${joinAnnotatedFetches}
+                query.distinct(true);
+            }
+/*-- print-if:end --*/
+            return null;
+        };
+    }
+
+    /**
+     * Retrieves all ${entityClassName} entities, converts them to ${dtoClassName} objects, and returns them as a list.
+     *
+     * @return a list of ${dtoClassName} objects
+     */
+    public List<${dtoClassName}> findAll() {
+        return helper.get${entityClassName}().findAll().stream()
+                 ${mappingCode}
+                .map(${mapperName}::toDTO)
+                .collect(Collectors.toList());
+    }
+
+
+    /**
+     * Retrieves all t${entityClassName} entities, converts them to ${dtoClassName} objects, and returns them as a list.
+     *
+     * @param sort the sort information
+     * @return a list of ${dtoClassName} objects
+     */
+    public List<${dtoClassName}> findAll(Sort sort) {
+        return helper.get${entityClassName}().findAll(sort).stream()
+                 ${mappingCode}
+                .map(${mapperName}::toDTO)
+                .collect(Collectors.toList());
+    }
+
+
+    /**
+     * Deletes ${entityClassName} entities that match the given search criteria.
+     *
+     * @param searchDTO the search criteria
+     * @return the number of entities deleted
+     */
+    @Transactional
+    public long delete(${searchDTOClassName} searchDTO) {
+        Specification<${entityClassName}> specification = ${mapperName}.toSpec(searchDTO);
+        return helper.get${entityClassName}().delete(specification);
+    }
+
+/*-- print-if:${isListOutput} --*/
+
+    /**
+     * Finds a list of ${entityClassName} entities that match the given search criteria
+     * and returns them as a list of ${searchResultDTOClassName} objects.
+     * If sorting information is provided in the search criteria, the results are sorted accordingly.
+     *
+     * @param searchDTO the search criteria
+     * @return a list of matching ${searchResultDTOClassName} objects
+     */
+    public List<${searchResultDTOClassName}> findBySearch(${searchDTOClassName} searchDTO) {
+        Specification<${entityClassName}> specification = ${mapperName}.toSpec(searchDTO);
+        Sort sort = searchDTO.getSort();
+        if(sort ==null) {
+            return helper.get${entityClassName}().findAll(specification).stream()
+                        ${mappingCode}
+                        .map(${mapperName}::${toSearchListMappingName})
+                        .collect(Collectors.toList());
+        }
+        return helper.get${entityClassName}().findAll(specification, sort).stream()
+                ${mappingCode}
+                .map(${mapperName}::${toSearchListMappingName})
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Finds the first ${entityClassName} entity that matches the given search criteria
+     * and returns it as a ${searchResultDTOClassName} object.
+     * If no matching entity is found, this method returns {@code null}.
+     *
+     * @param searchDTO the search criteria
+     * @return the first matching ${searchResultDTOClassName} object, or {@code null} if no match is found
+     */
+    public ${searchResultDTOClassName} findFirstBySearch(${searchDTOClassName} searchDTO) {
+        List<${searchResultDTOClassName}> list=findBySearch(searchDTO);
+        if(list==null || list.size()==0)
+            return null;
+        return list.get(0);
+    }
+/*-- print-if:end --*/
+
+
+/*-- print-if:${isPageOutput} --*/
+
+    /**
+     * Finds ${entityClassName} entities that match the given search criteria and returns them as a paginated list of ${searchResultDTOClassName}.
+     *
+     * @param searchDTO the search criteria
+     * @return a paginated list of ${searchResultDTOClassName} objects
+     */
+    public Page<${searchResultDTOClassName}> findBySearch(${searchDTOClassName} searchDTO) {
+        Specification<${entityClassName}> specification = ${mapperName}.toSpec(searchDTO).and(withJoinFetches());
+        Pageable pageable = searchDTO.getPageable();
+        Page<${entityClassName}> result = helper.get${entityClassName}().findAll(specification, pageable);
+        return result.map(${mapperName}::${toSearchListMappingName});
+    }
+
+    /**
+     * Finds the first ${entityClassName} entity that matches the given search criteria
+     * and returns it as a ${searchResultDTOClassName} object.
+     *
+     * @param searchDTO the search criteria
+     * @return the first matching ${searchResultDTOClassName} object, or {@code null} if no match is found
+     */
+    public ${searchResultDTOClassName} findFirstBySearch(${searchDTOClassName} searchDTO) {
+        Page<${searchResultDTOClassName}> pages= findBySearch(searchDTO);
+        List<${searchResultDTOClassName}> list=pages.getContent();
+        if(list==null || list.size()==0)
+            return null;
+        return list.get(0);
+    }
+
+
+    /**
+     * Counts the number of ${entityClassName} entities that match the given search criteria.
+     *
+     * @param searchDTO the search criteria
+     * @return the number of entities that match the search criteria
+     */
+    public long countBySearch(${searchDTOClassName} searchDTO) {
+        Specification<${entityClassName}> specification = ${mapperName}.toSpec(searchDTO);
+        return helper.get${entityClassName}().count(specification);
+    }
+/*-- print-if:end --*/
+/*-- print-if:${isExposeOutput} --*/
+
+    /**
+     * Finds a list of ${entityClassName} entities that match the given search criteria
+     * and returns them as a list of ${searchResultDTOClassName} objects.
+     * If sorting information is provided in the search criteria, the results are sorted accordingly.
+     *
+     * @param searchDTO the search criteria
+     * @return a list of matching ${searchResultDTOClassName} objects
+     */
+    public List<${searchResultDTOClassName}> listBySearch(${searchDTOClassName} searchDTO) {
+        Specification<${entityClassName}> specification = ${mapperName}.toSpec(searchDTO);
+        Sort sort = searchDTO.getSort();
+        if(sort ==null) {
+            return helper.get${entityClassName}().findAll(specification).stream()
+                        ${mappingCode}
+                        .map(${mapperName}::${toSearchListMappingName})
+                        .collect(Collectors.toList());
+        }
+        return helper.get${entityClassName}().findAll(specification, sort).stream()
+                ${mappingCode}
+                .map(${mapperName}::${toSearchListMappingName})
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Finds ${entityClassName} entities that match the given search criteria and returns them as a paginated list of ${searchResultDTOClassName}.
+     *
+     * @param searchDTO the search criteria
+     * @return a paginated list of ${searchResultDTOClassName} objects
+     */
+    public Page<${searchResultDTOClassName}> findBySearch(${searchDTOClassName} searchDTO) {
+        Specification<${entityClassName}> specification = ${mapperName}.toSpec(searchDTO).and(withJoinFetches());
+        Pageable pageable = searchDTO.getPageable();
+        Page<${entityClassName}> result = helper.get${entityClassName}().findAll(specification, pageable);
+        return result.map(${mapperName}::${toSearchListMappingName});
+    }
+
+    /**
+     * Finds the first ${entityClassName} entity that matches the given search criteria
+     * and returns it as a ${searchResultDTOClassName} object.
+     *
+     * @param searchDTO the search criteria
+     * @return the first matching ${searchResultDTOClassName} object, or {@code null} if no match is found
+     */
+    public ${searchResultDTOClassName} findFirstBySearch(${searchDTOClassName} searchDTO) {
+        searchDTO.setPageSize(1);
+        Page<${searchResultDTOClassName}> pages= findBySearch(searchDTO);
+        List<${searchResultDTOClassName}> list=pages.getContent();
+        if(list==null || list.size()==0)
+            return null;
+        return list.get(0);
+    }
+
+
+    /**
+     * Counts the number of ${entityClassName} entities that match the given search criteria.
+     *
+     * @param searchDTO the search criteria
+     * @return the number of entities that match the search criteria
+     */
+    public long countBySearch(${searchDTOClassName} searchDTO) {
+        Specification<${entityClassName}> specification = ${mapperName}.toSpec(searchDTO);
+        return helper.get${entityClassName}().count(specification);
+    }
+/*-- print-if:end --*/
+    /**
+     * Finds a ${entityClassName} entity by its ID and converts it to a ${dtoClassName}.
+     *
+     * @param ${pkDtoInfo2} the ID of the FaxResult entity
+     * @return an Optional containing the ${dtoClassName} if found, or an empty Optional if not found
+     */
+    public Optional<${dtoClassName}> findById(${pkDtoDefine}) {
+        return helper.get${entityClassName}().findById(${pkDtoInfo2})${mappingCode}.map(e->${mapperName}.toDTO(e, MappingContext.withGuard(2)));
+    }
+
+
+    /**
+     * Saves a new ${entityClassName} entity based on the given DTO and returns the saved entity as a DTO.
+     *
+     * @param dto the ${dtoClassName} to save
+     * @return the saved ${dtoClassName}
+     */
+    @Transactional
+    public ${dtoClassName} save(${dtoClassName} dto) {
+        ${orgEntityClassName} entity = ${mapperName}.toEntity(dto, helper.getEntityManager());
+        ${orgEntityClassName} result = helper.get${entityClassName}().save(entity);
+        return ${mapperName}.toDTO(result);
+    }
+
+
+    /**
+     * Updates an existing ${entityClassName} entity based on the given DTO and returns the updated entity as a DTO.
+     *
+     * @param dto the ${dtoClassName} with updated information
+     * @return the updated ${dtoClassName}
+     */
+    @Transactional
+    public ${dtoClassName} update(${dtoClassName} dto) {
+        ${orgEntityClassName} entity = ${orgEntityConvert}helper.get${entityClassName}().findById(${pkDtoInfo}).orElse(null);
+        if(entity==null)
+            throw new EntityNotFoundException("Invalid ${dtoClassName} ID");
+        ${mapperName}.mapping(dto, entity, ${isSkipNull}, helper.getEntityManager());
+
+        ${orgEntityClassName} result = ${orgEntityConvert}helper.get${entityClassName}().save(entity);
+        return ${mapperName}.toDTO(result);
+    }
+
+    /**
+     * Batch updates multiple ${entityClassName} entities in a single transaction.
+     * If any update fails, all changes are rolled back.
+     *
+     * @param dtoList the list of ${dtoClassName} objects to update
+     * @throws EntityNotFoundException if any entity is not found
+     * @throws RuntimeException if any update operation fails
+     */
+    @Transactional
+    public void batchUpdate(List<${dtoClassName}> dtoList) {
+        if (dtoList == null || dtoList.isEmpty()) {
+            return;
+        }
+        
+        for (${dtoClassName} dto : dtoList) {
+            ${orgEntityClassName} entity = ${orgEntityConvert}helper.get${entityClassName}().findById(${pkDtoInfo}).orElse(null);
+            if (entity == null) {
+                throw new EntityNotFoundException("Invalid ${dtoClassName} ID: " + ${pkDtoInfo});
+            }
+            ${mapperName}.mapping(dto, entity, ${isSkipNull}, helper.getEntityManager());
+            helper.get${entityClassName}().save(entity);
+        }
+    }
+
+    /**
+     * Deletes a list of ${entityClassName} entities based on the given list of DTOs and returns a list of boolean results
+     * indicating the success or failure of each deletion.
+     *
+     * @param dtoList the list of ${entityClassName} representing the entities to delete
+     * @return a list of boolean values where each value represents the deletion success (true) or failure (false)
+     *         for the corresponding ContractRelated entity
+     */
+    @Transactional
+    public List<Boolean> delete(List<${keyDtoClassName}> dtoList) {
+        List<Boolean> result = new ArrayList<>();
+        for (${keyDtoClassName} dto : dtoList) {
+            result.add(this.deleteById(${pkDtoParamInfo}));
+        }
+        return result;
+    }
+
+
+    /**
+     * Deletes a ${entityClassName} entity by its ID.
+     *
+     * @param ${pkDtoInfo2} the ID of the ${entityClassName} entity to delete
+     * @return true if the ${entityClassName} entity was successfully deleted, false if it still exists
+     */
+    @Transactional
+    public boolean deleteById(${pkDtoDefine}) {
+        helper.get${entityClassName}().deleteById(${pkDtoInfo2});
+        return !helper.get${entityClassName}().existsById(${pkDtoInfo2});
+    }
+
+/*-- print-if:${isCustomPageOutput} isCustomPageOutput--*/
+    public Page<${customListDTOClassName}> findBySearch(${searchDTOClassName} searchDTO) {
+        Specification<${entityClassName}> specification = ${mapperName}.toSpec(searchDTO);
+        Pageable pageable = searchDTO.getPageable();
+
+        return searchList(specification, pageable);
+    }
+
+
+    public Page<${customListDTOClassName}> searchList(Specification<${entityClassName}> specification, Pageable pageable) {
+        CriteriaBuilder cb = helper.getEntityManager().getCriteriaBuilder();
+
+        CriteriaQuery<${customListDTOClassName}> query = cb.createQuery(${customListDTOClassName}.class);
+        Root<${entityClassName}> root = query.from(${entityClassName}.class);
+
+        query.select(cb.construct(
+                ${customListDTOClassName}.class,
+
+                ${selectColumnNmList}
+        ));
+
+        if (specification != null) {
+            Predicate predicate = specification.toPredicate(root, query, cb);
+            if(predicate!=null)
+                query.where(predicate);
+        }
+
+        TypedQuery<${customListDTOClassName}> typedQuery = helper.getEntityManager().createQuery(query);
+        typedQuery.setFirstResult((int) pageable.getOffset());
+        typedQuery.setMaxResults(pageable.getPageSize());
+
+        List<${customListDTOClassName}> resultList = typedQuery.getResultList();
+
+        CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
+        Root<${entityClassName}> countRoot = countQuery.from(${entityClassName}.class);
+        countQuery.select(cb.count(countRoot));
+
+        if (specification != null) {
+            Predicate countPredicate = specification.toPredicate(countRoot, countQuery, cb);
+            if(countPredicate!=null)
+                countQuery.where(countPredicate);
+        }
+
+        Long count = helper.getEntityManager().createQuery(countQuery).getSingleResult();
+
+        return new PageImpl<${customListDTOClassName}>(resultList, pageable, count);
+    }
+/*-- print-if:end --*/
+
+
+/*-- print-if:${isCustomListOutput} isCustomListOutput--*/
+    public List<${customListDTOClassName}> findBySearch(${searchDTOClassName} searchDTO) {
+        Specification<${entityClassName}> specification = ${mapperName}.toSpec(searchDTO);
+        Sort sort = searchDTO.getSort();
+
+        return searchList(specification, sort);
+    }
+
+
+    public List<${customListDTOClassName}> searchList(Specification<${entityClassName}> specification, Sort sort) {
+        CriteriaBuilder cb = helper.getEntityManager().getCriteriaBuilder();
+
+        CriteriaQuery<${customListDTOClassName}> query = cb.createQuery(${customListDTOClassName}.class);
+        Root<Company> root = query.from(${entityClassName}.class);
+
+        query.select(cb.construct(
+                ${customListDTOClassName}.class,
+                ${selectColumnNmList}
+        ));
+
+        if (specification != null) {
+            Predicate predicate = specification.toPredicate(root, query, cb);
+            if (predicate != null)
+                query.where(predicate);
+        }
+
+        // Apply sorting
+        if (sort != null) {
+            List<Order> orders = sort.stream()
+                    .map(order -> order.isAscending() ?
+                            cb.asc(root.get(order.getProperty())) :
+                            cb.desc(root.get(order.getProperty())))
+                    .toList();
+            query.orderBy(orders);
+        }
+        TypedQuery<${customListDTOClassName}> typedQuery = helper.getEntityManager().createQuery(query);
+        List<${customListDTOClassName}> resultList = typedQuery.getResultList();
+        return resultList;
+    }
+/*-- print-if:end --*/
+
+
+    /**
+     * Updates Message entities that match the given search criteria,
+     * using non-null fields from the update DTO.
+     *
+     * @param dto     DTO containing the fields to update (only non-null fields will be applied)
+     * @param srchDTO DTO containing search conditions for filtering target entities
+     * @return number of records updated
+     */
+    @Transactional
+    public int updateBySpecification(${dtoClassName} dto, ${searchDTOClassName} srchDTO) {
+        return updateBySpecification(dto, ${mapperName}.toSpec(srchDTO));
+    }
+
+    /**
+     * Performs a conditional update using the provided Specification and non-null fields from the DTO.
+     * Prevents full table updates by requiring at least one condition.
+     *
+     * @param dto  DTO containing the fields to update (only non-null fields will be applied)
+     * @param spec JPA Specification defining update conditions
+     * @return number of records updated
+     * @throws IllegalArgumentException if no condition is provided
+     */
+    @Transactional
+    public int updateBySpecification(${dtoClassName} dto, Specification<${entityClassName}> spec) {
+        CriteriaBuilder cb = helper.getEntityManager().getCriteriaBuilder();
+        CriteriaUpdate<${entityClassName}> update = cb.createCriteriaUpdate(${entityClassName}.class);
+        Root<${entityClassName}> root = update.from(${entityClassName}.class);
+
+        Field[] fields = dto.getClass().getDeclaredFields();
+        for (Field field : fields) {
+            field.setAccessible(true);
+            try {
+                Object value = field.get(dto);
+                if (value != null)
+                    update.set(root.get(field.getName()), value);
+            } catch (IllegalAccessException e) { }
+        }
+        Predicate predicate = spec.toPredicate(root, cb.createQuery(${entityClassName}.class), cb);
+        if (predicate == null)
+            throw new IllegalArgumentException("Update condition is missing. Full table update is not allowed.");
+        update.where(predicate);
+        return helper.getEntityManager().createQuery(update).executeUpdate();
+    }
+}

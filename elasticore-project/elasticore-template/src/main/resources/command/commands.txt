@@ -1,0 +1,42 @@
+
+
+# deploy service
+ecore deploy service service.yml
+
+# deploy entity
+ecore deploy entity entity.yml
+
+# deploy io
+ecore deploy io io.yml
+
+# update service
+ecore update service service.yml
+
+# update entity
+ecore update entity entity.yml
+
+# list service
+ecore list service
+
+# list entity
+ecore list entity
+
+
+# generate request json
+ecore gen request party.getService
+
+# generate template service
+ecore gen template service
+
+# generate template entity
+ecore gen template entity
+
+# generate tempalte io
+ecore gen template io
+
+
+# execute ecore service
+ecore exec service party.getService test-req.json
+
+# execute query
+ecore exec query party.getServce#queryID

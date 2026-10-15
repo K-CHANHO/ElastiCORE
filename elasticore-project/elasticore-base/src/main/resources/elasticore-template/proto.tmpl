@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+option java_package = "${protoPackageName}";
+option java_multiple_files = true;
+
+service ${protoServiceName} {
+
+  ${protoFuncList}
+}
+
+${protoMsgList}
+
+${protoEnumList}
+

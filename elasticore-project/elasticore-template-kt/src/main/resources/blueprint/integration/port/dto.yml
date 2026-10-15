@@ -1,0 +1,67 @@
+dto:
+  HttpTestRequest:
+    meta: dto
+    fields:
+      message: string
+      code: int
+      timestamp: string
+
+  HttpTestResponse:
+    meta: dto
+    fields:
+      result: string
+      statusCode: int
+      receivedAt: string
+      echoMessage: string
+
+  HttpUserRequest:
+    meta: dto
+    fields:
+      userId: long
+      name: string
+      email: string
+
+  HttpUserResponse:
+    meta: dto
+    fields:
+      userId: long
+      name: string
+      email: string
+      status: string
+
+  FileUploadResponse:
+    meta: dto
+    fields:
+      fileName: string
+      fileSize: long
+      contentType: string
+      message: string
+
+  DbmsSearchInput:
+    meta: dto
+    fields:
+      keyword: string
+      status: int
+      minId: long
+      maxId: long
+      sortCode: string
+      pageNumber: int
+      pageSize: int
+
+  DbmsResultDTO:
+    meta: dto
+    fields:
+      logId: long
+      endpoint: string
+      method: string
+      statusCode: int
+      duration: long
+      createdAt: string
+
+  DbmsStatsDTO:
+    meta: dto
+    fields:
+      totalCount: long
+      avgDuration: double
+      maxDuration: long
+      minDuration: long

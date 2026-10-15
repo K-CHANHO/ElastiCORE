@@ -1,0 +1,60 @@
+# Reference-only target entity DSL for SALES_MONTH.
+#
+# This file is NOT used by any test - it lives in test/resources purely as
+# documentation of what the build-time target entity DSL would look like if
+# dropped into blueprint/ for normal ElastiCORE code generation.
+#
+# In a real project this YAML would sit at something like:
+#   elasticore-template/src/main/resources/blueprint/sales/model.yml
+# and would generate SalesMonth.java (JPA entity), repository, service,
+# controller, etc. via the standard annotation processor pipeline.
+#
+# The runtime ingest DSL (sales-monthly.yml) uses @target(SalesMonth)
+# to reference THIS entity, plus @target(fieldName) on each field to map the
+# converter output onto the target entity's fields.
+entity:
+  SalesMonth:
+    meta: entity @table(SALES_MONTH) @pageable
+    desc: "Monthly sales settlement data"
+
+    fields:
+      # Identity
+      seq:           long        @id @sequence        # 일련번호
+
+      # Required tenancy / upload
+      tenantId:      string(10)!                      # 테넌트ID
+      salesYm:       string(6)!                       # 매출년월
+      fileCd:        string(30)!                      # 업로드 파일 구분
+      channelCd:     string(3)!                       # 판매채널코드
+      settleType:    string(20)!                      # 정산구분
+      orderNo:       string(40)!                      # 주문번호
+
+      # Business fields
+      orderDate:     string(10)                       # 주문일자
+      orderStatus:   string(20)                       # 주문상태
+      storeCd:       string(20)                       # 매장코드
+      qty:           long                             # 수량
+      returnQty:     long                             # 반품수량
+      payMethod:     string(20)                       # 결제수단
+      storeNm:       string(100)                      # 매장명
+      customerNm:    string(100)                      # 고객명
+      productCd:     string(30)                       # 상품코드
+      productNm:     string(200)                      # 상품명
+      categoryCd:    string(20)                       # 분류코드
+      memo:          string(500)                      # 비고
+
+      # Amounts
+      unitPrice:     decimal                          # 단가
+      salesAmt:      decimal                          # 판매금액
+      discountAmt:   decimal                          # 할인금액
+      couponAmt:     decimal                          # 쿠폰금액
+      pointAmt:      decimal                          # 포인트사용액
+      shippingFee:   decimal                          # 배송비
+      taxAmt:        decimal                          # 부가세
+      netAmt:        decimal                          # 순매출
+      feeRate:       decimal                          # 수수료율
+      feeAmt:        decimal                          # 수수료
+
+      # Audit (populated at ingest time by the service)
+      createdBy:     string(20)!                      # 입력자
+      createdAt:     datetime!                        # 입력일시

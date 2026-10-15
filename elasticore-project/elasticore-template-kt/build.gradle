@@ -1,0 +1,286 @@
+import org.gradle.api.tasks.JavaExec
+
+// Kotlin counterpart of elasticore-template.
+//
+// elasticore-template proves the Java pipeline by compiling what it generates.
+// This module does the same for Kotlin, which the string-comparing unit tests
+// cannot: a rule can emit text that reads like Kotlin and does not compile,
+// and only a Kotlin compiler says so.
+//
+//   ./gradlew :elasticore-project:elasticore-template-kt:elcore3kt
+//   ./gradlew :elasticore-project:elasticore-template-kt:compileKotlin
+//
+// The blueprint is a copy of elasticore-template's, so both languages are
+// generated from the same DSL and can be compared.
+
+plugins {
+	id 'org.jetbrains.kotlin.jvm' version '1.9.24'
+	// A JPA entity has to be open to be proxied and needs a no-arg
+	// constructor; Kotlin classes are final and have neither by default.
+	// These are the plugins a Kotlin JPA project applies, and the generated
+	// entities assume them - which is why they are not declared open.
+	id 'org.jetbrains.kotlin.plugin.allopen' version '1.9.24'
+	id 'org.jetbrains.kotlin.plugin.jpa' version '1.9.24'
+	id 'io.spring.dependency-management' version '1.1.6'
+	id 'io.elasticore'
+}
+
+// One declaration for the whole module. Each domain's env.yml names its own
+// bundle, which is the level below this one - a domain writes publisher.rules
+// only where it deviates from what the project said here.
+elasticore {
+	language = 'kotlin'
+}
+
+// Inside this repository elasticore-base is the module next door rather than a
+// published artifact, so the configuration the plugin would otherwise resolve
+// is filled explicitly. A project pinning a different build uses the same hatch.
+dependencies {
+	elasticore project(':elasticore-project:elasticore-base')
+}
+
+group = 'elasticore-template-kt'
+version = '1.0.0-SNAPSHOT'
+
+kotlin {
+	jvmToolchain(17)
+}
+
+allOpen {
+	annotation 'jakarta.persistence.Entity'
+	annotation 'jakarta.persistence.MappedSuperclass'
+	annotation 'jakarta.persistence.Embeddable'
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencyManagement {
+	imports {
+		mavenBom 'org.springframework.boot:spring-boot-dependencies:3.3.2'
+	}
+}
+
+dependencies {
+	implementation 'org.jetbrains.kotlin:kotlin-stdlib'
+	// Spring reads Kotlin classes through kotlin-reflect; every Spring Kotlin
+	// application carries it, and the sample now boots one (ShopApiContractTest).
+	implementation 'org.jetbrains.kotlin:kotlin-reflect'
+
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
+	implementation 'io.swagger.core.v3:swagger-annotations:2.2.15'
+	implementation 'org.hibernate:hibernate-envers:6.6.13.Final'
+	// A domain with supportAI writes its extension service as Spring AI tools.
+	implementation 'org.springframework.ai:spring-ai-core:1.0.0-M6'
+
+	implementation project(':elasticore-project:elasticore-base')
+	implementation project(':elasticore-project:elasticore-springboot3')
+
+	testImplementation 'org.jetbrains.kotlin:kotlin-test-junit5'
+	testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+	testImplementation 'org.mockito:mockito-core:5.11.0'
+	testImplementation 'org.mockito:mockito-junit-jupiter:5.11.0'
+	testImplementation 'org.mockito.kotlin:mockito-kotlin:5.2.1'
+	testImplementation 'org.assertj:assertj-core:3.25.3'
+	// The generated API, booted and driven over HTTP (ShopApiContractTest).
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testRuntimeOnly 'com.h2database:h2'
+	testImplementation 'org.springframework:spring-context'
+	testImplementation 'io.projectreactor:reactor-core'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+sourceSets {
+	main.kotlin.srcDirs += ['src/main/kotlin']
+
+	// The gRPC stubs name classes protoc generates from the .proto, and this
+	// module runs no protoc - the same reason elasticore-template excludes
+	// its own proto output. GrpcStubTest covers what they should say.
+	main {
+		kotlin {
+			exclude '**/grpc/**'
+		}
+	}
+}
+
+test {
+	useJUnitPlatform()
+	// The sources under test are generated, not committed.
+	dependsOn 'elcore3kt'
+	testLogging { events 'passed', 'failed' }
+}
+
+// A verification that reads a stale file is not one. Generated trees are
+// cleared before regenerating, because a file carrying the generate-once
+// marker survives a rule change and would be checked instead of the new
+// output - which has already let a broken run report success here.
+task elcore3clean(type: Delete) {
+	group = 'elasticore'
+	description = 'Removes previously generated sources'
+	// The files rather than the directories: on Windows a handle held on a
+	// generated tree by the daemon that just compiled it fails a directory
+	// delete, and the clean is not worth a flaky build.
+	delete fileTree('src/main/kotlin'), fileTree('src/test/kotlin/io'),
+			fileTree('src/main/ts') { include '*.ts' }
+}
+
+// The plugin registers both generators and gives each one the classpath, the
+// project path, the declaration above and the -P pass-throughs. The language
+// is stated once: elcore3 writes .kt because the build said kotlin, not
+// because this task sets a switch.
+//
+// Kotlin and TypeScript are not alternatives. The browser model comes from the
+// same blueprint and coexists with whatever the server is written in, which is
+// why the plugin registers elcore3ts alongside elcore3 rather than instead.
+tasks.named('elcore3') {
+	systemProperty 'elasticore.rules.force', 'true'
+	dependsOn elcore3clean
+}
+
+tasks.named('elcore3ts') {
+	systemProperty 'elasticore.rules.force', 'true'
+}
+
+// The old name, kept so the documented command still works.
+task elcore3kt {
+	group = 'elasticore'
+	description = 'Generates Kotlin sources through the 3.0 rule pipeline'
+	dependsOn 'elcore3'
+}
+
+// Nothing orders compilation after generation on its own: compileKotlin is
+// reached through test, which depends on the generator, and Gradle is free to
+// schedule it first and find the tree empty. Stated explicitly here, as the
+// Java verification module states it.
+compileKotlin.mustRunAfter 'elcore3'
+compileTestKotlin.mustRunAfter 'elcore3'
+
+// The point of the module: what was generated has to compile.
+task elcore3ktVerify {
+	group = 'elasticore'
+	description = 'Generates Kotlin sources, compiles them, and runs them'
+	// dependsOn rather than finalizedBy: a finalizer here deadlocks Gradle's
+	// scheduler when another verification module is asked for in the same
+	// invocation, and these modules are meant to be runnable together.
+	//
+	// Compiling proves the shape; the tests drive the generated port through
+	// the runtime that implements it.
+	dependsOn 'test'
+}
+
+// The TypeScript model, checked by the only thing that can check it.
+//
+// Three things were wrong with the first version of this and all three made
+// it look like a check while not being one: it resolved tsc.cmd, which exists
+// only on Windows; its fallback ran `cmd /c echo`, which exists only on
+// Windows and reports success either way; and node_modules was gitignored
+// with no package.json, so no clone but this one could have had a toolchain
+// at all. On CI it printed a sentence and passed.
+//
+// Now: the compiler is pinned in package.json, installed on demand, and
+// resolved per platform. An absent toolchain is announced and skipped in a
+// normal build - Node is not a reasonable requirement for a Java project -
+// and is a failure under -Pstrict, which is the same flag the golden-tree
+// comparison answers to. A gate you can ask to be strict is a gate.
+task tsToolchain {
+	description = 'Installs the pinned TypeScript compiler if it is not already there'
+
+	doLast {
+		if (tscExecutable() != null) return
+		if (npmExecutable() == null) return
+
+		exec {
+			workingDir file('src/main/ts')
+			commandLine npmExecutable(), 'install', '--no-audit', '--no-fund'
+		}
+	}
+}
+
+def tscExecutable() {
+	['tsc.cmd', 'tsc'].collect { file("src/main/ts/node_modules/.bin/$it") }
+			.find { it.isFile() }?.absolutePath
+}
+
+def npmExecutable() {
+	def onWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+	def names = onWindows ? ['npm.cmd', 'npm'] : ['npm']
+	for (dir in System.getenv('PATH').split(File.pathSeparator)) {
+		for (name in names) {
+			def candidate = new File(dir, name)
+			if (candidate.isFile()) return candidate.absolutePath
+		}
+	}
+	return null
+}
+
+task elcore3tsVerify {
+	group = 'elasticore'
+	description = 'Generates TypeScript sources and type-checks them'
+	dependsOn elcore3ts, tsToolchain
+
+	doLast {
+		def tsc = tscExecutable()
+		if (tsc == null) {
+			def message = 'TypeScript toolchain absent - install Node and rerun,'					+ ' or run npm install in src/main/ts'
+			if (project.hasProperty('strict')) {
+				throw new GradleException("[elcore3tsVerify] SKIPPED under -Pstrict: $message")
+			}
+			logger.lifecycle("[elcore3tsVerify] SKIPPED - $message")
+			return
+		}
+		exec {
+			workingDir file('src/main/ts')
+			commandLine tsc, '-p', '.'
+		}
+	}
+}
+
+// Everything the pipeline can produce, checked as far as each can be.
+task elcore3Verify {
+	group = 'elasticore'
+	description = 'Verifies every generated language'
+	dependsOn 'elcore3ktVerify', 'elcore3tsVerify'
+}
+
+// The generated TypeScript, executed rather than only type-checked.
+//
+// Type-checking proves the emitted source is well-formed and that a consumer
+// still compiles against it. It cannot prove the rules answer correctly, and
+// on this side that gap is the one that matters: a decimal arrives as a
+// string, so the comparison a developer writes by hand is one the compiler
+// accepts and JavaScript answers false to whatever the amount. The defect
+// this language invites is exactly the one a type check cannot see.
+task elcore3tsTest {
+	group = 'elasticore'
+	description = 'Runs the generated TypeScript through node'
+	dependsOn elcore3tsVerify
+
+	doLast {
+		def npm = npmExecutable()
+		if (npm == null) {
+			def message = 'Node absent - install it to run the generated TypeScript'
+			if (project.hasProperty('strict')) {
+				throw new GradleException("[elcore3tsTest] SKIPPED under -Pstrict: $message")
+			}
+			logger.lifecycle("[elcore3tsTest] SKIPPED - $message")
+			return
+		}
+		exec {
+			workingDir file('src/main/ts')
+			commandLine npm, 'test'
+		}
+	}
+}
+
+// The TypeScript check runs unasked, like the Kotlin one.
+//
+// It was a task nobody's build invoked, which meant the only thing standing
+// between a broken generated .ts and a release was somebody remembering to
+// type its name. Kotlin is checked because `test` regenerates and compiles
+// it; this is the equivalent sentence for the other language.
+check.dependsOn 'elcore3tsVerify', 'elcore3tsTest'
+

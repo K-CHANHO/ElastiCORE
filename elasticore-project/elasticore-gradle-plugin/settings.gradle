@@ -1,0 +1,10 @@
+// Its own build, because a plugin cannot be applied by a sibling module of
+// the build that produces it. The root includes it through pluginManagement,
+// which makes it resolvable by id here and publishable to a Maven repository for everyone
+// else - the same artifact either way.
+// The plugin compiles on a JDK 17 toolchain; downloaded where the machine has none.
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.9.0'
+}
+
+rootProject.name = 'elasticore-gradle-plugin'

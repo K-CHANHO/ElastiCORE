@@ -1,0 +1,95 @@
+plugins {
+    id "java-library"
+}
+
+description = "ElastiCORE base library"
+
+repositories {
+    // Use Maven Central for resolving dependencies.
+    mavenCentral()
+}
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+dependencies {
+
+
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.13.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.0'
+
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.13.0'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.13.0'
+
+    implementation 'org.projectlombok:lombok:1.18.26'
+    implementation 'com.github.jsqlparser:jsqlparser:4.0'
+
+    implementation 'io.github.java-diff-utils:java-diff-utils:4.12'
+
+
+    implementation 'com.github.javaparser:javaparser-core:3.25.4'
+    implementation 'com.github.javaparser:javaparser-symbol-solver-core:3.25.4'
+
+
+    // Use JUnit Jupiter for testing.
+    testImplementation libs.junit.jupiter
+
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // This dependency is used by the application.
+    implementation libs.guava
+
+
+
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+
+    testCompileOnly 'org.projectlombok:lombok:1.18.30'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
+
+    testImplementation 'org.mockito:mockito-core:4.11.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:4.11.0'
+
+}
+
+// Apply a specific Java toolchain to ease working on different environments.
+// A machine without a JDK 8 gets one downloaded (the foojay resolver in
+// settings.gradle).
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(8)
+    }
+}
+
+// The javadoc jar is published. The comments are written for readers of the
+// source - '->', bare '<' and '>' - so doclint's HTML checks, which failed the
+// javadoc task on them, are off.
+javadoc {
+    options.addBooleanOption('Xdoclint:none', true)
+    options.quiet()
+}
+
+processResources {
+    // The version is read inside filesMatching, where Gradle cannot see it. Without
+    // this the task stays UP-TO-DATE across a version bump and the jar keeps
+    // reporting the old one until someone runs clean.
+    inputs.property('version', project.version)
+
+    filesMatching('elasticore-version.properties') {
+        expand(version: project.version)
+    }
+}
+
+// Test configuration inherited from root build.gradle
+
+test {
+    // ReadmeTest reads these, and Gradle cannot see a file that no task
+    // declares. Without them the test stays UP-TO-DATE while the README is
+    // edited underneath it - green because it never ran, which is the one
+    // failure mode a documentation gate cannot afford.
+    inputs.file(rootProject.file('README.md')).withPropertyName('readme')
+    inputs.file(rootProject.file('CONTRIBUTING.md')).withPropertyName('contributing')
+    inputs.file(rootProject.file('build.gradle')).withPropertyName('rootBuildScript')
+    inputs.file(rootProject.file('gradle.properties')).withPropertyName('versionSource')
+}

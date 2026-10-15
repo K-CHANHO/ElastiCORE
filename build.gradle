@@ -1,0 +1,136 @@
+plugins {
+    id 'maven-publish'
+}
+
+allprojects {
+    group = 'io.elasticore'
+    version = elasticoreVersion
+
+    repositories {
+        mavenCentral()
+    }
+
+    // Every module reads its sources as UTF-8. This used to be set on the root
+    // project only, which has no sources, so elasticore-base and the samples
+    // compiled with the platform default - MS949 on a Korean Windows machine,
+    // UTF-8 on Linux CI - and a Korean string in a test meant different text
+    // on each.
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+    }
+    tasks.withType(Javadoc).configureEach {
+        options.encoding = 'UTF-8'
+    }
+
+    // Hidden directories under a resources directory (editor or tool state) are
+    // never packaged.
+    tasks.withType(ProcessResources).configureEach {
+        exclude '**/.*/**'
+    }
+    tasks.withType(Jar).configureEach {
+        exclude '**/.*/**'
+    }
+}
+
+// Root-level elcore task delegates to elasticore-template
+tasks.register('elcore') {
+    group = 'elasticore'
+    description = 'Run ElastiCORE code generation on elasticore-template sample DSL'
+    dependsOn ':elasticore-project:elasticore-template:elcore'
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'maven-publish'
+
+    println  project.name
+
+    // Log published artifacts
+    tasks.withType(PublishToMavenRepository).configureEach {
+        doLast {
+            println "[PUBLISH] ${publication.groupId}:${publication.artifactId}:${publication.version} -> ${repository.url}"
+        }
+    }
+    
+    // Test configuration for all subprojects
+    tasks.withType(Test) {
+        useJUnitPlatform()
+        
+        testLogging {
+            events "passed", "skipped", "failed"
+            showStandardStreams = false
+            showExceptions = true
+            showCauses = true
+            showStackTraces = true
+            
+            afterSuite { desc, result ->
+                if (!desc.parent) {
+                    def output = "Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped)"
+                    def startItem = '|  ', endItem = '  |'
+                    def repeatLength = startItem.length() + output.length() + endItem.length()
+                    println('\n' + ('-' * repeatLength) + '\n' + startItem + output + endItem + '\n' + ('-' * repeatLength))
+                }
+            }
+        }
+        
+        reports {
+            html.required = true
+            junitXml.required = true
+        }
+    }
+    
+    // Only elasticore-base is published from here. The runtime libraries
+    // configure their own publication; the samples (templates, pet store) and
+    // the elasticore-project container used to be published too - an empty
+    // io.elasticore:elasticore-project jar among them - though nothing should
+    // depend on them.
+    if (project.name == 'elasticore-base') {
+        apply plugin: 'maven-publish'
+
+        java {
+            withSourcesJar()
+            withJavadocJar()
+        }
+
+        publishing {
+            publications {
+                mavenJava(MavenPublication) {
+                    from components.java
+                }
+            }
+            // Where to publish is the publisher's to say: -P flags or the
+            // user's ~/.gradle/gradle.properties, never a file in this repository.
+            // Without elasticorePublishUrl only publishToMavenLocal is available.
+            def publishUrl = project.findProperty('elasticorePublishUrl')
+            if (publishUrl) {
+                repositories {
+                    maven {
+                        name = 'release'
+                        url = publishUrl
+                        credentials {
+                            username = project.findProperty('elasticorePublishUsername')
+                            password = project.findProperty('elasticorePublishPassword')
+                        }
+                    }
+                }
+            }
+        }
+        apply from: rootProject.file('gradle/publishing.gradle')
+    }
+}
+
+// The plugin is an included build, and an included build contributes a jar to
+// this one but never its verification or its publications. Without these two
+// bridges its 249 lines of tests run on no CI path, and publishing this
+// repository ships a framework whose recommended entry point stays behind.
+project(':elasticore-project:elasticore-base').tasks.matching { it.name == 'check' }.configureEach {
+    // Hung on base's check rather than a root task, because the root applies
+    // no java plugin and so has no check of its own - while ./gradlew build
+    // always passes through here.
+    dependsOn gradle.includedBuild('elasticore-gradle-plugin').task(':check')
+}
+['publish', 'publishToMavenLocal'].each { name ->
+    tasks.named(name) {
+        dependsOn gradle.includedBuild('elasticore-gradle-plugin').task(':' + name)
+    }
+}

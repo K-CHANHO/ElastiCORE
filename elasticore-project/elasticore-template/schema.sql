@@ -1,0 +1,313 @@
+-- Generated DDL for Entities
+
+-- Table: cms_article
+-- Column: article_id Type: null
+-- Column: create_date Type: null
+-- Column: created_by Type: null
+-- Column: last_modified_by Type: null
+-- Column: last_modified_date Type: null
+-- Column: articleStatus Type: null
+-- Column: body Type: TEXT
+-- Column: body_text Type: TEXT
+-- Column: featured Type: null
+-- Column: labels Type: null
+-- Column: publish_date Type: null
+-- Column: ratings Type: null
+-- Column: slug Type: null
+-- Column: summary Type: null
+-- Column: title Type: null
+-- Column: view_count Type: null
+-- Column: category_category_id Type: null
+
+-- Table: cms_article_AUD
+-- Column: article_id Type: null
+-- Column: REV Type: null
+-- Column: REVTYPE Type: null
+-- Column: articleStatus Type: null
+-- Column: body Type: TEXT
+-- Column: body_text Type: TEXT
+-- Column: featured Type: null
+-- Column: labels Type: null
+-- Column: publish_date Type: null
+-- Column: ratings Type: null
+-- Column: slug Type: null
+-- Column: summary Type: null
+-- Column: title Type: null
+-- Column: view_count Type: null
+
+-- Table: cms_article_cms_tag
+-- Column: Article_article_id Type: null
+-- Column: tags_tag_id Type: null
+
+-- Table: cms_attachment
+-- Column: attach_id Type: null
+-- Column: content_type Type: null
+-- Column: file_name Type: null
+-- Column: file_size Type: null
+-- Column: storage_key Type: null
+-- Column: article_article_id Type: null
+
+-- Table: cms_comment
+-- Column: comment_id Type: null
+-- Column: create_date Type: null
+-- Column: created_by Type: null
+-- Column: last_modified_by Type: null
+-- Column: last_modified_date Type: null
+-- Column: approved Type: null
+-- Column: author_email Type: null
+-- Column: author_name Type: null
+-- Column: content Type: TEXT
+-- Column: article_article_id Type: null
+-- Column: parentComment_comment_id Type: null
+
+-- Table: cms_content_category
+-- Column: category_id Type: null
+-- Column: create_date Type: null
+-- Column: created_by Type: null
+-- Column: last_modified_by Type: null
+-- Column: last_modified_date Type: null
+-- Column: description Type: TEXT
+-- Column: name Type: null
+-- Column: slug Type: null
+-- Column: sort_order Type: null
+-- Column: parent_category_id Type: null
+
+-- Table: cms_tag
+-- Column: tag_id Type: null
+-- Column: color Type: null
+-- Column: name Type: null
+
+-- Table: hr_department
+-- Column: dept_id Type: null
+-- Column: create_date Type: null
+-- Column: created_by Type: null
+-- Column: last_modified_by Type: null
+-- Column: last_modified_date Type: null
+-- Column: version Type: null
+-- Column: active Type: null
+-- Column: budget Type: null
+-- Column: code Type: null
+-- Column: description Type: TEXT
+-- Column: floor_number Type: null
+-- Column: head_count Type: null
+-- Column: max_capacity Type: null
+-- Column: min_salary Type: null
+-- Column: name Type: null
+-- Column: name_exact_ci Type: null
+-- Column: name_insensitive Type: null
+-- Column: name_prefix Type: null
+-- Column: name_prefix_ci Type: null
+-- Column: name_suffix Type: null
+-- Column: name_suffix_ci Type: null
+-- Column: status Type: null
+
+-- Table: hr_employee
+-- Column: emp_id Type: null
+-- Column: create_date Type: null
+-- Column: created_by Type: null
+-- Column: last_modified_by Type: null
+-- Column: last_modified_date Type: null
+-- Column: version Type: null
+-- Column: active Type: null
+-- Column: bonus_rate Type: null
+-- Column: email Type: null
+-- Column: first_name Type: null
+-- Column: hire_date Type: null
+-- Column: last_name Type: null
+-- Column: phone Type: null
+-- Column: salary Type: null
+-- Column: department_dept_id Type: null
+-- Column: manager_emp_id Type: null
+
+-- Table: hr_employee_AUD
+-- Column: emp_id Type: null
+-- Column: REV Type: null
+-- Column: REVTYPE Type: null
+-- Column: active Type: null
+-- Column: bonus_rate Type: null
+-- Column: email Type: null
+-- Column: first_name Type: null
+-- Column: hire_date Type: null
+-- Column: last_name Type: null
+-- Column: phone Type: null
+-- Column: salary Type: null
+
+-- Table: hr_employee_hr_skill
+-- Column: Employee_emp_id Type: null
+-- Column: skills_skill_id Type: null
+
+-- Table: hr_project
+-- Column: project_code Type: null
+-- Column: budget Type: null
+-- Column: end_date Type: null
+-- Column: name Type: null
+-- Column: start_date Type: null
+-- Column: status Type: null
+
+-- Table: hr_project_assignment
+-- Column: emp_id Type: null
+-- Column: project_code Type: null
+-- Column: assign_date Type: null
+-- Column: hours_allocated Type: null
+-- Column: role Type: null
+
+-- Table: hr_skill
+-- Column: skill_id Type: null
+-- Column: proficiency Type: null
+-- Column: skill_name Type: null
+-- Column: category Type: null
+
+-- Table: intg_api_log
+-- Column: log_id Type: null
+-- Column: created_at Type: null
+-- Column: duration Type: null
+-- Column: endpoint Type: null
+-- Column: method Type: null
+-- Column: request_body Type: TEXT
+-- Column: response_body Type: TEXT
+-- Column: status_code Type: null
+
+-- Table: intg_sync_record
+-- Column: record_id Type: null
+-- Column: entity_id Type: null
+-- Column: entity_type Type: null
+-- Column: error_message Type: TEXT
+-- Column: retry_count Type: null
+-- Column: source_system Type: null
+-- Column: sync_date Type: null
+-- Column: syncStatus Type: null
+-- Column: target_system Type: null
+
+-- Table: REVINFO
+-- Column: REV Type: null
+-- Column: REVTSTMP Type: null
+
+-- Table: shop_category
+-- Column: cat_id Type: null
+-- Column: create_date Type: null
+-- Column: created_by Type: null
+-- Column: last_modified_by Type: null
+-- Column: last_modified_date Type: null
+-- Column: active Type: null
+-- Column: description Type: TEXT
+-- Column: name Type: null
+-- Column: sort_order Type: null
+-- Column: parentCategory_cat_id Type: null
+
+-- Table: shop_customer
+-- Column: customer_id Type: null
+-- Column: create_date Type: null
+-- Column: created_by Type: null
+-- Column: last_modified_by Type: null
+-- Column: last_modified_date Type: null
+-- Column: city Type: null
+-- Column: country Type: null
+-- Column: state Type: null
+-- Column: street Type: null
+-- Column: zip_code Type: null
+-- Column: customerType Type: null
+-- Column: date_of_birth Type: null
+-- Column: email Type: null
+-- Column: first_name Type: null
+-- Column: last_name Type: null
+-- Column: loyalty_points Type: null
+-- Column: phone Type: null
+-- Column: vipProfile_profile_id Type: null
+
+-- Table: shop_order
+-- Column: order_id Type: null
+-- Column: create_date Type: null
+-- Column: created_by Type: null
+-- Column: last_modified_by Type: null
+-- Column: last_modified_date Type: null
+-- Column: notes Type: TEXT
+-- Column: order_date Type: null
+-- Column: paymentMethod Type: null
+-- Column: city Type: null
+-- Column: country Type: null
+-- Column: state Type: null
+-- Column: street Type: null
+-- Column: zip_code Type: null
+-- Column: status Type: null
+-- Column: total_amount Type: null
+-- Column: tracking_number Type: null
+-- Column: version Type: null
+-- Column: customer_customer_id Type: null
+
+-- Table: shop_order_AUD
+-- Column: order_id Type: null
+-- Column: REV Type: null
+-- Column: REVTYPE Type: null
+-- Column: notes Type: TEXT
+-- Column: order_date Type: null
+-- Column: paymentMethod Type: null
+-- Column: city Type: null
+-- Column: country Type: null
+-- Column: state Type: null
+-- Column: street Type: null
+-- Column: zip_code Type: null
+-- Column: status Type: null
+-- Column: total_amount Type: null
+-- Column: tracking_number Type: null
+
+-- Table: shop_order_item
+-- Column: item_seq Type: null
+-- Column: order Type: null
+-- Column: discount Type: null
+-- Column: quantity Type: null
+-- Column: unit_price Type: null
+-- Column: order_order_id Type: null
+-- Column: product_product_id Type: null
+
+-- Table: shop_shop_products
+-- Column: product_id Type: null
+-- Column: create_date Type: null
+-- Column: created_by Type: null
+-- Column: last_modified_by Type: null
+-- Column: last_modified_date Type: null
+-- Column: active Type: null
+-- Column: cost_price Type: null
+-- Column: description Type: TEXT
+-- Column: last_restocked Type: null
+-- Column: launch_date Type: null
+-- Column: manual_content Type: TEXT
+-- Column: metadata Type: TEXT
+-- Column: name Type: null
+-- Column: price Type: null
+-- Column: rating Type: null
+-- Column: sku Type: null
+-- Column: stock_quantity Type: null
+-- Column: tags Type: null
+-- Column: thumbnail Type: null
+-- Column: uuid Type: null
+-- Column: weight Type: null
+-- Column: category_cat_id Type: null
+
+-- Table: shop_shop_products_AUD
+-- Column: product_id Type: null
+-- Column: REV Type: null
+-- Column: REVTYPE Type: null
+-- Column: active Type: null
+-- Column: cost_price Type: null
+-- Column: description Type: TEXT
+-- Column: last_restocked Type: null
+-- Column: launch_date Type: null
+-- Column: manual_content Type: TEXT
+-- Column: metadata Type: TEXT
+-- Column: name Type: null
+-- Column: price Type: null
+-- Column: rating Type: null
+-- Column: sku Type: null
+-- Column: stock_quantity Type: null
+-- Column: tags Type: null
+-- Column: thumbnail Type: null
+-- Column: uuid Type: null
+-- Column: weight Type: null
+
+-- Table: shop_vip_profile
+-- Column: profile_id Type: null
+-- Column: discount_rate Type: null
+-- Column: enroll_date Type: null
+-- Column: tier Type: null
+-- Column: customer_customer_id Type: null
+

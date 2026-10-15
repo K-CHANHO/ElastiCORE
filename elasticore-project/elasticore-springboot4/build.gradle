@@ -1,0 +1,122 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+// The runtime library for Spring Boot 4: the same sources as
+// elasticore-springboot3, compiled and tested against the Boot 4 stack
+// (Spring Framework 7, Hibernate 7, Spring Data 2025, Jackson 3 in the web
+// layer). The Java package stays io.elasticore.springboot3 on purpose:
+// generated code imports it, so a project moves from Boot 3 to Boot 4 by
+// changing this one dependency and nothing it generated.
+group = 'io.elasticore.springboot4'
+description = 'Spring Boot 4 Common Library'
+
+def shared = project(':elasticore-project:elasticore-springboot3').projectDir
+
+sourceSets {
+    main {
+        // The shared sources, and the Jackson 3 codecs in place of
+        // springboot3's Jackson 2 ones (src/jackson2/java is not included).
+        java.srcDirs = ["$shared/src/main/java", "src/jackson3/java"]
+        resources.srcDirs = ["$shared/src/main/resources"]
+    }
+    test {
+        java.srcDirs = ["$shared/src/test/java"]
+        resources.srcDirs = ["$shared/src/test/resources"]
+    }
+}
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+    withSourcesJar()
+    withJavadocJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation platform('org.springframework.boot:spring-boot-dependencies:4.0.8')
+    testImplementation platform('org.springframework.boot:spring-boot-dependencies:4.0.8')
+
+    implementation project(':elasticore-project:elasticore-base')
+
+    api 'org.springframework:spring-context'
+    api 'org.springframework:spring-beans'
+    api 'org.springframework:spring-web'
+
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'jakarta.persistence:jakarta.persistence-api'
+    compileOnly 'jakarta.validation:jakarta.validation-api'
+    // Only compiled against: the session-based CurrentUser signs in through the
+    // request, and an application without a servlet container never calls it.
+    compileOnly 'jakarta.servlet:jakarta.servlet-api'
+    // RunAsSystemExtension, for the generated service tests; a project has JUnit on its test path.
+    compileOnly 'org.junit.jupiter:junit-jupiter-api'
+    testImplementation 'jakarta.servlet:jakarta.servlet-api'
+
+    implementation 'org.reflections:reflections:0.10.2'
+    // The library's own mappers (the HTTP port client, the YAML gateway)
+    // stay on Jackson 2, which Boot 4 still manages; the application's web
+    // layer is Jackson 3 and is not touched by them.
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml'
+    implementation 'tools.jackson.core:jackson-databind'
+    implementation 'tools.jackson.dataformat:jackson-dataformat-xml'
+    implementation 'org.apache.commons:commons-lang3'
+    implementation 'io.projectreactor:reactor-core'
+    implementation 'io.netty:netty-handler'
+    implementation 'org.apache.commons:commons-jexl3:3.0'
+
+    api 'com.aventrix.jnanoid:jnanoid:2.0.0'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'io.projectreactor:reactor-test'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.11.0'
+    testImplementation 'org.springframework:spring-test'
+    testImplementation 'org.mockito:mockito-core'
+    testImplementation 'org.mockito:mockito-junit-jupiter'
+    testImplementation 'org.assertj:assertj-core'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // The DBMS port's sort is checked against a real database
+    testRuntimeOnly 'com.h2database:h2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = 'elasticore-springboot4'
+        }
+    }
+    // Where to publish is the publisher's to say: -P flags or the
+    // user's ~/.gradle/gradle.properties, never a file in this repository.
+    // Without elasticorePublishUrl only publishToMavenLocal is available.
+    def publishUrl = project.findProperty('elasticorePublishUrl')
+    if (publishUrl) {
+        repositories {
+            maven {
+                name = 'release'
+                url = publishUrl
+                credentials {
+                    username = project.findProperty('elasticorePublishUsername')
+                    password = project.findProperty('elasticorePublishPassword')
+                }
+            }
+        }
+    }
+}
+
+// POM metadata and signing, shared by every published artifact
+apply from: rootProject.file('gradle/publishing.gradle')

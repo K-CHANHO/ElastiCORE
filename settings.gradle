@@ -1,0 +1,24 @@
+// The plugin is a build of its own rather than a module of this one: a plugin
+// cannot be applied by a sibling module of the build that produces it, and the
+// sample modules are meant to be its first users. Included here, it resolves
+// by id exactly as it will for a project that gets it from a Maven repository.
+pluginManagement {
+    includeBuild('elasticore-project/elasticore-gradle-plugin')
+}
+
+// elasticore-base is compiled and tested on a JDK 8 toolchain, the libraries
+// and samples on 17. Where the machine has neither, Gradle downloads them
+// instead of failing with "no matching toolchain".
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.9.0'
+}
+
+rootProject.name = 'elasticore'
+
+include('elasticore-project:elasticore-base')
+include('elasticore-project:elasticore-template')
+include('elasticore-project:elasticore-template-kt')
+include('elasticore-project:elasticore-template-ddd')
+include('elasticore-project:elasticore-springboot3')
+include('elasticore-project:elasticore-springboot4')
+include('elasticore-project:elasticore-sample-petstore')

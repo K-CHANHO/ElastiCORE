@@ -1,0 +1,52 @@
+dto:
+
+  # ================================================================
+  # Search DTOs (required for service/controller generation)
+  # ================================================================
+
+  BlogPostSrchDTO:
+    meta: dto @searchable(entity=BlogPost, pageSize=10)
+    fields:
+      title: string @search(like)
+      author: string @search(like)
+      status: string @search(eq)
+
+  MemberSrchDTO:
+    meta: dto @searchable(entity=Member, pageSize=10)
+    fields:
+      username: string @search(like)
+      email: string @search(like)
+      role: string @search(eq)
+
+  # ================================================================
+  # BlogPostDTO: primary DTO for BlogPost entity
+  # jsonview(auto) from env.yml auto-infers @JsonView from entity annotations:
+  # - @id @sequence -> excluded from Create view
+  # - @updatable(false) -> excluded from Update view
+  # - @jpa:CreatedDate, @jpa:LastModifiedDate, @jpa:Version -> Read only
+  # ================================================================
+  BlogPostDTO:
+    meta: dto @template(BlogPost)
+    fields:
+
+  # ================================================================
+  # MemberDTO: primary DTO for Member entity
+  # Inherits @jsonview from entity meta (explicit @view on each field)
+  # ================================================================
+  MemberDTO:
+    meta: dto @template(Member)
+    fields:
+      password: --
+
+  # ================================================================
+  # PostSummaryDTO: custom DTO with @template + @jsonview combination
+  # Excludes heavy 'content' field, adds manual @view control
+  # ================================================================
+  PostSummaryDTO:
+    meta: dto @template(BlogPost) @jsonview
+    fields:
+      content: --
+      id: long @view(r)
+      title: string @view(cru)
+      summary: string @view(cr)
+      status: string @view(ur)

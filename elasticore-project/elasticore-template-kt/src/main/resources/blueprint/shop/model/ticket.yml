@@ -1,0 +1,69 @@
+# The 3.0 domain-rule DSL in Kotlin: who may do what (@access, @owner),
+# sign-in (@login, @password), a lifecycle (states) and values the model
+# derives (@snapshot, @compute). The Java side of the same is the pet store
+# sample (elasticore-sample-petstore).
+
+enumeration:
+  TicketStatus:
+    meta: enum @db(code) @json(code) -- 작업 상태
+    fields:
+      code:  string(3) @code
+      label: string(20)
+    enum:
+      OPEN:   OPN, Open
+      CLOSED: CLS, Closed
+
+  BillingStatus:
+    meta: enum @db(code) @json(code) -- 청구 상태
+    fields:
+      code:  string(3) @code
+      label: string(20)
+    enum:
+      UNBILLED: UNB, Unbilled
+      BILLED:   BIL, Billed
+      VOID:     VOD, Void
+
+entity:
+  Agent:
+    meta: entity @root @editable @expose(20) @owner(agentId) @access(read=owner, create=public, update=owner) -- 상담원
+    fields:
+      agentId: long @id @sequence
+      login:    string(20)! @login
+      secret:   string(255)! @password
+      grade:    string(10) @access(admin)
+
+  Ticket:
+    meta: entity @root @expose(20) @owner(agentId) @access(read=owner, create=user, close=owner) @event(Closed) -- 작업
+    fields:
+      ticketId: string(36) @id @genid
+      agent:    Agent @ManyToOne
+      subject:  string(100)!
+      status:   TicketStatus
+      billing:  BillingStatus
+      total:    bigdecimal(14.2) @compute(sum(entries.amount))
+      entries:  List<TicketEntry> @OneToMany(mappedBy="ticket") @dtype(List<TicketEntryDTO>)
+    states:
+      status:
+        initial: OPEN
+        close:   OPEN -> CLOSED
+        cancel:  OPEN -> CLOSED
+        delete:  CLOSED              # deleted only once closed ...
+      billing:
+        initial: UNBILLED
+        bill:    UNBILLED -> BILLED
+        cancel:  UNBILLED -> VOID     # one command, two lifecycles: both move or neither
+        delete:  UNBILLED, VOID      # ... and never once billed
+
+  TicketEntry:
+    meta: entity @behavior -- 작업 항목
+    fields:
+      entryId: string(36) @id @genid
+      ticket:  Ticket @ManyToOne
+      product: Product @ManyToOne
+      hours:   quantity!
+      rate:    bigdecimal(12.2) @snapshot(product.price)
+      amount:  bigdecimal(14.2) @compute(rate * hours)
+
+dto:
+  TicketEntryDTO:
+    meta: dto @template(TicketEntry)

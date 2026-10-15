@@ -1,0 +1,34 @@
+package ${packageName};
+
+
+import lombok.Getter;
+import lombok.Setter;
+import lombok.Builder;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+
+import ${j2eePkgName}.validation.constraints.NotBlank;
+import ${j2eePkgName}.validation.constraints.NotNull;
+import ${j2eePkgName}.validation.constraints.Size;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import java.util.*;
+import java.time.*;
+import ${importList};
+
+
+/**
+ * <pre>${description}</pre>
+ * hash:${hashCode}
+*/
+
+${classAnnotationList}
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public ${abstract} class ${className} ${extendInfo} ${implementInfo}  {
+
+	${fieldList}
+}

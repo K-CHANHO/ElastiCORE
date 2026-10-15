@@ -1,0 +1,13 @@
+# Fixture for FieldDescriptionTest — verifies that "--" inline comments are
+# surfaced through Field.getDescription() after being parsed into @label/@desc
+# annotations. Also covers the "label | desc" extended form.
+entity:
+  DescCommentFixture:
+    meta: entity @runtime(map)
+    desc: "entity-level desc via YAML key"
+
+    fields:
+      plainLabel:   string  @id       -- Plain label
+      labelAndDesc: string            -- Short label | Detailed description text
+      noComment:    string
+      withFn:       string @fn(trim)  -- Trimmed value

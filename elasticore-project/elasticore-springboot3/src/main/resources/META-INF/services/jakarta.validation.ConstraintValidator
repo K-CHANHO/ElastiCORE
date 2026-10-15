@@ -1,0 +1,4 @@
+io.elasticore.springboot3.domain.ValueBoundValidators$MoneyDecimalMin
+io.elasticore.springboot3.domain.ValueBoundValidators$MoneyDecimalMax
+io.elasticore.springboot3.domain.ValueBoundValidators$QuantityMin
+io.elasticore.springboot3.domain.ValueBoundValidators$QuantityMax

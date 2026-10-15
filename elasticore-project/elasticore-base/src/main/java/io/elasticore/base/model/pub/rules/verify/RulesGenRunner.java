@@ -1,0 +1,2806 @@
+package io.elasticore.base.model.pub.rules.verify;
+
+import io.elasticore.base.ECoreModelContext;
+import io.elasticore.base.ModelDomain;
+import io.elasticore.base.extract.FileBasedSourceFileAccessFactory;
+import io.elasticore.base.model.ECoreModel;
+import io.elasticore.base.model.ModelComponentItems;
+import io.elasticore.base.model.entity.Entity;
+import io.elasticore.base.model.pub.rules.ArtifactTarget;
+import io.elasticore.base.model.pub.rules.EntitySpec;
+import io.elasticore.base.model.pub.rules.RuleCatalog;
+import io.elasticore.base.model.pub.rules.RuleEngine;
+import io.elasticore.base.model.pub.rules.RulesConfig;
+import io.elasticore.base.model.pub.rules.SourceCode;
+import io.elasticore.base.util.HashUtils;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Source generation through the 3.0 rule pipeline. Driven by the elcore3
+ * gradle task, alongside - never replacing - the existing elcore task.
+ *
+ *   ./gradlew elcore3 [-Pdomain=content] [-Pv3] [-Pforce]
+ *
+ * Modes:
+ *   default : compatibility mode - the 2.x templates, output verified
+ *             byte-identical by elcoreRulesCheck
+ *   -Pv3    : clean mode - the v3 templates (used-imports only,
+ *             rule-emitted class annotations, per-entity method selection)
+ *
+ * File safety mirrors 2.x writeSrcCode: a file carrying the generate-once
+ * marker is never touched, and a file whose //ecd: hash shows developer
+ * edits is skipped unless -Pforce is given. Diff-based merging of developer
+ * edits is improvement 2 and not wired yet, so skipping is the safe default.
+ *
+ * PROTOTYPE - part of the 3.0 publisher extension experiment.
+ */
+public final class RulesGenRunner {
+
+    private final String projectRoot;
+    private final boolean v3;
+    private final boolean force;
+
+    /**
+     * Kotlin output: the kt bundle, the kt skeletons, and .kt files under
+     * src/main/kotlin. Only the artifacts the kt bundle covers are emitted -
+     * an artifact whose rules still write Java signatures is skipped rather
+     * than written in the wrong language.
+     */
+    private final boolean kotlin;
+
+    /**
+     * TypeScript output: the model a browser sees, as .ts under src/main/ts.
+     * Only the data artifacts - a DTO and an enum are the whole surface, since
+     * nothing else the DSL declares runs on that side.
+     */
+    private final boolean typescript;
+
+    /** The house style the build asked for, or none. */
+    private final io.elasticore.base.model.pub.rules.CodeStyle style =
+            io.elasticore.base.model.pub.rules.CodeStyle.fromSystemProperties();
+
+    /** Module alias -> root path, for a namespace that redirects across modules. */
+    private Map<String, String> moduleRoots = java.util.Collections.emptyMap();
+
+    /** Where the domain being generated writes, when the project has modules. */
+    private String domainRoot;
+
+    /** The project's contexts, for a process manager that reacts to another context's event. */
+    private ContextMap contextMap;
+
+    /** Package prefix -> module alias, as the domain's env.yml declares it. */
+    private Map<String, String> packageModuleMap;
+
+    private int wrote = 0;
+    private int unchanged = 0;
+    private int skipped = 0;
+
+    /**
+     * Artifacts that could not be written.
+     *
+     * Counted apart from a skip because the two mean opposite things: a skip
+     * is a decision some rule made about a file, and this is the absence of
+     * one. Both used to land in the same number, so a rule set that threw on
+     * every entity of a domain ended the run the same way a clean one did -
+     * zero exit, a line in the log, and a project missing files nobody was
+     * told about.
+     */
+    private int failed = 0;
+    private final List<String> notes = new ArrayList<String>();
+
+    private RulesGenRunner(String projectRoot, boolean v3, boolean force,
+                           boolean kotlin, boolean typescript) {
+        this.projectRoot = projectRoot;
+        this.v3 = v3;
+        this.force = force;
+        this.kotlin = kotlin;
+        this.typescript = typescript;
+        SpecFactory.valueObjectsInDto(false);
+        SpecFactory.rootsSplitByDefault(false);
+        SpecFactory.commandOnlyRoots(false);
+    }
+
+    /**
+     * The first domain whose own rule selection exists only in v3, as a line
+     * for the log - or null when every domain is content with the 2.x mode.
+     */
+    static String domainAskingForV3(List<ECoreModel> models) {
+        if (models == null) return null;
+        for (ECoreModel model : models) {
+            java.util.List<String> rules = RulesConfig.configuredList(model.getConfig("publisher.rules"));
+            if (rules == null) continue;
+            for (String rule : rules) {
+                if (needsV3(rule)) {
+                    return "domain '" + model.getInternalDomainName() + "' names " + rule;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * A domain rule the DSL states and the selected rules do not carry - an
+     * @access on a 2.x bundle, states: without the DDD rules - would be
+     * ignored without a word, and a password stored as typed. Said instead.
+     */
+    private void warnUnenforced(ECoreModel model) {
+        boolean access = selectsNamed("ServiceAccessRules");
+        boolean states = selectsNamed("DddStateRules");
+        boolean derive = selectsNamed("DddDeriveRules");
+        ModelComponentItems<Entity> all = model.getEntityModels().getItems();
+        for (int i = 0; i < all.size(); i++) {
+            Entity entity = all.get(i);
+            String name = entity.getIdentity().getName();
+            java.util.Map<String, io.elasticore.base.model.core.Annotation> meta = entity.getMetaInfo().getMetaAnnotationMap();
+            boolean wantsAccess = meta != null && (meta.containsKey("access") || meta.containsKey("owner"));
+            boolean wantsDerive = false;
+            ModelComponentItems<io.elasticore.base.model.entity.Field> fields = entity.getItems();
+            for (int j = 0; fields != null && j < fields.size(); j++) {
+                io.elasticore.base.model.entity.Field f = fields.get(j);
+                if (f.hasAnnotation("password") || f.hasAnnotation("access")) wantsAccess = true;
+                if (f.hasAnnotation("snapshot") || f.hasAnnotation("compute")) wantsDerive = true;
+            }
+            String missing = null;
+            if (wantsAccess && !access) missing = "@access, @owner and @password (jpa-service-access)";
+            else if (!entity.getStates().isEmpty() && !states) missing = "states: (ddd-state)";
+            else if (wantsDerive && !derive) missing = "@snapshot and @compute (ddd-derive)";
+            if (missing != null) {
+                io.elasticore.base.util.ConsoleLog.storeLog("DSL_WARN", String.format(
+                        "[%s] %s declares %s, which the selected rules do not enforce - nothing is checked, derived"
+                                + " or hashed. Declare architecture = 'domain-model' or 'hexagonal', or add the rule set.",
+                        model.getInternalDomainName(), name, missing));
+            }
+        }
+    }
+
+    /**
+     * A command given a move in states: after its behaviour class was written
+     * still has the stub that throws - and the stub overrides the move, so
+     * every call is a 500. The class is the developer's; it is said rather
+     * than rewritten.
+     */
+    private void warnStubsOverMoves(List<EntitySpec> specs) {
+        for (EntitySpec e : specs) {
+            if (e.stateMachines().isEmpty()) continue;
+            ArtifactTarget behavior = target(e.pkg("entity"), e.getName());
+            File file = new File(rootFor(behavior) + "/" + behavior.relativePath());
+            if (!file.isFile()) continue;
+            String text;
+            try {
+                text = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+            } catch (java.io.IOException ex) {
+                continue;
+            }
+            java.util.Set<String> warned = new java.util.HashSet<String>();
+            for (EntitySpec.StateMachine m : e.stateMachines()) {
+                for (EntitySpec.Move move : m.moves()) {
+                    // A lifecycle left out keeps its commands abstract: the stub is then needed.
+                    if (!e.lifecycleAccepts(move.command()) || !warned.add(move.command())) continue;
+                    if (text.contains(e.getName() + "." + move.command() + ": write the rule")) {
+                        io.elasticore.base.util.ConsoleLog.storeLog("DSL_WARN", String.format(
+                                "[%s] %s.%s is a move of states:, but %s still has the stub that throws and"
+                                        + " overrides it - delete the stub from %s.",
+                                e.domainClassName(), e.getName(), move.command(), e.getName(), behavior.relativePath()));
+                    }
+                }
+            }
+        }
+    }
+
+    /** Whether the selection includes a rule set of this class name (named, so the runner imports no rule set). */
+    private boolean selectsNamed(String simpleName) {
+        for (String name : contributingRules()) {
+            try {
+                for (io.elasticore.base.model.pub.rules.CodeRules rs : RuleCatalog.standard().rulesOf(name)) {
+                    if (rs.getClass().getSimpleName().equals(simpleName)) return true;
+                }
+            } catch (IllegalArgumentException notOnThisClasspath) {
+                // a project's own rule set: not one of these
+            }
+        }
+        return false;
+    }
+
+    /** Whether a rule name exists only as a v3 reading (the DDD, hexagonal and clean bundles). */
+    static boolean needsV3(String rule) {
+        if (rule == null) return false;
+        String r = rule.trim();
+        return r.startsWith("ddd-") || r.startsWith("hexagonal-") || r.startsWith("hex-")
+                || r.endsWith("-v3") || r.equals("jpa-write-guard") || r.equals("spring-api-errors")
+                || r.equals("jpa-value-object-boundary") || r.equals("jpa-service-access");
+    }
+
+    /** Where an artifact of the language being generated goes. */
+    private ArtifactTarget target(String packageName, String className) {
+        if (typescript) {
+            // One flat directory: a module path is a path, and the package
+            // a Java type sits in says nothing about where a browser would
+            // look for it.
+            return ArtifactTarget.of("ts", "src/main/ts", "ts", "", className, false);
+        }
+        return kotlin
+                ? ArtifactTarget.kotlin(packageName, className)
+                : ArtifactTarget.java(packageName, className);
+    }
+
+    public static void main(String[] args) {
+        // The value types this engine writes and the 2.x generator does not
+        // (Instant, UUID, short ...): on for this run, off after it, so a 2.x
+        // generation in the same JVM resolves them as it always did.
+        io.elasticore.base.model.entity.BaseFieldType.ruleEngineTypes(true);
+        try {
+            generateAll(args);
+        } finally {
+            io.elasticore.base.model.entity.BaseFieldType.ruleEngineTypes(false);
+        }
+    }
+
+    private static void generateAll(String[] args) {
+        String basePath = System.getProperty("elasticore.base.path");
+        if (basePath == null) basePath = System.getProperty("user.dir");
+
+        // What an earlier run in this JVM found is not this run's to report.
+        io.elasticore.base.model.pub.rules.ModelCheck.reset();
+        io.elasticore.base.model.pub.rules.SourceCode.resetWarnings();
+
+        boolean v3 = Boolean.getBoolean("elasticore.rules.v3");
+        boolean force = Boolean.getBoolean("elasticore.rules.force");
+        boolean kotlin = Boolean.getBoolean("elasticore.rules.kt");
+        boolean typescript = Boolean.getBoolean("elasticore.rules.ts");
+
+        // A build that declared a language gets the switch derived from it
+        // rather than set beside it. The two used to be spelled separately -
+        // a bundle naming Kotlin and a property naming the tree - and the
+        // pairing that disagrees is what the rule guide warns about and what
+        // SourceCode.requireSyntax throws on much later. One word decides it.
+        RulesConfig.Language declaredLanguage = RulesConfig.declaredLanguage();
+        if (declaredLanguage != null) {
+            kotlin = kotlin || declaredLanguage == RulesConfig.Language.KOTLIN;
+            typescript = typescript || declaredLanguage == RulesConfig.Language.TYPESCRIPT;
+        }
+        // The architecture decides the mode the same way the language decides
+        // its switch. A domain model and a hexagon exist only as v3 bundles -
+        // their skeletons live under v3/ - so declaring either and getting the
+        // 2.x mode sent every DDD artifact looking for a template that does
+        // not exist. The samples never showed it because their builds set
+        // elasticore.rules.v3 by hand; a real project declares two words.
+        RulesConfig.Architecture declaredArchitecture = RulesConfig.declaredArchitecture();
+        if (declaredArchitecture == RulesConfig.Architecture.DOMAIN_MODEL
+                || declaredArchitecture == RulesConfig.Architecture.HEXAGONAL) {
+            v3 = true;
+        }
+        String domainFilter = System.getProperty("elasticore.domain");
+
+        // A multi-module project keeps its blueprints per module, and names
+        // those modules the same way the 2.x extractor is told about them.
+        String modulePaths = System.getProperty("elasticore.modules");
+
+        System.out.println("[elcore3] mode      : "
+                + (typescript ? "typescript" : kotlin ? "kotlin"
+                        : v3 ? "v3 (clean)" : "compatible"));
+        System.out.println("[elcore3] project   : " + basePath);
+
+        // The guides go beside the model here as well as in ModelExtractor.
+        // A project on a bundle is the one meeting these documents for the
+        // first time, and until now it was the only one that never received
+        // them - both rule-engine sample modules had an empty blueprint root.
+        if (!Boolean.getBoolean("elasticore.rules.list")) {
+            io.elasticore.base.util.GuideDeployer.deployTo(
+                    basePath + "/src/main/resources/blueprint", basePath);
+        }
+        if (modulePaths != null && !modulePaths.trim().isEmpty()) {
+            System.out.println("[elcore3] modules   : " + modulePaths);
+        } else {
+            System.out.println("[elcore3] blueprint : "
+                    + basePath + "/src/main/resources/blueprint");
+        }
+
+        io.elasticore.base.model.pub.rules.CodeStyle declared =
+                io.elasticore.base.model.pub.rules.CodeStyle.fromSystemProperties();
+        System.out.println("[elcore3] style     : "
+                + (declared.isAsWritten() ? "as written" : declared.describe()));
+
+        BlueprintLoader loader = (modulePaths != null && !modulePaths.trim().isEmpty())
+                ? BlueprintLoader.loadModules(modulePaths)
+                : BlueprintLoader.load(basePath + "/src/main/resources/blueprint");
+        if (loader.isEmpty()) {
+            System.out.println("[elcore3] no blueprint domain found");
+            System.exit(1);
+            return;
+        }
+
+        // The checks the other entry point has always run, and this one
+        // silently did not. A bundle was a downgrade nobody had announced: a
+        // duplicate entity across domains, or a reference to a type that
+        // exists nowhere, sailed through here and surfaced as a compile error
+        // in generated code - or worse, compiled. Same inputs, same warnings,
+        // whichever door the project came in through.
+        io.elasticore.base.extract.ModelExtractor.validateGlobalTypeReferences(
+                new ArrayList<io.elasticore.base.ECoreModelContext>(loader.contexts().values()));
+        RulesConfig.settleSpringBoot(loader.contexts().values());
+
+        // And a domain that names a v3 bundle in its own env.yml gets v3 too,
+        // with no switch to remember: the rule names say what they need.
+        if (!v3 && !kotlin && !typescript) {
+            String asking = domainAskingForV3(loader.allModels());
+            if (asking != null) {
+                v3 = true;
+                System.out.println("[elcore3] mode      : v3 (clean) - " + asking);
+            }
+        }
+
+        // The project's own rule sets, checked once before anything is
+        // generated: a misspelt class otherwise failed every file in turn.
+        for (String name : RulesConfig.addedRules()) {
+            try {
+                RuleCatalog.standard().rulesOf(name);
+            } catch (IllegalArgumentException e) {
+                io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] " + e.getMessage());
+                System.exit(1);
+            } catch (LinkageError e) {
+                io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] Rule set '" + name + "' cannot be loaded: " + e
+                        + (e instanceof UnsupportedClassVersionError
+                                ? " - it is compiled for a newer Java than the generator runs on."
+                                : " - a class it uses is not on the generator's classpath; add it to the rules module's dependencies."));
+                System.exit(1);
+            }
+        }
+
+        RulesGenRunner runner = new RulesGenRunner(basePath, v3, force, kotlin, typescript);
+        runner.moduleRoots = loader.moduleRoots();
+        List<ECoreModel> allModels = loader.allModels();
+
+        // The bounded contexts the domains declare (config.context), checked
+        // before anything is written: a type taken across a boundary nobody
+        // opened is the model's problem, said once for the whole project.
+        ContextMap contextMap = ContextMap.of(loader);
+        for (String w : contextMap.warnings()) io.elasticore.base.util.ConsoleLog.storeLog("DSL_WARN", w);
+        for (String p : contextMap.problems()) io.elasticore.base.model.pub.rules.ModelCheck.fail("[elcore3] context: " + p);
+        runner.contextMap = contextMap;
+
+        for (Map.Entry<String, ECoreModelContext> en : loader.contexts().entrySet()) {
+            String domainDirName = loader.domainDirNameOf(en.getKey());
+            if (domainFilter != null && !domainFilter.contains(domainDirName)) continue;
+            runner.domainRoot = loader.moduleRootOf(en.getKey());
+            runner.generate(domainDirName, loader.modelsOf(en.getKey()), allModels);
+        }
+        // A listing wrote nothing, so it must not tidy up either: removeStale
+        // would read every generated file as no longer produced.
+        if (Boolean.getBoolean("elasticore.rules.list")) return;
+        runner.writeOrmXml();
+        if (domainFilter == null && runner.succeeded()) runner.removeStale();
+        runner.printSummary();
+
+        // What the DSL validation found, said where the person who can fix it
+        // is looking. The extractor prints these; a rule-engine project used
+        // to get them stored and never shown.
+        io.elasticore.base.util.ConsoleLog.printRemainingAsOrphans("DSL_WARN",
+                "[elcore3] DSL validation warnings:", "  ", true);
+
+        // The schema every domain contributes to, written beside the model it
+        // describes. Every domain is loaded regardless of the filter, so the
+        // file reflects the whole project and is safe to regenerate - the same
+        // guarantee the extractor gives it.
+        writeSchema(loader, basePath, modulePaths);
+
+        // The context map beside it, where a domain declared itself a context.
+        if (contextMap.declared()) writeContextMap(contextMap, schemaRootOf(basePath, modulePaths));
+
+        // The Ossie semantic model, where a project asked for it. Beside the
+        // schema because it is the same kind of thing: a side-car describing
+        // the whole model, regenerated with it, never edited.
+        if (io.elasticore.base.model.pub.ossie.OssieSemanticModelExporter.requested(allModels)) {
+            io.elasticore.base.model.pub.ossie.OssieSemanticModelExporter.export(
+                    new ArrayList<io.elasticore.base.ECoreModelContext>(loader.contexts().values()),
+                    schemaRootOf(basePath, modulePaths));
+        }
+
+        // A generation error used to be a line in the log the build walked
+        // past. It is the build's answer now: the sources a compile is about
+        // to run on are not the ones the model describes.
+        if (!runner.succeeded()) {
+            System.exit(1);
+        }
+        // A project's model check that refused the model: every file was
+        // still generated, so all of its findings were said in this one run.
+        java.util.List<String> refused = io.elasticore.base.model.pub.rules.ModelCheck.failures();
+        if (!refused.isEmpty()) {
+            io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] the model check failed (" + refused.size() + "):");
+            for (String r : refused) io.elasticore.base.util.ConsoleLog.printWarn("  " + r);
+            System.exit(1);
+        }
+    }
+
+    /** context-map.md: the bounded contexts and what crosses between them, drawn in Mermaid. */
+    private static void writeContextMap(ContextMap map, String blueprintRoot) {
+        File file = new File(blueprintRoot, "context-map.md");
+        try {
+            String text = map.markdown();
+            if (file.isFile()) {
+                String existing = new String(java.nio.file.Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+                if (equalsIgnoringLineEndings(existing, text)) return;
+            }
+            if (file.getParentFile() != null) file.getParentFile().mkdirs();
+            java.nio.file.Files.write(file.toPath(), text.getBytes(StandardCharsets.UTF_8));
+            System.out.println("[elcore3] context map: " + file.getPath());
+        } catch (IOException e) {
+            // A side-car: a stale map is a worse document, not a broken build.
+            io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] context-map.md not written: " + e.getMessage());
+        }
+    }
+
+    /** Where the project-level side-cars go: the same answer for both of them. */
+    private static String schemaRootOf(String basePath, String modulePaths) {
+        return (modulePaths != null && !modulePaths.trim().isEmpty())
+                ? modulePaths.split(",")[0].trim() + "/src/main/resources/blueprint"
+                : basePath + "/src/main/resources/blueprint";
+    }
+
+    /**
+     * schema.yml, from whichever shape the project has.
+     *
+     * A failure here degrades the schema, not the build: the sources are
+     * already on disk and correct, and a stale schema.yml with a warning
+     * beats losing the generation over its side-car.
+     */
+    private static void writeSchema(BlueprintLoader loader, String basePath, String modulePaths) {
+        io.elasticore.base.model.pub.schema.SchemaCodePublisher schema =
+                new io.elasticore.base.model.pub.schema.SchemaCodePublisher();
+
+        for (io.elasticore.base.ECoreModelContext ctx : loader.contexts().values()) {
+            String[] domainNames = ctx.getInternalDomainNames();
+            if (domainNames == null) continue;
+            for (String domainName : domainNames) {
+                io.elasticore.base.ModelDomain domain = ctx.getDomain(domainName);
+                if (domain == null) continue;
+                try {
+                    schema.publish(ctx, domain);
+                } catch (Exception e) {
+                    io.elasticore.base.util.ConsoleLog.printWarn(
+                            "Failed to collect schema: " + domainName + " - " + e.getMessage());
+                }
+            }
+        }
+
+        try {
+            if (modulePaths != null && !modulePaths.trim().isEmpty()) {
+                schema.generateSchemaFile(modulePaths.split(",")[0].trim());
+            } else {
+                schema.generateSchemaFileInBlueprintDir(basePath + "/src/main/resources/blueprint");
+            }
+        } catch (Exception e) {
+            io.elasticore.base.util.ConsoleLog.printWarn(
+                    "Failed to generate schema.yml: " + e.getMessage());
+        }
+    }
+
+    // ------------------------------------------------------------------
+
+    /** Models already emitted, by identity: the shared context re-offers them. */
+    private final java.util.Set<ECoreModel> generatedModels =
+            java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<ECoreModel, Boolean>());
+
+    /** The model being generated, for the configuration a rule selection reads. */
+    private ECoreModel currentModel;
+
+    private void generate(String domainDirName, List<ECoreModel> models, List<ECoreModel> allModels) {
+        System.out.println();
+        System.out.println("[" + domainDirName + "]");
+        // The refusal codes this domain's rules record as they generate - one
+        // catalog for the domain, however many models its blueprint holds.
+        io.elasticore.base.model.pub.rules.ErrorCatalog.begin();
+
+        for (ECoreModel model : models) {
+            if (!generatedModels.add(model)) continue;
+            packageModuleMap = model.getNamespaceModuleRedirectMap();
+            currentModel = model;
+            if (Boolean.getBoolean("elasticore.rules.list")) {
+                listRules(domainDirName);
+                continue;
+            }
+            // Another aggregate by its identity, where the rule set that
+            // decides references is selected. The model is rewritten before
+            // any spec is built from it, so every artifact sees one shape.
+            // A TypeScript run takes these from the server's selection: the
+            // client describes what the server sends (see serverRules). It is
+            // not gated on v3: a TypeScript run never reads the domain's own
+            // publisher.rules for that switch, and the server's rules say it.
+            boolean shaped = v3 || kotlin || typescript;
+            if (shaped
+                    && shapes(io.elasticore.base.model.pub.rules.ReferencesById.class)) {
+                IdReferences.apply(model);
+            }
+            // Per domain, because the selection is: a value object travels in
+            // the DTO only where a rule set makes it immutable.
+            SpecFactory.valueObjectsInDto(shaped && shapes(
+                    io.elasticore.base.model.pub.rules.ImmutableValueObjects.class));
+            // And a root starts with a class for its behaviour where the
+            // rule set that makes one - the one that names entity classes -
+            // is selected.
+            SpecFactory.rootsSplitByDefault(shaped
+                    && shapes(io.elasticore.base.model.pub.rules.EntityClassNamer.class));
+            SpecFactory.commandOnlyRoots(shaped
+                    && shapes(io.elasticore.base.model.pub.rules.CommandOnlyRoots.class));
+
+            List<EntitySpec> specs = new ArrayList<EntitySpec>();
+            ModelComponentItems<Entity> entities = model.getEntityModels().getItems();
+            while (entities.hasNext()) {
+                Entity entity = entities.next();
+                EntitySpec spec = SpecFactory.fromEntity(entity, model, domainDirName);
+                for (ECoreModel m : allModels) {
+                    SpecFactory.registerEnums(spec, m);
+                }
+                SpecFactory.registerAllEmbeddables(spec, allModels);
+                SpecFactory.collectEntityImports(spec, entity, model);
+                specs.add(spec);
+                generateEntityArtifacts(entity, spec, model);
+            }
+
+            generateDtos(domainDirName, model);
+            if (!typescript) {
+                warnUnenforced(model);
+                warnStubsOverMoves(specs);
+            }
+
+            if (typescript) {
+                generateEnums(model);
+                emitDomain(SpecFactory.fromDomain(domainDirName, model, specs),
+                        "apiSupport", target("", "apiSupport"), "ts-api");
+                continue;
+            }
+
+            // The rest still write Java from their own rules - EnumBaseRules
+            // builds converter bodies, RepositoryBaseRules builds signatures -
+            // so a Kotlin run emits only what the kt bundle covers rather than
+            // putting Java into a Kotlin source tree. Each joins as its rules
+            // learn the language.
+            if (kotlin) {
+                generateEnums(model);
+                generatePorts(model);
+                // A .proto is not Java or Kotlin, so it is emitted unchanged.
+                generateProtoPorts(model);
+                generateKotlinDomainArtifacts(domainDirName, model, specs);
+                generateSupportTypes(domainDirName, model, specs);
+                continue;
+            }
+
+            generateEnums(model);
+            generatePorts(model);
+            generateProtoPorts(model);
+            generateDomainArtifacts(domainDirName, model, specs);
+        }
+    }
+
+    /**
+     * One file per declared DTO. A search DTO is a different artifact with its
+     * own template, so which one to write is decided by what the DTO declares
+     * itself to be.
+     */
+    /**
+     * Mapper sections of the domain being generated. 2.x walks the entity
+     * models first, emitting every forward mapping, then the DTO models,
+     * emitting every reverse one, then the searchable pairs - so the halves
+     * are kept apart and ordered at assembly.
+     */
+    private final List<String[]> mapperForwardSections = new ArrayList<String[]>();
+    private final List<String> mapperReverseSections = new ArrayList<String>();
+    private final List<String> mapperSpecSections = new ArrayList<String>();
+
+    /** The shadow namespaces of the types the mapper's sections referenced. */
+    private final java.util.Set<String> mapperNamespaces = new java.util.HashSet<String>();
+
+    /** How many DTOs of each entity the domain has produced sections for. */
+    private final Map<String, Integer> mapperOrdinals = new java.util.HashMap<String, Integer>();
+
+    private void generateDtos(String domainDirName, ECoreModel model) {
+        if (model.getDataTransferModels() == null) return;
+
+        ModelComponentItems<io.elasticore.base.model.dto.DataTransfer> dtos =
+                model.getDataTransferModels().getItems();
+        for (int i = 0; i < dtos.size(); i++) {
+            io.elasticore.base.model.dto.DataTransfer dto = dtos.get(i);
+            String name = dto.getIdentity().getName();
+            EntitySpec spec = SpecFactory.fromDto(dto, model, domainDirName);
+
+            boolean searchable = dto.getMetaInfo().hasMetaAnnotation("searchable");
+            ArtifactTarget out = target(model.getNamespace("dto"), name);
+
+            // toSpec takes the search DTO as its parameter, so the mapper's
+            // section for it cannot stand where a rule declined to write it.
+            boolean searchDtoWritten = false;
+            if (searchable) {
+                searchDtoWritten = emit(spec, "srchdto", out, "jpa-searchdto",
+                        typescript ? "jpa-dto-file-ts"
+                                : kotlin ? "jpa-searchdto-file-kt"
+                                : v3 ? "jpa-searchdto-file-v3" : "jpa-searchdto-file");
+            } else {
+                emit(spec, "dto", out, "jpa-dto",
+                        typescript ? "jpa-dto-file-ts"
+                                : kotlin ? "jpa-dto-file-kt"
+                                : v3 ? "jpa-dto-file-v3" : "jpa-dto-file");
+            }
+
+            collectMapperSection(spec, dto, model, searchable, searchDtoWritten);
+
+            if (!searchable) generateKeyDto(dto, model, domainDirName);
+        }
+    }
+
+    /**
+     * The key DTO of a templated DTO: the same file with only the key fields.
+     * A DTO built from several templates has no single entity to key on, so
+     * 2.x skips it - and so does this.
+     */
+    private void generateKeyDto(io.elasticore.base.model.dto.DataTransfer dto,
+                                ECoreModel model, String domainDirName) {
+        String template = dto.getMetaInfo().getMetaAnnotationValue("template");
+        if (template == null || template.isEmpty() || template.indexOf(',') >= 0) return;
+
+        String keyName = String.format("%sKeyDTO", template);
+        EntitySpec keySpec = SpecFactory.fromDto(dto, model, domainDirName);
+        keySpec.keyDtoClassName(keyName);
+
+        emit(keySpec, "dto",
+                target(model.getNamespace("dto"), keyName),
+                "jpa-dto", typescript ? "jpa-dto-file-ts"
+                        : kotlin ? "jpa-dto-file-kt"
+                        : v3 ? "jpa-dto-file-v3" : "jpa-dto-file");
+    }
+
+    private void addMapperNamespace(io.elasticore.base.model.pub.rules.FieldSpec f) {
+        if (f.isBaseType()) return;
+        String pkg = SpecFactory.packageOfType(f.coreItemType());
+        if (pkg != null) mapperNamespaces.add(pkg + ".*");
+    }
+
+    /**
+     * One mapper section per DTO-entity pair, built the way 2.x builds the
+     * domain's mapper: the mapping methods for a templated DTO, the toSpec
+     * methods for a searchable one. The sections are collected here and the
+     * file is assembled with the domain artifacts.
+     */
+    /**
+     * An engine for one mapper section, carrying the language being written.
+     * A section is rendered on its own and then pasted into the domain file,
+     * so it needs telling which language it is in - the file it lands in
+     * cannot tell it afterwards.
+     */
+    private RuleEngine sectionEngine(String... ruleSets) {
+        RuleEngine engine = new RuleEngine().templateSet(
+                kotlin ? SourceCode.TemplateSet.KOTLIN
+                        : v3 ? SourceCode.TemplateSet.V3 : SourceCode.TemplateSet.COMPATIBLE);
+
+        // What the domain configured, so a mapper is written by the same
+        // selection as everything else it is generated alongside. Without
+        // this the mapper was the one artifact no configuration could reach,
+        // and a ruleset could state a thing about the model in every file
+        // except the one that reads and writes it - the aggregate boundary
+        // was declared on the entity and then crossed by the mapper.
+        for (io.elasticore.base.model.pub.rules.CodeRules r : configuredSectionRules()) {
+            engine.register(r);
+        }
+        for (String rs : ruleSets) {
+            for (io.elasticore.base.model.pub.rules.CodeRules r
+                    : RuleCatalog.standard().rulesOf(rs)) {
+                engine.register(r);
+            }
+        }
+        // Suppressed here as everywhere else, so -PlistRules and the mapper agree.
+        for (String id : RulesConfig.resolveSuppress(domainConfig("publisher.suppress"))) {
+            engine.suppress(id);
+        }
+        return engine;
+    }
+
+    /**
+     * The configured rule sets a mapper section may take, which is all of
+     * them except the ones that decide what a section IS.
+     *
+     * A section's shell is the caller's to choose - a searchable DTO's
+     * section is not the same file text as a templated one's, and the two
+     * shells cannot both be registered without writing each other's output.
+     * So the shells are filtered out here and named explicitly at the call,
+     * exactly as before; everything else the configuration says is honoured.
+     *
+     * A domain that configures nothing adds nothing, which is what keeps the
+     * default output byte-identical.
+     */
+    private java.util.List<io.elasticore.base.model.pub.rules.CodeRules> configuredSectionRules() {
+        java.util.List<io.elasticore.base.model.pub.rules.CodeRules> out =
+                new java.util.ArrayList<io.elasticore.base.model.pub.rules.CodeRules>();
+
+        java.util.List<String> names = configuredRules();
+        // A domain that names nothing still runs a bundle - the one its build
+        // declared, or the v3 / Kotlin default. Reading only env.yml here
+        // left the mapper sections without their boundary and write-guard
+        // rules whenever the bundle came from the build rather than the
+        // domain: members were dropped and refs wrote into other aggregates.
+        // The compatible 2.x run stays exactly as it was.
+        if (names == null && !typescript
+                && (v3 || kotlin || RulesConfig.declaredArchitecture() != null)) {
+            names = java.util.Collections.singletonList(defaultBundle());
+        }
+        // The project's own rule sets reach the mapper too. Only those on a
+        // compatible run with nothing configured: adding the whole default
+        // bundle there would change what 2.x wrote.
+        if (names == null) {
+            names = typescript ? null : RulesConfig.addedRules();
+            if (names == null || names.isEmpty()) return out;
+        } else {
+            names = withAddedRules(names);
+        }
+
+        for (String name : names) {
+            for (io.elasticore.base.model.pub.rules.CodeRules r
+                    : RuleCatalog.standard().rulesOf(name)) {
+                if (!decidesSectionShape(r)) out.add(r);
+            }
+        }
+        return out;
+    }
+
+    /** Whether a rule set is one of the mapper shells the caller picks. */
+    private boolean decidesSectionShape(io.elasticore.base.model.pub.rules.CodeRules r) {
+        return r instanceof io.elasticore.base.model.pub.rules.base.MapperBaseRules
+                || r instanceof io.elasticore.base.model.pub.rules.base.MapperAssembleRules
+                || r instanceof io.elasticore.base.model.pub.rules.base.MapperSpecRules
+                || r instanceof io.elasticore.base.model.pub.rules.base.MapperSpecShellRules
+                || r instanceof io.elasticore.base.model.pub.rules.lang.java.MapperFileRules
+                || r instanceof io.elasticore.base.model.pub.rules.lang.kotlin.KotlinMapperAssembleRules
+                || r instanceof io.elasticore.base.model.pub.rules.lang.kotlin.KotlinMapperSpecShellRules;
+    }
+
+    private void collectMapperSection(EntitySpec spec,
+                                      io.elasticore.base.model.dto.DataTransfer dto,
+                                      ECoreModel model, boolean searchable,
+                                      boolean searchDtoWritten) {
+        String entityName = spec.getName();
+        if (model.getEntityModels().findByName(entityName) == null) return;
+
+        // Only a DTO that gets reverse list methods takes a name: a search
+        // DTO maps through toSpec, so one declared first must not push the
+        // entity's own DTO to toBlogPost2List the way it did.
+        if (!searchable) {
+            Integer seenBefore = mapperOrdinals.get(entityName);
+            int ordinal = (seenBefore == null ? 0 : seenBefore) + 1;
+            mapperOrdinals.put(entityName, ordinal);
+            spec.mapperOrdinal(ordinal);
+        }
+
+        // The shadow model of 2.x resolves every referenced type's package.
+        for (io.elasticore.base.model.pub.rules.FieldSpec f : spec.dtoFields()) {
+            addMapperNamespace(f);
+        }
+        for (io.elasticore.base.model.pub.rules.FieldSpec f : spec.allFields()) {
+            addMapperNamespace(f);
+        }
+
+        try {
+            if (searchable) {
+                // A search DTO a rule declined has no type to take, so the
+                // section that would take it is not written either - and the
+                // DTO is still not mapped, since a search DTO never was.
+                if (!searchDtoWritten) return;
+                SourceCode specCode = sectionEngine("jpa-mapper-spec",
+                        kotlin ? "jpa-mapper-spec-shell-kt" : "jpa-mapper-spec-shell")
+                        .run(spec, "mapper");
+                // A rule may have declined the section - the aggregate reading
+                // does, for a DTO of an entity nothing queries on its own.
+                String text = specCode.isMake() ? specCode.renderBlock("spec") : "";
+                if (!text.isEmpty()) mapperSpecSections.add(text);
+            } else {
+                SourceCode code = sectionEngine("jpa-mapper",
+                        kotlin ? "jpa-mapper-assemble-kt" : "jpa-mapper-assemble")
+                        .run(spec, "mapper");
+                String fwd = code.renderBlock("forward");
+                String rev = code.renderBlock("reverse");
+                if (!fwd.isEmpty()) mapperForwardSections.add(new String[]{entityName, fwd});
+                if (!rev.isEmpty()) mapperReverseSections.add(rev);
+            }
+        } catch (RuntimeException e) {
+            // A section that threw is mapping code the mapper will not carry,
+            // and nothing downstream is missing a file to notice it by.
+            failed++;
+            notes.add(entityName + " mapper section: " + e);
+        }
+    }
+
+    /**
+     * One interface per declared transaction port. A proto port is a
+     * different artifact and its rule set declines to write this one.
+     */
+    private void generatePorts(ECoreModel model) {
+        if (model.getPortModels() == null) return;
+        if (model.getNamespace("port") == null) return;
+
+        ModelComponentItems<io.elasticore.base.model.port.Port> ports =
+                model.getPortModels().getItems();
+        List<io.elasticore.base.model.pub.rules.PortSpec> springPorts =
+                new ArrayList<io.elasticore.base.model.pub.rules.PortSpec>();
+        for (int i = 0; i < ports.size(); i++) {
+            io.elasticore.base.model.port.Port port = ports.get(i);
+            String name = port.getIdentity().getName();
+            io.elasticore.base.model.pub.rules.PortSpec spec = SpecFactory.fromPort(port, model);
+            emitPort(spec, target(model.getNamespace("port"), name));
+            if (spec.springHttp() && !spec.operations().isEmpty() && !typescript) springPorts.add(spec);
+        }
+        if (!springPorts.isEmpty()) emitSpringHttpServices(model, springPorts);
+
+        // Where a properties file of Spring ports would be, looked at by
+        // removeStale whether or not this run wrote one: turning httpPort:
+        // spring off again must take the file away with the ports.
+        if (ports.size() > 0 && !typescript) {
+            String domainName = ports.get(0).getIdentity().getDomainId();
+            ArtifactTarget props = ArtifactTarget.of("resource", "src/main/resources", "properties",
+                    model.getNamespace("port"),
+                    io.elasticore.base.model.pub.rules.base.SpringHttpPorts.propertiesName(domainName), true);
+            File dir = new File(rootFor(props) + "/" + props.relativePath()).getParentFile();
+            if (dir != null) generatedDirs.add(dir);
+        }
+    }
+
+    /**
+     * What registers a domain's Spring HTTP ports (httpPort: spring): the
+     * configuration class beside them and the properties file with each
+     * group's base URL and timeouts.
+     */
+    private void emitSpringHttpServices(ECoreModel model, List<io.elasticore.base.model.pub.rules.PortSpec> ports) {
+        io.elasticore.base.model.pub.rules.PortSpec first = ports.get(0);
+        String className = io.elasticore.base.model.pub.rules.base.SpringHttpPorts.configClassName(first.domainClassName());
+        String domainName = first.id().substring(0, first.id().indexOf('.'));
+        String propertiesName = io.elasticore.base.model.pub.rules.base.SpringHttpPorts.propertiesName(domainName);
+
+        for (io.elasticore.base.model.pub.rules.PortSpec p : ports) {
+            for (String what : io.elasticore.base.model.pub.rules.base.SpringHttpPorts.unsupported(p)) {
+                io.elasticore.base.util.ConsoleLog.printWarn(String.format(
+                        "[elcore3] %s: %s has no Spring HTTP client setting and is not applied (httpPort: spring)",
+                        p.id(), what));
+            }
+        }
+
+        ArtifactTarget config = target(model.getNamespace("port"), className);
+        try {
+            write(String.format("    %-12s %s", "httpServices", config.relativePath()), config,
+                    io.elasticore.base.model.pub.rules.base.SpringHttpPorts.configuration(
+                            kotlin ? io.elasticore.base.model.pub.rules.Syntax.KOTLIN
+                                    : io.elasticore.base.model.pub.rules.Syntax.JAVA,
+                            model.getNamespace("port"), className, propertiesName, ports));
+        } catch (RuntimeException e) {
+            failed(String.format("    %-12s %s", "httpServices", config.relativePath()), config, e);
+        }
+
+        // Beside the configuration class's package, which is where its @PropertySource looks.
+        ArtifactTarget props = ArtifactTarget.of("resource", "src/main/resources", "properties",
+                model.getNamespace("port"), propertiesName, true);
+        try {
+            write(String.format("    %-12s %s", "httpServices", props.relativePath()), props,
+                    io.elasticore.base.model.pub.rules.base.SpringHttpPorts.properties(domainName, ports));
+        } catch (RuntimeException e) {
+            failed(String.format("    %-12s %s", "httpServices", props.relativePath()), props, e);
+        }
+    }
+
+    private void emitPort(io.elasticore.base.model.pub.rules.PortSpec spec, ArtifactTarget out) {
+        String label = String.format("    %-12s %s", "port", out.relativePath());
+        try {
+            SourceCode code = engine("port").run(spec, "port");
+            if (!code.isMake()) {
+                skipped++;
+                System.out.println(label + "  SKIP(dontMake)");
+                return;
+            }
+            write(label, out, code.render());
+        } catch (RuntimeException e) {
+            failed(label, out, e);
+        }
+    }
+
+    /**
+     * One .proto file per declared gRPC port (meta type=proto). Every other
+     * port kind is Java; this one is not, so it bypasses the "port" rule set
+     * entirely rather than filling one of its slots.
+     */
+    private void generateProtoPorts(ECoreModel model) {
+        if (model.getPortModels() == null) return;
+        if (model.getNamespace("proto") == null) return;
+
+        ModelComponentItems<io.elasticore.base.model.port.Port> ports =
+                model.getPortModels().getItems();
+        for (int i = 0; i < ports.size(); i++) {
+            io.elasticore.base.model.port.Port port = ports.get(i);
+            String type = port.getMetaInfo().getMetaAnnotationValue("type");
+            if (!"proto".equals(type)) continue;
+
+            io.elasticore.base.model.pub.rules.ProtoServiceSpec spec =
+                    SpecFactory.fromProtoService(port, model);
+            emitProto(spec, spec.target());
+            // The stubs the .proto's service needs on this side of the wire.
+            emitProtoStub(spec, "grpc_svc_provider", "Provider");
+            emitProtoStub(spec, "grpc_svc_client", "Client");
+        }
+    }
+
+    /**
+     * One gRPC stub of a proto service. The .proto is language-neutral; these
+     * are source in the language being generated, so they go to its tree.
+     */
+    private void emitProtoStub(io.elasticore.base.model.pub.rules.ProtoServiceSpec spec,
+                               String artifact, String suffix) {
+        ArtifactTarget out = target(spec.javaPackage(), spec.getName() + suffix);
+        String label = String.format("    %-12s %s", "grpc", out.relativePath());
+        try {
+            SourceCode code = engine("grpc-stub").run(spec, artifact);
+            if (!code.isMake()) {
+                System.out.println(label + "  SKIP(dontMake)");
+                return;
+            }
+            write(label, out, code.render());
+        } catch (RuntimeException e) {
+            failed(label, out, e);
+        }
+    }
+
+    private void emitProto(io.elasticore.base.model.pub.rules.ProtoServiceSpec spec, ArtifactTarget out) {
+        String label = String.format("    %-12s %s", "proto", out.relativePath());
+        try {
+            SourceCode code = engine("proto").run(spec, "proto");
+            if (!code.isMake()) {
+                skipped++;
+                System.out.println(label + "  SKIP(dontMake)");
+                return;
+            }
+            write(label, out, code.render());
+        } catch (RuntimeException e) {
+            failed(label, out, e);
+        }
+    }
+
+    /** One file per declared enumeration. */
+    private void generateEnums(ECoreModel model) {
+        if (model.getEnumModels() == null) return;
+
+        ModelComponentItems<io.elasticore.base.model.enums.EnumModel> enums =
+                model.getEnumModels().getItems();
+        for (int i = 0; i < enums.size(); i++) {
+            io.elasticore.base.model.enums.EnumModel em = enums.get(i);
+            String name = em.getIdentity().getName();
+
+            emitEnum(SpecFactory.fromEnum(em, model), name,
+                    target(model.getNamespace("enumeration"), name));
+        }
+    }
+
+    /** The artifacts a domain has one of, rather than one per entity. */
+    private void generateDomainArtifacts(String domainDirName, ECoreModel model,
+                                         List<EntitySpec> specs) {
+        if (specs.isEmpty()) {
+            warnNothingToHang(domainDirName, model);
+            return;
+        }
+
+        io.elasticore.base.model.pub.rules.DomainSpec domain =
+                SpecFactory.fromDomain(domainDirName, model, specs);
+
+        System.out.println("  [" + domainDirName + " domain artifacts]");
+
+        emitDomain(domain, "Q", ArtifactTarget.java(queryPackage(model), "Q"), "jpa-q");
+
+        // The domain's mapper, in 2.x emission order: the forward mappings
+        // follow the entity models' order, the reverse ones the DTO models',
+        // and the toSpec sections close the file.
+        // Sections are separated by an indented blank line on either side:
+        // one before the first, two between neighbors, none after the last.
+        assembleMapper(domain, model);
+        emitDomain(domain, "repositoryHelper",
+                ArtifactTarget.java(model.getNamespace("repository"),
+                        String.format("%sRepositoryHelper", domain.className())),
+                "jpa-repository-helper");
+        emitContributedDomain(domain, model);
+        generateSupportTypes(domainDirName, model, specs);
+        emitArchitectureTest(domain, model);
+    }
+
+    /** archTest: true - the hexagon's boundaries as an ArchUnit test, written once. */
+    private void emitArchitectureTest(io.elasticore.base.model.pub.rules.DomainSpec domain, ECoreModel model) {
+        if (typescript || !"true".equalsIgnoreCase(model.getConfig("archTest", "false"))) return;
+        String pkg = ArchitectureTestSource.basePackage(model);
+        if (pkg == null) return;
+        String name = domain.className() + "ArchitectureTest";
+        ArtifactTarget out = kotlin
+                ? ArtifactTarget.of("kotlin", "src/test/kotlin", "kt", pkg, name, true)
+                : ArtifactTarget.of("java", "src/test/java", "java", pkg, name, true);
+        String label = String.format("    %-12s %s", "archTest", out.relativePath());
+        write(label, out, ArchitectureTestSource.render(model, name, pkg, kotlin, xmlMapping()));
+    }
+
+
+    /**
+     * The domain's mapper, in 2.x emission order: the forward mappings follow
+     * the entity models' order, the reverse ones the DTO models', and the
+     * toSpec sections close the file. Sections are separated by an indented
+     * blank line on either side: one before the first, two between neighbors,
+     * none after the last.
+     *
+     * Both languages call this: the per-field lines were written through the
+     * seam, so the collected sections are the same either way.
+     */
+    private void assembleMapper(io.elasticore.base.model.pub.rules.DomainSpec domain,
+                                ECoreModel model) {
+        List<String> ordered = new ArrayList<String>();
+        ModelComponentItems<Entity> order = model.getEntityModels().getItems();
+        for (int i = 0; i < order.size(); i++) {
+            String entityName = order.get(i).getIdentity().getName();
+            for (String[] section : mapperForwardSections) {
+                if (section[0].equals(entityName)) ordered.add(section[1]);
+            }
+        }
+        ordered.addAll(mapperReverseSections);
+        ordered.addAll(mapperSpecSections);
+        for (int i = 0; i < ordered.size(); i++) {
+            String lead = i == 0 ? "    \n" : "    \n    \n";
+            String tail = i == ordered.size() - 1 ? "    " : "";
+            domain.mapperSection(lead + ordered.get(i) + tail);
+        }
+        for (String ns : mapperNamespaces) {
+            domain.mapperImport(ns);
+        }
+        mapperNamespaces.clear();
+        mapperOrdinals.clear();
+        mapperForwardSections.clear();
+        mapperReverseSections.clear();
+        mapperSpecSections.clear();
+        emitDomain(domain, "mapper",
+                target(model.getNamespace("dto"),
+                        String.format("%sMapper", domain.className())),
+                "jpa-mapper-file");
+    }
+
+    /**
+     * A domain with no entity gets no domain-level files - including the
+     * process managers and domain services it declares, which is said rather
+     * than left for the user to find missing.
+     */
+    private void warnNothingToHang(String domainDirName, ECoreModel model) {
+        if (model.getDomainServiceModels() == null) return;
+        if (model.getDomainServiceModels().getOrgItems().size() == 0) return;
+        io.elasticore.base.util.ConsoleLog.storeLog("DSL_WARN", String.format(
+                "[%s] declares domain services or process managers but no entity, so nothing is generated for them"
+                        + " - a context that only reacts needs at least one entity of its own.", domainDirName));
+    }
+
+    /** The domain-level artifacts the kt bundle covers so far. */
+    private void generateKotlinDomainArtifacts(String domainDirName, ECoreModel model,
+                                               List<EntitySpec> specs) {
+        if (specs.isEmpty()) {
+            warnNothingToHang(domainDirName, model);
+            return;
+        }
+        io.elasticore.base.model.pub.rules.DomainSpec domain =
+                SpecFactory.fromDomain(domainDirName, model, specs);
+        emitDomain(domain, "Q", target(queryPackage(model), "Q"), "jpa-q-kt");
+        assembleMapper(domain, model);
+        emitDomain(domain, "repositoryHelper",
+                target(model.getNamespace("repository"),
+                        String.format("%sRepositoryHelper", domain.className())),
+                "jpa-repository-helper");
+        emitContributedDomain(domain, model);
+        emitArchitectureTest(domain, model);
+    }
+
+    /**
+     * The types a DTO names but no entity declares: the JsonView markers and
+     * the sort/page interfaces a search DTO implements. Language-neutral -
+     * the rules only gate and set the package, and the bodies come from the
+     * template set - so both languages emit them the same way.
+     */
+    private void generateSupportTypes(String domainDirName, ECoreModel model,
+                                      List<EntitySpec> specs) {
+        if (specs.isEmpty()) return;
+        io.elasticore.base.model.pub.rules.DomainSpec domain =
+                SpecFactory.fromDomain(domainDirName, model, specs);
+        emitDomain(domain, "views",
+                target(model.getNamespace("dto"), "Views"), "jpa-views");
+        emitDomain(domain, "pageableObject",
+                target(model.getNamespace("dto"), "PageableObject"),
+                "jpa-support-types");
+        emitDomain(domain, "sortableObject",
+                target(model.getNamespace("dto"), "SortableObject"),
+                "jpa-support-types");
+    }
+
+    private void emitEnum(io.elasticore.base.model.pub.rules.EnumSpec spec,
+                          String name, ArtifactTarget out) {
+        String label = String.format("    %-12s %s", "enum", out.relativePath());
+        try {
+            SourceCode code = engine(typescript ? "jpa-enum-ts"
+                    : kotlin ? "jpa-enum-kt" : "jpa-enum").run(spec, "enum");
+            if (!code.isMake()) {
+                skipped++;
+                System.out.println(label + "  SKIP(dontMake)");
+                return;
+            }
+            String rendered = code.render();
+            if (xmlMapping()) {
+                // The enum's database converter is persistence, so it moves out.
+                String[] split = OrmMapping.splitEnumConverter(rendered, name,
+                        out.packageName() + "." + name, persistencePackage(), kotlin);
+                if (split != null) {
+                    rendered = split[0];
+                    ArtifactTarget conv = target(persistencePackage(), name + "Converter");
+                    write(String.format("    %-12s %s", "converter", conv.relativePath()), conv, split[1]);
+                    orm(out).converterMoved(out.packageName() + "." + name,
+                            persistencePackage() + "." + name + "Converter");
+                }
+            }
+            write(label, out, rendered);
+        } catch (RuntimeException e) {
+            failed(label, out, e);
+        }
+    }
+
+    private void emitDomain(io.elasticore.base.model.pub.rules.DomainSpec spec, String target,
+                            ArtifactTarget out, String... ruleSets) {
+        String label = String.format("    %-12s %s", target, out.relativePath());
+        try {
+            SourceCode code = engine(ruleSets)
+                    .artifactName(out.fileName())
+                    .packageName(out.packageName())
+                    .run(spec, target);
+            if (!code.isMake()) {
+                skipped++;
+                System.out.println(label + "  SKIP(dontMake)");
+                return;
+            }
+            write(label, out, code.render());
+        } catch (RuntimeException e) {
+            failed(label, out, e);
+        }
+    }
+
+    /**
+     * An engine carrying the configured selection plus the rule sets this
+     * artifact requires, so a project-level choice cannot silently disable
+     * the artifact being generated.
+     */
+    private RuleEngine engine(String... ruleSets) {
+        RuleEngine engine = RulesConfig.engineFor(RuleCatalog.standard(),
+                        withAddedRules(configuredRules()), domainConfig("publisher.suppress"),
+                        defaultBundle())
+                .templateSet(typescript ? SourceCode.TemplateSet.TYPESCRIPT
+                        : kotlin ? SourceCode.TemplateSet.KOTLIN
+                        : v3 ? SourceCode.TemplateSet.V3 : SourceCode.TemplateSet.COMPATIBLE);
+        for (String rs : ruleSets) {
+            for (io.elasticore.base.model.pub.rules.CodeRules r
+                    : RuleCatalog.standard().rulesOf(rs)) {
+                engine.register(r);
+            }
+        }
+        return engine;
+    }
+
+    /**
+     * The rule selection this run should use, which is not always the one
+     * env.yml states.
+     *
+     * publisher.rules names the rules the server is built from, and Java and
+     * Kotlin are both the server - so a Kotlin run honours it, which is how
+     * [jpa-springboot-kt, ddd-aggregate] works. TypeScript is a different
+     * program with a different set of artifacts, and a server-side selection
+     * says nothing about it: naming the Kotlin bundle there would generate
+     * Kotlin rules into .ts files, which is what this stops.
+     *
+     * A project that wants to choose for TypeScript says so under its own
+     * key, publisher.rules.ts.
+     */
+    /**
+     * The bundle a run falls back to when a domain names no rules of its own.
+     *
+     * An architecture declared by the build wins over the language switches,
+     * because it says more: the switches only distinguish Java from Kotlin,
+     * while the declaration also says whether this project is a domain model.
+     * Nothing declared leaves the old answer exactly where it was.
+     */
+    private String defaultBundle() {
+        return defaultBundle(typescript);
+    }
+
+    private String defaultBundle(boolean typescript) {
+        RulesConfig.Architecture architecture = RulesConfig.declaredArchitecture();
+        if (architecture != null) {
+            // -Pv3 still chooses the clean file set for a layered Java run.
+            // Dropping it here while the switch went on driving the v3
+            // skeletons was a bundle and a switch disagreeing - the exact bug
+            // class bundleFor exists to eliminate, reintroduced by its caller.
+            if (architecture == RulesConfig.Architecture.LAYERED && v3
+                    && !kotlin && !typescript) {
+                return RulesConfig.DEFAULT_BUNDLE_V3;
+            }
+            return RulesConfig.bundleFor(architecture,
+                    typescript ? RulesConfig.Language.TYPESCRIPT
+                            : kotlin ? RulesConfig.Language.KOTLIN
+                            : RulesConfig.Language.JAVA);
+        }
+        return typescript ? "ts-model"
+                : kotlin ? RulesConfig.bundleFor(
+                        RulesConfig.Architecture.LAYERED, RulesConfig.Language.KOTLIN)
+                : v3 ? RulesConfig.DEFAULT_BUNDLE_V3
+                : RulesConfig.bundleFor(
+                        RulesConfig.Architecture.LAYERED, RulesConfig.Language.JAVA);
+    }
+
+    /**
+     * What the server of this project selects: the choice a Java or Kotlin
+     * run of the same build makes.
+     *
+     * A TypeScript run asks this rather than its own selection when it
+     * decides the model's shape. The client describes the JSON the server
+     * sends, and the server sends what its own rules made of the model - a
+     * reference by its id, a value object inline. Asked of ts-model instead,
+     * the answer was always no, and the client described a 2.x server: an
+     * order with no customerId, no delivery address and no card.
+     */
+    private java.util.List<String> serverRules() {
+        java.util.List<String> declared = kotlin ? domainConfig("publisher.rules.kt") : null;
+        if (declared == null) declared = domainConfig("publisher.rules");
+        java.util.List<String> out = new java.util.ArrayList<String>();
+        if (declared != null) {
+            out.addAll(declared);
+        } else {
+            String prop = System.getProperty(RulesConfig.PROP_RULES);
+            if (prop != null && !prop.trim().isEmpty()) {
+                out.addAll(RulesConfig.configuredList(prop));
+            } else {
+                out.add(defaultBundle(false));
+            }
+        }
+        for (String name : RulesConfig.addedRules()) {
+            if (!out.contains(name)) out.add(name);
+        }
+        return out;
+    }
+
+    /** Whether the rules that shape the model - the server's, for a client - include one of this kind. */
+    private boolean shapes(Class<?> kind) {
+        if (!typescript) return selects(kind);
+        for (String name : serverRules()) {
+            try {
+                for (io.elasticore.base.model.pub.rules.CodeRules rs : RuleCatalog.standard().rulesOf(name)) {
+                    if (kind.isInstance(rs)) return true;
+                }
+            } catch (IllegalArgumentException notOnThisClasspath) {
+                // A project's own rule set is the server's business; it does not shape the client.
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The rule selection contributed artifacts are asked for.
+     *
+     * The same one the engine resolves, which configuredRules() alone is not:
+     * that answers null when a domain declares nothing, and a null meant
+     * emitContributed returned without asking anybody. A project relying on
+     * the default bundle therefore got no contributed artifact at all, and
+     * silently - the run said nothing because nothing had been asked to
+     * decline. It stayed invisible only because the bundles that had
+     * contributors were also the ones every sample names explicitly.
+     */
+    private java.util.List<String> contributingRules() {
+        java.util.List<String> declared = configuredRules();
+        java.util.List<String> selected = declared != null ? declared
+                : java.util.Collections.singletonList(defaultBundle());
+        return withAddedRules(selected);
+    }
+
+    /**
+     * The selection plus the rule sets the project adds (the plugin's rules
+     * list). Null stays null when nothing is added, so the engine still falls
+     * through to the project property and the default bundle as before.
+     * TypeScript is another program and takes none of them: a server rule
+     * set would write JVM code into .ts files.
+     */
+    private java.util.List<String> withAddedRules(java.util.List<String> selected) {
+        java.util.List<String> added = RulesConfig.addedRules();
+        if (added.isEmpty() || typescript) return selected;
+        java.util.List<String> out = new java.util.ArrayList<String>();
+        if (selected != null) {
+            out.addAll(selected);
+        } else {
+            String prop = System.getProperty(RulesConfig.PROP_RULES);
+            if (prop != null && !prop.trim().isEmpty()) {
+                out.addAll(RulesConfig.configuredList(prop));
+            } else {
+                out.add(defaultBundle());
+            }
+        }
+        for (String name : added) {
+            if (!out.contains(name)) out.add(name);
+        }
+        return out;
+    }
+
+    private java.util.List<String> configuredRules() {
+        String key = typescript ? "publisher.rules.ts"
+                : kotlin ? "publisher.rules.kt" : null;
+
+        if (key != null) {
+            java.util.List<String> declared = domainConfig(key);
+            if (declared != null) return declared;
+        }
+        return typescript ? null : domainConfig("publisher.rules");
+    }
+
+    /**
+     * -PlistRules: the rules this domain's selection runs, by artifact and in
+     * the order they run, instead of generating. The ids are what
+     * publisher.suppress takes, and the orders are where a project's own rule
+     * has to sit to come before or after one.
+     */
+    private void listRules(String domainDirName) {
+        java.util.List<String> names = contributingRules();
+        java.util.List<String> off = RulesConfig.resolveSuppress(domainConfig("publisher.suppress"));
+        System.out.println("[rules] " + domainDirName + ": " + String.join(" + ", names)
+                + (off.isEmpty() ? "" : "   (suppressed: " + String.join(", ", off) + ")"));
+        java.util.Map<String, java.util.List<String[]>> byTarget = new java.util.TreeMap<String, java.util.List<String[]>>();
+        java.util.Set<String> seen = new java.util.HashSet<String>();
+        for (String name : names) {
+            for (io.elasticore.base.model.pub.rules.CodeRules rs : RuleCatalog.standard().rulesOf(name)) {
+                for (java.lang.reflect.Method m : rs.getClass().getDeclaredMethods()) {
+                    io.elasticore.base.model.pub.rules.Rule r = m.getAnnotation(io.elasticore.base.model.pub.rules.Rule.class);
+                    if (r == null || !seen.add(r.target() + "/" + r.value() + "/" + rs.getClass().getName())) continue;
+                    Class<?>[] params = m.getParameterTypes();
+                    // A rule taking a domain, an enum or a port runs once, by order alone.
+                    String when = params.length == 0 ? "?"
+                            : params.length == 2 ? "field"
+                            : params[0] != EntitySpec.class ? "once"
+                            : r.phase() == io.elasticore.base.model.pub.rules.Rule.Phase.TAIL ? "tail" : "head";
+                    java.util.List<String[]> rows = byTarget.get(r.target());
+                    if (rows == null) byTarget.put(r.target(), rows = new java.util.ArrayList<String[]>());
+                    rows.add(new String[]{String.format("%5d", r.order()), when, r.value(),
+                            rs.getClass().getSimpleName(), off.contains(r.value()) ? "  (suppressed)" : "",
+                            String.valueOf(seen.size()),
+                            rs.getClass().getName().startsWith("io.elasticore.") ? "0" : "1"});
+                }
+            }
+        }
+        for (java.util.Map.Entry<String, java.util.List<String[]>> t : byTarget.entrySet()) {
+            java.util.List<String[]> rows = t.getValue();
+            // The order they run in: head rules, then field rules, then tail
+            // rules, each by order.
+            java.util.Collections.sort(rows, new java.util.Comparator<String[]>() {
+                public int compare(String[] a, String[] b) {
+                    // head, field, tail as the engine runs them; whole-model
+                    // rules are their own run and listed after them. Within a
+                    // stage by order, then as registered - the engine's ties.
+                    int pa = rank(a[1]), pb = rank(b[1]);
+                    if (pa != pb) return pa - pb;
+                    // The project's rules after ElastiCORE's in the same stage, as the engine runs them.
+                    if (!a[6].equals(b[6])) return a[6].compareTo(b[6]);
+                    int oa = Integer.parseInt(a[0].trim()), ob = Integer.parseInt(b[0].trim());
+                    if (oa != ob) return oa < ob ? -1 : 1;
+                    return Integer.parseInt(a[5]) - Integer.parseInt(b[5]);
+                }
+
+                private int rank(String when) {
+                    return "head".equals(when) ? 0 : "field".equals(when) ? 1 : "tail".equals(when) ? 2 : 3;
+                }
+            });
+            System.out.println("  " + t.getKey());
+            for (String[] row : rows) {
+                System.out.println(String.format("    %s %-5s %-36s %s%s", row[0], row[1], row[2], row[3], row[4]));
+            }
+        }
+    }
+
+    /** A rule selection this domain declares in its own env.yml, or null. */
+    private java.util.List<String> domainConfig(String key) {
+        return currentModel == null
+                ? null
+                : RulesConfig.configuredList(currentModel.getConfig(key));
+    }
+
+    private void generateEntityArtifacts(Entity entity, EntitySpec spec, ECoreModel model) {
+        String name = entity.getIdentity().getName();
+        boolean exposed = entity.getMetaInfo().hasMetaAnnotation("expose");
+        boolean serviced = exposed || entity.getMetaInfo().hasMetaAnnotation("service");
+        boolean hasPk = spec.pkField() != null;
+
+        System.out.println("  " + name);
+
+        // What the configured rule sets bring of their own, before the
+        // built-in list. The built-ins are what every project gets; these
+        // exist only where a selection declared them, so a project that
+        // configures nothing reaches this loop zero times and its output
+        // is untouched.
+        emitContributed(spec, model);
+
+        // Kotlin covers the entity and, through generateDtos, the DTOs. The
+        // service, repository, controller and mapper are not in the kt bundle
+        // yet - their rules still write Java signatures - so they are left
+        // unwritten rather than emitted in the wrong language.
+        if (typescript) {
+            // The client for what the controller exposes. Only an entity the
+            // DSL exposed has endpoints to call.
+            if (exposed && hasPk) {
+                emit(spec, "api", target("", String.format("%sApi", name)), "ts-api");
+            }
+            // The shape of a value object the server's DTOs carry inline.
+            if (entity.getMetaInfo().hasMetaAnnotation("embeddable") && SpecFactory.valueObjectsInDto()) {
+                emit(spec, "valueObject", target("", name), "jpa-dto-file-ts");
+            }
+            return;
+        }
+
+        // The files written once are written from what the core service is.
+        // Written while it failed, they keep a constructor for a service that
+        // was never generated, and are the developer's from then on - so they
+        // wait for a run in which it succeeds.
+        boolean coreOk = true;
+
+        if (kotlin) {
+            emit(spec, "entity",
+                    target(model.getNamespace("entity"), entityClassName(spec)),
+                    "jpa-entity", "jpa-entity-annotations", "jpa-entity-file-kt");
+            if (serviced && hasPk) {
+                emit(spec, "repository",
+                        target(model.getNamespace("repository"),
+                                String.format("%sRepository", name)),
+                        "jpa-repository", "jpa-repository-file-v3");
+                coreOk = emitSucceeded(spec, "service",
+                        target(model.getNamespace("service"),
+                                String.format("%sCoreService", name)),
+                        "jpa-service-file");
+                if (coreOk) emit(spec, "service_extend",
+                        target(model.getNamespace("service"),
+                                String.format("%sService", name)),
+                        "spring-service-extend");
+            }
+            if (exposed && hasPk && coreOk) {
+                emit(spec, "control",
+                        target(model.getNamespace("control"),
+                                String.format("%sController", name)),
+                        "spring-controller");
+            }
+            // The generated test sits in the test tree, in the language it
+            // exercises. Only a domain that asks for it in env.yml gets one.
+            if (serviced && hasPk && coreOk && spec.testCode()) {
+                emit(spec, "service_test",
+                        ArtifactTarget.of("kotlin", "src/test/kotlin", "kt",
+                                model.getNamespace("service"),
+                                String.format("%sServiceTest", name), true),
+                        "spring-service-test");
+            }
+            if (spec.pkCount() > 1) {
+                // The class the entity's @IdClass names; Java gets it from
+                // emitIdentity, in the Kotlin form here.
+                emit(spec, "identity",
+                        target(model.getNamespace("entity"),
+                                String.format("%sIdentity", name)),
+                        "jpa-entity", "jpa-identity-kt");
+            }
+            return;
+        }
+
+        if (v3) {
+            emit(spec, "entity",
+                    ArtifactTarget.java(model.getNamespace("entity"), entityClassName(spec)),
+                    "jpa-entity", "jpa-entity-file");
+            emitIdentity(spec, model);
+
+            if (serviced && hasPk) {
+                coreOk = emitSucceeded(spec, "service",
+                        ArtifactTarget.java(model.getNamespace("service"),
+                                String.format("%sCoreService", name)),
+                        "jpa-service-file");
+                emit(spec, "repository",
+                        ArtifactTarget.java(model.getNamespace("repository"),
+                                String.format("%sRepository", name)),
+                        "jpa-repository", "jpa-repository-file-v3");
+                if (coreOk) emit(spec, "service_extend",
+                        ArtifactTarget.java(model.getNamespace("service"),
+                                String.format("%sService", name)),
+                        "spring-service-extend");
+            }
+            if (exposed && hasPk && coreOk) {
+                emit(spec, "control",
+                        ArtifactTarget.java(model.getNamespace("control"),
+                                String.format("%sController", name)),
+                        "spring-controller");
+            }
+            return;
+        }
+
+        // Compatibility mode: the artifacts whose whole file the rules render.
+        // The entity renders through the compat file rules of the configured
+        // selection (jpa-entity / jpa-entity-class / jpa-entity-file-compat).
+        emit(spec, "entity", ArtifactTarget.java(model.getNamespace("entity"), name));
+        emitIdentity(spec, model);
+
+        // Whether 2.x writes the service pair, and with which DTOs: the ones
+        // declared @template / @searchable of the entity, whatever they are
+        // called (ServiceSrcPublisher.publish).
+        String[] dtoPair = compatDtoPair(entity, model);
+        if (dtoPair != null) {
+            spec.config(COMPAT_SERVICE_DTO, dtoPair[0]);
+            spec.config(COMPAT_SERVICE_SRCH_DTO, dtoPair[1]);
+        }
+        boolean servicePair = dtoPair != null && compatWritesService(entity, model);
+
+        // Every entity with a key has a repository in 2.x: the loader gives
+        // each one a repository model whether repository.yml names it or not.
+        if (hasPk) {
+            emit(spec, "repository",
+                    ArtifactTarget.java(model.getNamespace("repository"),
+                            String.format("%sRepository", name)),
+                    "jpa-repository");
+        }
+        // The CoreService in its 2.x form ("jpa-service-compat"), not the v3
+        // one "jpa-service-file" writes - a different artifact.
+        if (servicePair) {
+            emit(spec, "service",
+                    ArtifactTarget.java(model.getNamespace("service"),
+                            String.format("%sCoreService", name)),
+                    "jpa-service-compat");
+            emit(spec, "service_extend",
+                    ArtifactTarget.java(model.getNamespace("service"),
+                            String.format("%sService", name)),
+                    "spring-service-extend");
+
+            // The service's test: a skeleton the developer takes over.
+            // Maven convention puts it under src/test/java, and like the
+            // service it is written once and never regenerated. Only a
+            // domain that asks for it in env.yml gets one.
+            if (spec.testCode()) emit(spec, "service_test",
+                    ArtifactTarget.of("java", "src/test/java", "java",
+                            model.getNamespace("service"),
+                            String.format("%sServiceTest", name), true),
+                    "spring-service-test");
+        }
+        if (dtoPair != null && compatWritesController(entity, model)) {
+            emit(spec, "control",
+                    ArtifactTarget.java(model.getNamespace("control"),
+                            String.format("%sController", name)),
+                    "spring-controller");
+        }
+    }
+
+    /** Where the compatible service rules find the DTOs 2.x chose for the entity. */
+    public static final String COMPAT_SERVICE_DTO = "compat.service.dto";
+    public static final String COMPAT_SERVICE_SRCH_DTO = "compat.service.srchdto";
+
+    /**
+     * The DTO and search DTO 2.x writes an entity's service and controller
+     * with, or null when it writes neither (ServiceSrcPublisher.publish,
+     * ControlSrcPublisher.publish): not for a @runtime entity or one without
+     * a key; only with a DTO declared @template of the entity and one
+     * declared @searchable of it, whatever they are called.
+     */
+    static String[] compatDtoPair(Entity entity, ECoreModel model) {
+        io.elasticore.base.model.MetaInfo meta = entity.getMetaInfo();
+        if (meta != null && meta.hasMetaAnnotation("runtime")) return null;
+        if (entity.getPkField() == null) return null;
+
+        io.elasticore.base.model.core.RelationshipManager relations =
+                io.elasticore.base.model.core.RelationshipManager.getInstance(entity.getIdentity().getDomainId());
+        String name = entity.getIdentity().getName();
+        String dto = firstDto(relations.findByToNameAndType(name,
+                io.elasticore.base.model.relation.RelationType.TEMPLATE), model);
+        String srch = firstDto(relations.findByToNameAndType(name,
+                io.elasticore.base.model.relation.RelationType.SEARCHABLE), model);
+        return dto == null || srch == null ? null : new String[]{dto, srch};
+    }
+
+    /**
+     * Not when @service(false) / @expose(false) says so, or when
+     * defaultGeneration.service is false and the entity asked for neither.
+     */
+    static boolean compatWritesService(Entity entity, ECoreModel model) {
+        io.elasticore.base.model.MetaInfo meta = entity.getMetaInfo();
+        boolean asked = meta.hasMetaAnnotation("service") || meta.hasMetaAnnotation("expose");
+        String isGen = meta.getInfoAnnotationValue("service");
+        if (isGen == null) isGen = meta.getInfoAnnotationValue("expose");
+        boolean defaultGen = !"false".equals(model.getConfig("defaultGeneration.service", "true"));
+        return !("false".equals(isGen) || (!asked && !defaultGen));
+    }
+
+    /**
+     * Not for a @service entity, which is used from other code rather than
+     * over HTTP; not when @api(false) says so, or when defaultGeneration.api
+     * is false and the entity did not ask with @api.
+     */
+    static boolean compatWritesController(Entity entity, ECoreModel model) {
+        io.elasticore.base.model.MetaInfo meta = entity.getMetaInfo();
+        if (meta.hasMetaAnnotation("service")) return false;
+        boolean asked = meta.hasMetaAnnotation("api");
+        String isGen = meta.getInfoAnnotationValue("api");
+        boolean defaultGen = !"false".equals(model.getConfig("defaultGeneration.api", "true"));
+        return !("false".equals(isGen) || (!asked && !defaultGen));
+    }
+
+    private static String firstDto(java.util.List<io.elasticore.base.model.relation.ModelRelationship> relations,
+                                   ECoreModel model) {
+        for (io.elasticore.base.model.relation.ModelRelationship r : relations) {
+            String dtoName = r.getFromName();
+            if (model.getDataTransferModels() != null
+                    && model.getDataTransferModels().findByName(dtoName) != null) return dtoName;
+        }
+        return null;
+    }
+
+    /**
+     * The class a composite key's @IdClass names. Without it a Java project
+     * whose entity declares two @id fields did not compile: the entity named
+     * a class nothing wrote.
+     */
+    private void emitIdentity(EntitySpec spec, ECoreModel model) {
+        if (spec.pkCount() <= 1) return;
+        emit(spec, "identity",
+                ArtifactTarget.java(model.getNamespace("entity"),
+                        String.format("%sIdentity", spec.getName())),
+                "jpa-identity");
+    }
+
+    /**
+     * The class an entity's regenerated file is written as: its own name, or
+     * its base when ddd-behavior splits it and the concrete class - the one
+     * with the entity's name - is the developer's (DddBehaviorRules).
+     */
+    private String entityClassName(EntitySpec spec) {
+        for (String name : contributingRules()) {
+            for (io.elasticore.base.model.pub.rules.CodeRules rs : RuleCatalog.standard().rulesOf(name)) {
+                if (!(rs instanceof io.elasticore.base.model.pub.rules.EntityClassNamer)) continue;
+                String named = ((io.elasticore.base.model.pub.rules.EntityClassNamer) rs).entityClassName(spec);
+                if (named != null) return named;
+            }
+        }
+        return spec.getName();
+    }
+
+    /** Whether a rule set of this kind is in the current domain's selection. */
+    private boolean selects(Class<?> kind) {
+        for (String name : contributingRules()) {
+            for (io.elasticore.base.model.pub.rules.CodeRules rs : RuleCatalog.standard().rulesOf(name)) {
+                if (kind.isInstance(rs)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether the model declares a DTO of the given name. */
+    private static boolean hasDataTransfer(ECoreModel model, String name) {
+        if (model.getDataTransferModels() == null) return false;
+        return model.getDataTransferModels().getItems().findByName(name) != null;
+    }
+
+    /**
+     * Renders one artifact and writes it when the file may be touched.
+     * The template is resolved from the target name, so no template path
+     * appears at the call site.
+     */
+    /** @return whether the artifact was written. */
+    /**
+     * The artifacts the configured rule sets declare beyond the built-in
+     * list.
+     *
+     * The runner never learns their names: it asks each configured set what
+     * it adds for this entity and emits the answers. Conditions live in the
+     * set's own code - an empty answer is the artifact not applying - and
+     * the rules that write the content are the set's own, found through the
+     * same engine as everything else, so a contributed artifact is declined,
+     * styled and ownership-checked exactly like a built-in one.
+     */
+    /**
+     * The artifacts the configured rule sets declare for the domain itself.
+     *
+     * The same walk as the entity form, over the other interface. Neither
+     * mentions a rule set: the runner asks what is configured and emits the
+     * answers, so a new kind of domain-level file lives entirely inside the
+     * set that wants it.
+     */
+    private void emitContributedDomain(io.elasticore.base.model.pub.rules.DomainSpec domain,
+                                       ECoreModel model) {
+        lendEvents(domain);
+        // A rule set selected twice - in a bundle and by name - declares its files once.
+        java.util.Set<Class<?>> asked = new java.util.HashSet<Class<?>>();
+        for (String name : contributingRules()) {
+            for (io.elasticore.base.model.pub.rules.CodeRules rs
+                    : RuleCatalog.standard().rulesOf(name)) {
+                if (!(rs instanceof io.elasticore.base.model.pub.rules.DomainArtifactContributor)) {
+                    continue;
+                }
+                if (!asked.add(rs.getClass())) continue;
+
+                for (io.elasticore.base.model.pub.rules.ContributedArtifact a
+                        : ((io.elasticore.base.model.pub.rules.DomainArtifactContributor) rs)
+                                .artifactsFor(domain)) {
+                    emitDomain(domain, a.target(),
+                            target(namespaceFor(a, model), a.className()),
+                            name);
+                    // The handler says its messages through the domain's bundle.
+                    if ("apiErrors".equals(a.target())) {
+                        writeMessages(domain.getName(), target(namespaceFor(a, model), a.className()));
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * What a process manager needs from the other contexts: the class of each
+     * event it names as context:RootEvent, and which context declares a name
+     * written without one. The domain alone cannot know either.
+     */
+    private void lendEvents(io.elasticore.base.model.pub.rules.DomainSpec domain) {
+        if (contextMap == null) return;
+        for (io.elasticore.base.model.pub.rules.DomainSpec.DomainServiceSpec pm : domain.domainServices()) {
+            for (String event : pm.on()) {
+                int colon = event.indexOf(':');
+                if (colon > 0) {
+                    String other = contextMap.contextNamed(event.substring(0, colon));
+                    String cls = contextMap.eventClass(event);
+                    if (other == null) {
+                        domain.foreignEventProblem(event, String.format("there is no context %s (a blueprint folder"
+                                + " or domainName)", event.substring(0, colon).trim()));
+                    } else if (cls == null && contextMap.whyNoEvent(event) != null) {
+                        domain.foreignEventProblem(event, contextMap.whyNoEvent(event));
+                    } else if (cls != null && !generatesEvents(contextMap.modelsOf(other))) {
+                        // Declared, but the rules that context runs write no event
+                        // classes: the import would name a class nobody generates.
+                        domain.foreignEventProblem(event, String.format("%s declares it, but its rules generate no"
+                                + " event classes - select ddd-event there (a ddd or hexagonal bundle has it)"
+                                + " and do not suppress it", other));
+                    } else if (cls != null) {
+                        domain.foreignEvent(event, cls);
+                    }
+                } else {
+                    String other = contextMap.contextDeclaringEvent(domain.getName(), event);
+                    if (other != null) domain.eventElsewhere(event, other);
+                }
+            }
+        }
+    }
+
+    /**
+     * Whether another domain's rule selection - as this run would resolve it
+     * there, suppressions included - has a rule writing the event artifact.
+     * Asked of the rules' declarations, as -PlistRules reads them, so the
+     * runner still names no rule set.
+     */
+    private boolean generatesEvents(List<ECoreModel> models) {
+        ECoreModel saved = currentModel;
+        try {
+            for (ECoreModel m : models) {
+                currentModel = m;
+                java.util.List<String> off = RulesConfig.resolveSuppress(domainConfig("publisher.suppress"));
+                for (String name : contributingRules()) {
+                    for (io.elasticore.base.model.pub.rules.CodeRules rs : RuleCatalog.standard().rulesOf(name)) {
+                        for (java.lang.reflect.Method method : rs.getClass().getDeclaredMethods()) {
+                            io.elasticore.base.model.pub.rules.Rule r =
+                                    method.getAnnotation(io.elasticore.base.model.pub.rules.Rule.class);
+                            if (r != null && "event".equals(r.target()) && !off.contains(r.value())) return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        } finally {
+            currentModel = saved;
+        }
+    }
+
+    /** Where a contributed artifact goes: its own namespace, or its fallback. */
+    private String namespaceFor(io.elasticore.base.model.pub.rules.ContributedArtifact a,
+                                ECoreModel model) {
+        String pkg = model.getNamespace(a.namespaceKey());
+        if (pkg == null && a.fallbackNamespaceKey() != null) {
+            pkg = model.getNamespace(a.fallbackNamespaceKey());
+        }
+        return pkg;
+    }
+
+    private void emitContributed(EntitySpec spec, ECoreModel model) {
+        java.util.List<String> names = contributingRules();
+        java.util.Set<Class<?>> asked = new java.util.HashSet<Class<?>>();
+
+        for (String name : names) {
+            for (io.elasticore.base.model.pub.rules.CodeRules rs
+                    : RuleCatalog.standard().rulesOf(name)) {
+                if (!(rs instanceof io.elasticore.base.model.pub.rules.ArtifactContributor)) continue;
+                if (!asked.add(rs.getClass())) continue;
+
+                for (io.elasticore.base.model.pub.rules.ContributedArtifact a
+                        : ((io.elasticore.base.model.pub.rules.ArtifactContributor) rs).artifactsFor(spec)) {
+                    contributedPackage = true;
+                    try {
+                        emit(spec, a.target(), target(namespaceFor(a, model), a.className()));
+                    } finally {
+                        contributedPackage = false;
+                    }
+                }
+            }
+        }
+    }
+
+    /** The test-tree twin of {@link #target}, for a contributed test artifact. */
+    private ArtifactTarget testTarget(String packageName, String className) {
+        return kotlin
+                ? ArtifactTarget.of("kotlin", "src/test/kotlin", "kt", packageName, className, true)
+                : ArtifactTarget.of("java", "src/test/java", "java", packageName, className, true);
+    }
+
+    /** Whether an artifact did not fail - written, unchanged, owned or declined by a rule. */
+    private boolean emitSucceeded(EntitySpec spec, String target,
+                                  ArtifactTarget out, String... ruleSets) {
+        int before = failed;
+        emit(spec, target, out, ruleSets);
+        return failed == before;
+    }
+
+    /** Whether the artifact being emitted is a contributed one, whose rules are handed its package. */
+    private boolean contributedPackage;
+
+    private boolean emit(EntitySpec spec, String target,
+                      ArtifactTarget out, String... ruleSets) {
+        String label = String.format("    %-12s %s", target, out.relativePath());
+        try {
+            // Rule sets required by this artifact are added on top of the
+            // configured selection so a project-level choice cannot silently
+            // disable the artifact being generated.
+            SourceCode code = engine(ruleSets)
+                    .artifactName(out.fileName())
+                    .packageName(contributedPackage ? out.packageName() : null)
+                    .run(spec, target);
+            if (!code.isMake()) {
+                skipped++;
+                System.out.println(label + "  SKIP(dontMake)");
+                return false;
+            }
+            write(label, out, code.render());
+            return true;
+        } catch (RuntimeException e) {
+            failed(label, out, e);
+            return false;
+        }
+    }
+
+    /**
+     * Records an artifact that could not be generated, and keeps going.
+     *
+     * Not thrown: one broken rule set should not hide what the others would
+     * have said, and a run that stops at the first failure has to be run
+     * again to learn the second. The run ends non-zero instead, so a build
+     * that asked for these files does not proceed as though it got them.
+     */
+    private void failed(String label, ArtifactTarget out, Exception e) {
+        failed++;
+        notes.add(out.relativePath() + ": " + e);
+        System.out.println(label + "  ERROR " + e.getMessage());
+    }
+
+    /**
+     * A user-owned file the generator no longer writes can still have to
+     * agree with one it does.
+     *
+     * The extension service is generate-once and calls its core service's
+     * constructor; when a rule changes what the core service is given - the
+     * hexagonal bundle handing it ports instead of the repository helper - the
+     * owned file keeps the old call and the build fails far from the cause.
+     * So the call the generator would write now is compared with the one the
+     * file has, and a difference is said here, with the line to write.
+     */
+    /**
+     * An entity class the developer owns - the concrete half of a split
+     * entity - carries the table annotations, so a DSL change to the table
+     * name, schema or indexes is not applied to it. It is said instead, with
+     * the lines the generator would write now.
+     */
+    /**
+     * A file the developer owns that the generator would now write as the
+     * subclass of a regenerated base - a process manager or domain service
+     * written before they were split - does not extend that base. Kept, it
+     * stops following the DSL: an event added to 'on' or a name added to
+     * 'uses' reaches only the base nobody extends, and nothing fails. So it
+     * is said, with what to do.
+     */
+    private void warnIfBaseNotExtended(ArtifactTarget out, File file, String wouldWrite) {
+        String base = out.fileName() + "Base";
+        if (!wouldWrite.contains("extends " + base) && !wouldWrite.contains(": " + base + "()")) return;
+        String existing;
+        try {
+            existing = new String(java.nio.file.Files.readAllBytes(file.toPath()),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            return;
+        }
+        if (existing.contains("extends " + base) || existing.contains(": " + base + "()")) return;
+        String message = String.format("[elcore3] %s does not extend %s, which is regenerated from the DSL - so a change"
+                + " to the DSL ('on', 'uses') does not reach it. Make it extend %s (Kotlin: ': %s()'), turn each"
+                + " listener into 'protected void handle(...)' (Kotlin: 'override fun handle(...)') without its"
+                + " annotations, and drop the constructor - the ports are fields of the base. Or delete the file to"
+                + " have it generated anew.", out.relativePath(), base, base, base);
+        io.elasticore.base.util.ConsoleLog.printWarn(message);
+        notes.add(message);
+    }
+
+    private void warnIfClassAnnotationsDrifted(ArtifactTarget out, File file, String wouldWrite) {
+        String cls = out.fileName();
+        // With mapping: xml the class says nothing of its table, so an owned
+        // class that still does is brought in line - to no annotations.
+        if (!wouldWrite.contains("@Entity") && !(xmlMapping() && inDomainModel(out))) return;
+        String existing;
+        try {
+            existing = new String(java.nio.file.Files.readAllBytes(file.toPath()),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            return;
+        }
+        // @behavior taken away: the generator now writes the whole entity
+        // here, but the file is the developer's split half and is kept - so
+        // the entity's fields stop following the DSL until they decide.
+        String base = cls + "Base";
+        boolean ownedSplit = existing.contains("extends " + base) || existing.contains(": " + base + "()");
+        boolean splitNow = wouldWrite.contains("extends " + base) || wouldWrite.contains(": " + base + "()");
+        if (ownedSplit && !splitNow) {
+            String message = String.format("[elcore3] %s extends %s, but the DSL no longer splits the entity"
+                    + " (@editable added, @behavior removed, or the rule set changed)."
+                    + " The entity is not regenerated while this file is yours: move its methods elsewhere and delete it"
+                    + " to generate the whole entity here again, or undo the DSL change.", out.relativePath(), base);
+            io.elasticore.base.util.ConsoleLog.printWarn(message);
+            notes.add(message);
+            return;
+        }
+        java.util.List<String> would = classAnnotationsOf(wouldWrite, cls);
+        java.util.List<String> have = classAnnotationsOf(existing, cls);
+        // Only the table's annotations are kept in line. One a rule set adds
+        // besides - a project's own, like a DDD role marker - is said once
+        // missing and never written into the developer's file: comparing it
+        // too made the file differ on every run, and writing it put a second
+        // copy beside one the developer had already added.
+        java.util.List<String> expected = managedOnly(would);
+        // Compared as written: a name in full (@org.jmolecules.ddd.annotation.Entity)
+        // is not the same annotation as another of its simple name (@Entity).
+        java.util.Set<String> haveNames = new java.util.HashSet<String>();
+        for (String h : have) haveNames.add(annotationToken(h));
+        java.util.List<String> notCarried = new java.util.ArrayList<String>();
+        for (String w : would) {
+            if (!MANAGED_CLASS_ANNOTATIONS.contains(annotationName(w)) && !haveNames.contains(annotationToken(w))) {
+                notCarried.add(w);
+            }
+        }
+        if (!notCarried.isEmpty()) {
+            String message = String.format("[elcore3] %s: the rules also put these on the class, which this file"
+                            + " does not have - it is yours, so add them by hand if they apply:%n    %s",
+                    out.relativePath(), String.join(System.lineSeparator() + "    ", notCarried));
+            System.out.println(message);
+            notes.add(message);
+        }
+        // Compared as sets: the developer may order them differently, and a
+        // reordering is not a difference worth rewriting their file for.
+        // Compared as sorted lists rather than sets: a repeated line is a
+        // difference - an annotation written twice does not compile.
+        java.util.List<String> want = new java.util.ArrayList<String>(expected);
+        java.util.List<String> got = new java.util.ArrayList<String>(managedOnly(have));
+        java.util.Collections.sort(want);
+        java.util.Collections.sort(got);
+        if (want.equals(got)) return;
+
+        String synced = withClassAnnotations(existing, wouldWrite, cls, expected);
+        if (synced != null && xmlMapping()) synced = OrmMapping.withoutUnusedPersistenceImports(synced, kotlin);
+        // The file keeps the stamp it had. It holds the developer's code, and
+        // a stamp taken of it would make the next run read it as the
+        // generator's own, untouched output - and write the template over it.
+        int eol = existing.indexOf('\n');
+        String stamp = existing.startsWith("//ecd:") && eol > 0
+                ? existing.substring(0, eol).replace("\r", "") + "\n" : null;
+        if (synced != null && stamp != null && writeWithStamp(file, stamp, synced)) {
+            String message = String.format("[elcore3] %s: table annotations brought in line with the DSL"
+                    + " - the rest of the file, your own annotations included, is as it was", out.relativePath());
+            System.out.println(message);
+            return;
+        }
+        String message = String.format("[elcore3] %s: the class annotations differ from what the DSL now says"
+                        + " - this file is yours, so update them by hand:%n    %s",
+                out.relativePath(), String.join(System.lineSeparator() + "    ", expected));
+        System.out.println(message);
+        notes.add(message);
+    }
+
+    /**
+     * The persistence annotations the generator states for an entity class.
+     * Anything else above the class is the developer's and is kept.
+     */
+    private static final java.util.Set<String> MANAGED_CLASS_ANNOTATIONS = new java.util.HashSet<String>(
+            java.util.Arrays.asList("Entity", "Table", "DynamicUpdate", "DynamicInsert", "Immutable",
+                    "Audited", "Inheritance", "DiscriminatorColumn", "DiscriminatorValue", "IdClass",
+                    "PersistentModel"));
+
+    /** The annotation's name as written, qualified or not: "AggregateRoot", "org.jmolecules.ddd.annotation.Entity". */
+    private static String annotationToken(String line) {
+        String t = line.trim();
+        if (!t.startsWith("@")) return null;
+        int end = 1;
+        while (end < t.length() && (Character.isJavaIdentifierPart(t.charAt(end)) || t.charAt(end) == '.')) end++;
+        return t.substring(1, end);
+    }
+
+    private static String annotationName(String line) {
+        String t = line.trim();
+        if (!t.startsWith("@")) return null;
+        int end = 1;
+        while (end < t.length() && (Character.isJavaIdentifierPart(t.charAt(end)) || t.charAt(end) == '.')) end++;
+        String name = t.substring(1, end);
+        return name.substring(name.lastIndexOf('.') + 1);
+    }
+
+    private static java.util.List<String> managedOnly(java.util.List<String> lines) {
+        java.util.List<String> out = new java.util.ArrayList<String>();
+        for (String l : lines) {
+            if (MANAGED_CLASS_ANNOTATIONS.contains(annotationName(l))) out.add(l);
+        }
+        return out;
+    }
+
+    /**
+     * The owned file with the managed class annotations replaced by the ones
+     * the DSL now states, the developer's own kept after them, and any import
+     * the new ones need added. Null when the block cannot be read safely - an
+     * annotation spread over several lines - and a warning is given instead.
+     */
+    static String withClassAnnotations(String existing, String wouldWrite, String cls, java.util.List<String> expected) {
+        String[] lines = existing.split("\\r?\\n", -1);
+        int classLine = -1;
+        for (int i = 0; i < lines.length; i++) {
+            String t = lines[i].trim();
+            if (t.contains("class " + cls + " ") || t.contains("class " + cls + ":")) { classLine = i; break; }
+        }
+        if (classLine < 0) return null;
+        // The block above the class: everything up to a blank line, a
+        // statement, or the end of a comment. Each line of it has to be one
+        // whole annotation; a continuation line means an annotation spread
+        // over several, which is left for the developer.
+        int first = classLine;
+        while (first > 0) {
+            String t = lines[first - 1].trim();
+            if (t.isEmpty() || t.endsWith(";") || t.endsWith("*/") || t.startsWith("//") || t.startsWith("*")) break;
+            first--;
+        }
+        java.util.List<String> kept = new java.util.ArrayList<String>();
+        for (int i = first; i < classLine; i++) {
+            String t = lines[i].trim();
+            int open = t.length() - t.replace("(", "").length();
+            int close = t.length() - t.replace(")", "").length();
+            if (!t.startsWith("@") || open != close) return null;
+            if (!MANAGED_CLASS_ANNOTATIONS.contains(annotationName(t))) kept.add(lines[i]);
+        }
+        StringBuilder sb = new StringBuilder();
+        java.util.Set<String> haveImports = new java.util.HashSet<String>();
+        for (String l : lines) if (l.trim().startsWith("import ")) haveImports.add(l.trim());
+        java.util.List<String> missing = new java.util.ArrayList<String>();
+        for (String l : wouldWrite.split("\\r?\\n")) {
+            if (!l.trim().startsWith("import ") || haveImports.contains(l.trim())) continue;
+            // Only what the annotations written here name: the file would
+            // otherwise gain imports for things it does not use.
+            String imported = l.trim().replaceAll(";$", "");
+            String simple = imported.substring(imported.lastIndexOf('.') + 1);
+            boolean used = false;
+            for (String e : expected) {
+                if (e.contains("@" + simple) || e.contains(simple + "(") || e.contains(simple + ".")) used = true;
+            }
+            if (used) missing.add(l.trim());
+        }
+        // New imports join the existing ones - before the first - or, where
+        // there are none, follow the package line.
+        int firstImport = -1;
+        for (int i = 0; i < lines.length; i++) {
+            if (lines[i].trim().startsWith("import ")) { firstImport = i; break; }
+        }
+        boolean importsAdded = missing.isEmpty();
+        for (int i = 0; i < lines.length; i++) {
+            // The ecd line is the writer's to put back, not the content's.
+            if (i == 0 && lines[i].startsWith("//ecd:")) continue;
+            if (!importsAdded && i == firstImport) {
+                for (String m : missing) sb.append(m).append('\n');
+                importsAdded = true;
+            }
+            if (i == first) {
+                for (String a : expected) sb.append(a).append('\n');
+                for (String k : kept) sb.append(k).append('\n');
+            }
+            if (i >= first && i < classLine) continue;
+            sb.append(lines[i]);
+            if (i < lines.length - 1) sb.append('\n');
+            if (!importsAdded && firstImport < 0 && lines[i].trim().startsWith("package ")) {
+                sb.append('\n');
+                for (String m : missing) sb.append(m).append('\n');
+                importsAdded = true;
+            }
+        }
+        return sb.toString();
+    }
+
+    /** The annotation lines directly above a class declaration, trimmed. */
+    static java.util.List<String> classAnnotationsOf(String source, String className) {
+        java.util.List<String> found = new java.util.ArrayList<String>();
+        for (String line : source.split("\\r?\\n")) {
+            String t = line.trim();
+            if (t.startsWith("@")) {
+                found.add(t);
+            } else if (t.contains("class " + className + " ") || t.contains("class " + className + ":")) {
+                return found;
+            } else if (!t.isEmpty() && !found.isEmpty() && !t.startsWith("//")) {
+                found.clear();
+            } else if (t.startsWith("/*") || t.startsWith("*")) {
+                found.clear();
+            }
+        }
+        return java.util.Collections.emptyList();
+    }
+
+    private void warnIfConstructorDrifted(ArtifactTarget out, File file, String wouldWrite) {
+        java.util.List<String> expected = new java.util.ArrayList<String>();
+        for (String line : wouldWrite.split("\\r?\\n")) {
+            String args = superArguments(line);
+            if (args != null) expected.add(args);
+        }
+        if (expected.isEmpty()) return;
+
+        String existing;
+        try {
+            existing = new String(java.nio.file.Files.readAllBytes(file.toPath()),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            return;
+        }
+        java.util.Set<String> have = new java.util.HashSet<String>();
+        for (String line : existing.split("\\r?\\n")) {
+            String args = superArguments(line);
+            if (args != null) have.add(args);
+        }
+        // A file that calls no core-service constructor at all is not one this can judge.
+        if (have.isEmpty()) return;
+
+        boolean drifted = false;
+        for (String args : expected) {
+            if (!have.contains(args)) drifted = true;
+        }
+        if (drifted && untouchedApartFromWiring(existing, wouldWrite, out.fileName())) {
+            // Nothing in it is the developer's yet - the first run that wrote
+            // it failed or ran in another mode - so the file is simply written
+            // again, still generate-once, rather than left for a hand fix.
+            if (rewriteOwned(file, wouldWrite)) {
+                String msg = out.relativePath() + ": constructor was out of date and the file was never edited"
+                        + " - written again with (" + expected.get(0) + ")";
+                System.out.println("[elcore3] " + msg);
+            }
+            return;
+        }
+        for (String args : expected) {
+            if (have.contains(args)) continue;
+            String msg = out.relativePath() + ": constructor out of date with its core service - "
+                    + "the generator now calls it with (" + args + "); update this file by hand "
+                    + "(it is yours, so it is not rewritten). See the rule guide, repository ports.";
+            notes.add(msg);
+            io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] " + msg);
+        }
+    }
+
+    /**
+     * Whether an owned file holds nothing of the developer's beyond what the
+     * generator would write now, its constructor wiring and imports aside:
+     * the code lines outside the constructor are the same.
+     */
+    static boolean untouchedApartFromWiring(String existing, String wouldWrite, String className) {
+        java.util.List<String> mine = codeOutsideConstructor(existing, className);
+        return mine != null && mine.equals(codeOutsideConstructor(wouldWrite, className));
+    }
+
+    /**
+     * The parameters a generated extension's constructor ever takes: the
+     * repository helper of the compatible mode, or the ports and the entity
+     * manager of the hexagonal one. A constructor naming anything else was
+     * given a dependency by the developer and is not the generator's.
+     */
+    private static final java.util.Set<String> WIRING_PARAMETERS = new java.util.HashSet<String>(
+            java.util.Arrays.asList("helper", "repository", "query", "entityManager"));
+
+    /**
+     * The file's lines with only the constructor's wiring taken out - its
+     * signature and its super(...) call, or Kotlin's constructor header -
+     * and null when that wiring names anything but the generator's own
+     * parameters. Everything else, comments and the constructor's own body
+     * included, has to match for the file to count as untouched.
+     */
+    private static java.util.List<String> codeOutsideConstructor(String source, String className) {
+        java.util.List<String> out = new java.util.ArrayList<String>();
+        String[] lines = source.split("\\r?\\n");
+        boolean inKotlinHeader = false;
+        StringBuilder header = new StringBuilder();
+        for (String line : lines) {
+            String t = line.trim();
+            if (t.startsWith("//ecd:")) continue;
+            if (inKotlinHeader) {
+                header.append(t).append(' ');
+                if (t.startsWith(")")) {
+                    inKotlinHeader = false;
+                    if (!onlyWiring(header.toString())) return null;
+                }
+                continue;
+            }
+            if (t.startsWith("public " + className + "(")) {
+                if (!onlyWiring(t)) return null;
+                continue;
+            }
+            if (t.startsWith("super(")) continue;
+            if (t.contains("class " + className + "(")) {
+                header.setLength(0);
+                header.append(t).append(' ');
+                inKotlinHeader = !t.contains(") :") && !t.endsWith(") {");
+                if (!inKotlinHeader && !onlyWiring(t)) return null;
+                continue;
+            }
+            if (t.isEmpty() || t.startsWith("import ")) continue;
+            out.add(t.replaceAll("\\s+", " "));
+        }
+        return out;
+    }
+
+    /** Whether a constructor's parameter list names only the generator's wiring. */
+    private static boolean onlyWiring(String signature) {
+        int open = signature.indexOf('(');
+        int close = signature.indexOf(')', open + 1);
+        if (open < 0) return false;
+        String params = close < 0 ? signature.substring(open + 1) : signature.substring(open + 1, close);
+        for (String p : params.split(",")) {
+            String t = p.trim();
+            if (t.isEmpty()) continue;
+            // Java "Type name", Kotlin "name: Type" (maybe "private val name: Type")
+            String name;
+            int colon = t.indexOf(':');
+            if (colon >= 0) {
+                String[] words = t.substring(0, colon).trim().split("\\s+");
+                name = words[words.length - 1];
+            } else {
+                String[] words = t.split("\\s+");
+                name = words[words.length - 1];
+            }
+            if (!WIRING_PARAMETERS.contains(name)) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Whether an owned file is still byte for byte what the generator wrote:
+     * the hash on its first line was taken of the content when it was
+     * written, and the content still has it. A file without that line, or
+     * with custom blocks added, is taken as edited.
+     */
+    static boolean neverEdited(HashUtils.Response st) {
+        if (st == null || st.getEcd() == null || st.getOldEcdLine() == null) return false;
+        if (st.hasCustomizedScopeContent()) return false;
+        try {
+            return HashUtils.checkHashCode(st.getPreSourceContent(), st.getEcd(),
+                    HashUtils.getVersion(st.getOldEcdLine()));
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /** Writes content under a given first line (the ecd stamp it already had). */
+    private boolean writeWithStamp(File file, String stamp, String content) {
+        Writer w = null;
+        try {
+            w = FileBasedSourceFileAccessFactory.newPlatformLineWriter(file);
+            w.write(stamp.endsWith("\n") ? stamp : stamp + "\n");
+            w.write(content);
+            return true;
+        } catch (IOException e) {
+            notes.add(file + ": " + e);
+            return false;
+        } finally {
+            if (w != null) {
+                try { w.close(); } catch (IOException ignore) { }
+            }
+        }
+    }
+
+    /** Writes an owned file again, keeping it owned (the template carries the marker). */
+    private boolean rewriteOwned(File file, String content) {
+        Writer w = null;
+        try {
+            w = FileBasedSourceFileAccessFactory.newPlatformLineWriter(file);
+            w.write(HashUtils.makeEcdCode(content));
+            w.write(content);
+            return true;
+        } catch (IOException e) {
+            notes.add(file + ": " + e);
+            return false;
+        } finally {
+            if (w != null) {
+                try { w.close(); } catch (IOException ignore) { }
+            }
+        }
+    }
+
+    /**
+     * The arguments a line hands to the core service's constructor - Java's
+     * super(...) or Kotlin's ") : XCoreService(...)" - with the spacing and
+     * whatever follows (an implements list, a brace) taken away, so a
+     * reformatted or extended line still compares by what it passes.
+     */
+    static String superArguments(String line) {
+        String t = line.trim();
+        int start;
+        if (t.startsWith("super(")) {
+            start = "super(".length();
+        } else if (t.startsWith(") : ") && t.contains("CoreService(")) {
+            start = t.indexOf("CoreService(") + "CoreService(".length();
+        } else {
+            return null;
+        }
+        int depth = 1;
+        for (int i = start; i < t.length(); i++) {
+            char ch = t.charAt(i);
+            if (ch == '(') depth++;
+            else if (ch == ')' && --depth == 0) return t.substring(start, i).replaceAll("\\s+", "");
+        }
+        return null;
+    }
+
+    // ---- mapping: xml ------------------------------------------------------
+
+    /** The JPA mapping moved out of the domain classes, per module root. */
+    private final Map<String, OrmMapping> ormByRoot = new java.util.LinkedHashMap<String, OrmMapping>();
+
+    /** Whether the domain being generated keeps its JPA mapping in orm.xml. */
+    private boolean xmlMapping() {
+        return currentModel != null && !typescript && (v3 || kotlin)
+                && "xml".equalsIgnoreCase(currentModel.getConfig("mapping", ""));
+    }
+
+    private OrmMapping orm(ArtifactTarget out) {
+        String root = rootFor(out);
+        OrmMapping m = ormByRoot.get(root);
+        if (m == null) {
+            m = new OrmMapping();
+            ormByRoot.put(root, m);
+        }
+        return m;
+    }
+
+    /** Where the persistence side of the domain goes: the persistence namespace, else the repository's. */
+    private String persistencePackage() {
+        String pkg = currentModel.getNamespace("persistence");
+        if (pkg == null || pkg.isEmpty()) pkg = currentModel.getNamespace("repository");
+        return pkg;
+    }
+
+    /**
+     * Where the query metadata class Q goes. It is written in JPA's terms
+     * (Specification, criteria), so with mapping: xml it leaves the domain
+     * model for the persistence side.
+     */
+    private String queryPackage(ECoreModel model) {
+        return xmlMapping() ? persistencePackage() : model.getNamespace("entity");
+    }
+
+    /** The Q class, rendered for the entity package, moved to the one it is written to. */
+    private String movedQuery(ArtifactTarget out, String content) {
+        String entityPkg = currentModel.getNamespace("entity");
+        if (!"Q".equals(out.fileName()) || entityPkg == null || entityPkg.equals(out.packageName())) return content;
+        String semi = kotlin ? "" : ";";
+        String from = "package " + entityPkg + semi;
+        int at = content.indexOf(from);
+        if (at < 0) return content;
+        String imports = "\n\nimport " + entityPkg + ".*" + semi;
+        String enumPkg = currentModel.getNamespace("enumeration");
+        if (enumPkg != null && !enumPkg.equals(entityPkg)) imports += "\nimport " + enumPkg + ".*" + semi;
+        return content.substring(0, at) + "package " + out.packageName() + semi + imports
+                + content.substring(at + from.length());
+    }
+
+    /** A class of the domain model package: the entity or the enumeration namespace. */
+    private boolean inDomainModel(ArtifactTarget out) {
+        String pkg = out.packageName();
+        if (pkg == null) return false;
+        return pkg.equals(currentModel.getNamespace("entity")) || pkg.equals(currentModel.getNamespace("enumeration"));
+    }
+
+    /**
+     * src/main/resources/i18n/<domain>-messages.properties: every message the
+     * domain's API can answer with, by code, in its default wording - beside
+     * the error handler that reads it (same module). Regenerated with the model;
+     * a translation is a file beside it (..._ko.properties), never this one.
+     */
+    private void writeMessages(String domainName, ArtifactTarget handler) {
+        if (typescript) return;
+        String text = io.elasticore.base.model.pub.rules.ErrorCatalog.properties(domainName,
+                io.elasticore.base.model.pub.rules.ErrorCatalog.shared(),
+                io.elasticore.base.model.pub.rules.ErrorCatalog.recorded());
+        File file = new File(rootFor(handler) + "/src/main/resources/i18n/" + domainName + "-messages.properties");
+        String label = String.format("    %-12s %s", "messages", relative(file));
+        if (file.isFile()) {
+            try {
+                String existing = new String(java.nio.file.Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+                if (equalsIgnoringLineEndings(existing, text)) {
+                    unchanged++;
+                    System.out.println(label + "  UNCHANGED");
+                    return;
+                }
+            } catch (IOException e) {
+                // unreadable: write it again
+            }
+        }
+        File dir = file.getParentFile();
+        if (dir != null && !dir.exists()) dir.mkdirs();
+        try {
+            java.nio.file.Files.write(file.toPath(), io.elasticore.base.model.pub.rules.ErrorCatalog.bytes(text));
+            wrote++;
+            System.out.println(label + "  WROTE");
+        } catch (IOException e) {
+            failed++;
+            notes.add(file + ": " + e.getMessage());
+        }
+    }
+
+    /** Writes each module's orm.xml. Not ours to overwrite if someone else wrote it. */
+    private void writeOrmXml() {
+        for (Map.Entry<String, OrmMapping> en : ormByRoot.entrySet()) {
+            OrmMapping m = en.getValue();
+            for (String w : m.warnings()) {
+                String message = "[elcore3] mapping: xml - " + w;
+                io.elasticore.base.util.ConsoleLog.printWarn(message);
+                notes.add(message);
+            }
+            if (m.isEmpty()) continue;
+            File file = new File(en.getKey() + "/src/main/resources/META-INF/orm.xml");
+            String xml = m.toXml();
+            if (file.isFile()) {
+                String existing;
+                try {
+                    existing = new String(java.nio.file.Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+                } catch (IOException e) {
+                    existing = "";
+                }
+                if (!existing.contains("Generated by ElastiCORE (mapping: xml)")) {
+                    file = new File(en.getKey() + "/src/main/resources/META-INF/elasticore-orm.xml");
+                    notes.add("META-INF/orm.xml is yours, so the mapping went to META-INF/elasticore-orm.xml:"
+                            + " add spring.jpa.mapping-resources=META-INF/elasticore-orm.xml");
+                } else if (equalsIgnoringLineEndings(existing, xml)) {
+                    unchanged++;
+                    System.out.println("  " + relative(file) + "  UNCHANGED");
+                    continue;
+                }
+            }
+            File dir = file.getParentFile();
+            if (dir != null && !dir.exists()) dir.mkdirs();
+            Writer w = null;
+            try {
+                w = new java.io.OutputStreamWriter(new java.io.FileOutputStream(file), StandardCharsets.UTF_8);
+                w.write(xml);
+                wrote++;
+                System.out.println("  " + relative(file) + "  WROTE");
+            } catch (IOException e) {
+                failed++;
+                notes.add(file + ": " + e.getMessage());
+            } finally {
+                if (w != null) {
+                    try { w.close(); } catch (IOException ignore) { }
+                }
+            }
+        }
+    }
+
+    /** Every file this run produced or considered, and the directories they are in. */
+    private final java.util.Set<String> produced = new java.util.HashSet<String>();
+    private final java.util.Set<File> generatedDirs = new java.util.LinkedHashSet<File>();
+
+    private void remember(File file) {
+        try {
+            produced.add(file.getCanonicalPath());
+        } catch (IOException e) {
+            produced.add(file.getAbsolutePath());
+        }
+        if (file.getParentFile() != null) generatedDirs.add(file.getParentFile());
+    }
+
+    /**
+     * Removes what the generator wrote and no longer would.
+     *
+     * A file the DSL stopped asking for - the invariants of a root whose last
+     * bound moved into a value type, the command DTO of a command renamed -
+     * stayed on disk, still compiled against a base that had changed shape,
+     * and broke the build on nothing the developer did. Only a file that is
+     * provably the generator's is removed: a 3.0 hash line, not handed over
+     * ("Initially generated"), and still byte for byte what was written. One
+     * that was edited is reported instead.
+     *
+     * Only after a run over every domain: a run over one cannot tell another
+     * domain's file from a stale one.
+     */
+    private void removeStale() {
+        int removed = 0;
+        for (File dir : generatedDirs) {
+            // Only a directory this run is the one generator of: the project's
+            // own, or a module the run was told about. A module a namespace
+            // redirects into may be generated by another run as well, which
+            // this one cannot tell from a stale file.
+            if (!ownsDirectory(dir)) continue;
+            File[] files = dir.listFiles();
+            if (files == null) continue;
+            for (File f : files) {
+                String name = f.getName();
+                if (!f.isFile() || !(name.endsWith(".java") || name.endsWith(".kt") || name.endsWith(".ts")
+                        || name.endsWith("-http-services.properties"))) continue;
+                String path;
+                try {
+                    path = f.getCanonicalPath();
+                } catch (IOException e) {
+                    path = f.getAbsolutePath();
+                }
+                if (produced.contains(path)) continue;
+                // A base a developer's class still extends is not stale: the
+                // class is theirs and kept, and removing its parent breaks it.
+                if (stillExtended(f)) continue;
+                HashUtils.Response st = readStatus(f);
+                if (st == null || st.getOldEcdLine() == null || st.getStatus() == HashUtils.UNTRACKED
+                        || st.getStatus() == HashUtils.NO_ECD) continue;
+                String version;
+                try {
+                    version = HashUtils.getVersion(st.getOldEcdLine());
+                } catch (RuntimeException e) {
+                    continue;
+                }
+                if (version == null || !version.trim().startsWith("3")) continue;
+                String rel = relative(f);
+                if (neverEdited(st)) {
+                    if (f.delete()) {
+                        removed++;
+                        System.out.println("  " + rel + "  REMOVED(the DSL no longer produces it)");
+                    }
+                } else {
+                    String message = "[elcore3] " + rel + " was generated, the DSL no longer produces it,"
+                            + " and it has been edited - delete it, or move what you wrote.";
+                    io.elasticore.base.util.ConsoleLog.printWarn(message);
+                    notes.add(message);
+                }
+            }
+        }
+        if (removed > 0) {
+            notes.add(removed + " generated file(s) the DSL no longer produces were removed.");
+        }
+    }
+
+    private boolean ownsDirectory(File dir) {
+        String d = dir.getAbsolutePath().replace('\\', '/');
+        java.util.List<String> roots = new java.util.ArrayList<String>();
+        roots.add(new File(projectRoot).getAbsolutePath());
+        if (domainRoot != null) roots.add(new File(domainRoot).getAbsolutePath());
+        for (String r : moduleRoots.values()) roots.add(new File(r).getAbsolutePath());
+        // Without a module list, a redirected module is someone else's too.
+        boolean multiModule = !moduleRoots.isEmpty();
+        String project = roots.get(0).replace('\\', '/');
+        for (String r : roots) {
+            String root = r.replace('\\', '/');
+            if (!multiModule && !root.equals(project)) continue;
+            if (!d.startsWith(root + "/")) continue;
+            // A module nested inside the project root is only the project's
+            // when the run knows the modules.
+            if (!multiModule && root.equals(project)) {
+                String rest = d.substring(root.length() + 1);
+                if (!rest.startsWith("src/")) return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /** Whether f is XxxBase and a kept Xxx beside it still extends it. */
+    static boolean stillExtended(File f) {
+        String name = f.getName();
+        int dot = name.lastIndexOf('.');
+        String cls = name.substring(0, dot);
+        if (!cls.endsWith("Base")) return false;
+        File sibling = new File(f.getParentFile(), cls.substring(0, cls.length() - 4) + name.substring(dot));
+        if (!sibling.isFile()) return false;
+        try {
+            String s = new String(java.nio.file.Files.readAllBytes(sibling.toPath()), StandardCharsets.UTF_8);
+            return s.contains("extends " + cls) || s.contains(": " + cls + "(");
+        } catch (IOException e) {
+            return true;
+        }
+    }
+
+    private String relative(File f) {
+        String p = f.getAbsolutePath().replace('\\', '/');
+        String root = new File(projectRoot).getAbsolutePath().replace('\\', '/');
+        return p.startsWith(root + "/") ? p.substring(root.length() + 1) : p;
+    }
+
+    private void write(String label, ArtifactTarget out, String rendered) {
+        File file = new File(rootFor(out) + "/" + out.relativePath());
+        remember(file);
+
+        // What would actually land on disk, so that a file already carrying
+        // the house style is recognised as unchanged - and one that does not
+        // is rewritten.
+        //
+        // 2.x always terminates the file with a newline; templates do not
+        // necessarily end with one.
+        String content = rendered.endsWith("\n") ? rendered : rendered + "\n";
+        content = style.apply(content);
+        // mapping: xml - the domain class says nothing of JPA; orm.xml does.
+        if (xmlMapping() && inDomainModel(out) && ("java".equals(out.scheme()) || "kotlin".equals(out.scheme()))) {
+            content = orm(out).extract(content, out.packageName(), out.fileName(), kotlin);
+        }
+        if (xmlMapping()) content = movedQuery(out, content);
+
+        HashUtils.Response st = null;
+        if (file.isFile()) {
+            st = readStatus(file);
+            if (st != null && st.getStatus() == HashUtils.UNTRACKED && (v3 || kotlin)
+                    && neverEdited(st) && !equalsIgnoringLineEndings(st.getPreSourceContent(), content)) {
+                // Written once and handed over - but nobody took it: the file
+                // is still exactly what the generator wrote, as its own hash
+                // says. Left alone it would keep what the DSL said then - a
+                // controller calling a save that @readonly has since removed -
+                // and break the build on nothing the developer did. So it
+                // follows the DSL until the first edit makes it theirs.
+                System.out.println(label + "  REGENERATED(owned, never edited)");
+            } else if (st != null && st.getStatus() == HashUtils.NO_ECD) {
+                // No hash line: not a file ElastiCORE wrote, or one whose
+                // header the developer removed. Either way it is theirs - 2.x
+                // skips it too - and writing over it would lose their code.
+                skipped++;
+                System.out.println(label + "  SKIP(no ElastiCORE header - yours)");
+                return;
+            } else if (st != null && st.getStatus() == HashUtils.UNTRACKED) {
+                skipped++;
+                System.out.println(label + "  SKIP(user-owned)");
+                warnIfConstructorDrifted(out, file, content);
+                warnIfClassAnnotationsDrifted(out, file, content);
+                warnIfBaseNotExtended(out, file, content);
+                return;
+            }
+            if (st != null && st.getStatus() == HashUtils.MODIFIED && !force) {
+                skipped++;
+                System.out.println(label + "  SKIP(user-modified; -Pforce to overwrite)");
+                return;
+            }
+            if (st != null && st.getPreSourceContent() != null
+                    && equalsIgnoringLineEndings(st.getPreSourceContent(), content)) {
+                unchanged++;
+                System.out.println(label + "  UNCHANGED");
+                return;
+            }
+        }
+
+        File dir = file.getParentFile();
+        if (dir != null && !dir.exists() && !dir.mkdirs()) {
+            failed++;
+            notes.add(out.relativePath() + ": cannot create " + dir);
+            System.out.println(label + "  ERROR cannot create " + dir);
+            return;
+        }
+        // UTF-8 always; never FileWriter, which uses the platform charset.
+        //
+        // Line endings come from the platform unless the build named a house
+        // style, in which case the style owns them and the converting writer
+        // would undo its choice.
+        Writer w = null;
+        try {
+            w = style.lineEnding() == null
+                    ? FileBasedSourceFileAccessFactory.newPlatformLineWriter(file)
+                    : new java.io.OutputStreamWriter(
+                            new java.io.FileOutputStream(file), java.nio.charset.StandardCharsets.UTF_8);
+
+            // The hash covers the generated text only, so the user's blocks
+            // are put back after it is taken - where 2.x puts them.
+            w.write(HashUtils.makeEcdCode(content));
+            w.write(st != null && st.hasCustomizedScopeContent() ? withCustomBlocks(content, st) : content);
+            w.flush();
+            wrote++;
+            System.out.println(label + "  WROTE");
+        } catch (IOException e) {
+            failed(label, out, e);
+        } finally {
+            if (w != null) {
+                try { w.close(); } catch (IOException ignore) { }
+            }
+        }
+    }
+
+    /**
+     * The generated text with the user's custom blocks (from a line holding
+     * "// !----------" to one holding "------------!") put back.
+     *
+     * The blocks are left out of the hash and the comparison, so a file that
+     * carries them reads as unchanged while the DSL is. When the DSL changed
+     * the file was rewritten without them, losing code the user had been told
+     * was safe there. Placement is 2.x's: a block of imports after the second
+     * line, the rest before the closing line.
+     */
+    static String withCustomBlocks(String content, HashUtils.Response st) {
+        String[] lines = content.split("\n", -1);
+        int last = lines.length - 1;
+        while (last > 0 && lines[last].trim().isEmpty()) last--;
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            if (i == last && st.getCustomizedScopeContent() != null) {
+                out.append(st.getCustomizedScopeContent());
+            }
+            out.append(lines[i]);
+            if (i < lines.length - 1) out.append("\n");
+            if (i == 1 && st.getCustomizedScopeContent4Header() != null) {
+                out.append(st.getCustomizedScopeContent4Header());
+            }
+        }
+        return out.toString();
+    }
+
+    private HashUtils.Response readStatus(File file) {
+        Reader r = null;
+        try {
+            r = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8);
+            return HashUtils.checkContentModified(r);
+        } catch (IOException e) {
+            return null;
+        } finally {
+            if (r != null) {
+                try { r.close(); } catch (IOException ignore) { }
+            }
+        }
+    }
+
+    /**
+     * Where an artifact is written: the module its namespace redirects to,
+     * otherwise the module that owns the domain, otherwise the project root.
+     *
+     * The redirect is what "app-admin://com.acme.shop.domain.service" in an
+     * env.yml namespace asks for; the package it names arrives here clean,
+     * so the mapping is kept beside it.
+     */
+    private String rootFor(ArtifactTarget out) {
+        if (packageModuleMap != null && out.packageName() != null) {
+            for (Map.Entry<String, String> en : packageModuleMap.entrySet()) {
+                if (!out.packageName().startsWith(en.getKey())) continue;
+                String moduleRoot = moduleRoots.get(en.getValue());
+                if (moduleRoot != null) return moduleRoot;
+            }
+        }
+        return domainRoot != null ? domainRoot : projectRoot;
+    }
+
+    private static boolean equalsIgnoringLineEndings(String a, String b) {
+        return a.replace("\r\n", "\n").trim().equals(b.replace("\r\n", "\n").trim());
+    }
+
+    private void printSummary() {
+        System.out.println();
+        System.out.println("=== elcore3: " + wrote + " written / "
+                + unchanged + " unchanged / " + skipped + " skipped / "
+                + failed + " failed ===");
+        for (String n : notes) {
+            System.out.println("  " + n);
+        }
+        if (failed > 0) {
+            System.out.println();
+            System.out.println("[elcore3] " + failed
+                    + " artifact(s) could not be generated - see the notes above.");
+        }
+    }
+
+    /** Whether the run produced everything it was asked for. */
+    private boolean succeeded() {
+        return failed == 0;
+    }
+}
