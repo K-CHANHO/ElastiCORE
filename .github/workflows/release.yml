@@ -61,6 +61,39 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      # Tried in seconds, before the build, rather than at the signing step after it.
+      # Gradle says only "Could not read PGP secret key" for a key cut short and for a
+      # wrong passphrase alike; this says which. Nothing secret is printed.
+      - name: The signing key opens with its passphrase
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error title=Signing key::$1"; exit 1; }
+          [ -n "$SIGNING_KEY" ] || fail "SIGNING_KEY is empty"
+          [ -n "$SIGNING_PASSWORD" ] || fail "SIGNING_PASSWORD is empty"
+          case "$SIGNING_KEY" in
+            *'-----BEGIN PGP PRIVATE KEY BLOCK-----'*'-----END PGP PRIVATE KEY BLOCK-----'*) ;;
+            *) fail "SIGNING_KEY is not a whole armored private key, from -----BEGIN PGP PRIVATE KEY BLOCK----- to -----END PGP PRIVATE KEY BLOCK-----" ;;
+          esac
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          printf '%s\n' "$SIGNING_KEY" | gpg --batch --quiet --import 2> /dev/null \
+            || fail "SIGNING_KEY does not import - it was probably cut short or altered when pasted"
+          echo probe > "$RUNNER_TEMP/probe"
+          if ! printf '%s' "$SIGNING_PASSWORD" | gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 0 \
+                 --detach-sign --output "$RUNNER_TEMP/probe.sig" "$RUNNER_TEMP/probe" 2> /dev/null; then
+            hint=""
+            if [[ "$SIGNING_PASSWORD" =~ ^[[:space:]]|[[:space:]]$ ]]; then hint=" It starts or ends with a space or a line break."; fi
+            if LC_ALL=C grep -q '[^ -~]' <<< "$SIGNING_PASSWORD"; then
+              hint="$hint It has characters outside ASCII, as typing in Korean input mode gives."
+            fi
+            fail "SIGNING_PASSWORD does not unlock SIGNING_KEY.$hint"
+          fi
+          echo "Signing key $(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr/ {print $10; exit}') opens"
+          gpgconf --kill all
+
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
