@@ -5,6 +5,7 @@ import io.elasticore.base.ModelDomain;
 import io.elasticore.base.model.ECoreModel;
 import io.elasticore.base.model.core.BaseECoreModelContext;
 import io.elasticore.base.model.loader.FileBasedModelLoader;
+import io.elasticore.base.util.FileOrder;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -32,7 +33,7 @@ public final class BlueprintLoader {
 
     public static BlueprintLoader load(String blueprintRoot) {
         BlueprintLoader loader = new BlueprintLoader();
-        File[] dirs = new File(blueprintRoot).listFiles();
+        File[] dirs = FileOrder.list(new File(blueprintRoot));
         if (dirs == null) return loader;
 
         for (File dir : dirs) {
@@ -107,7 +108,7 @@ public final class BlueprintLoader {
             loader.moduleRoots.put(moduleDir.getName(), absolute(moduleDir));
 
             File blueprintDir = new File(moduleDir, "src/main/resources/blueprint");
-            File[] dirs = blueprintDir.listFiles();
+            File[] dirs = FileOrder.list(blueprintDir);
             if (dirs == null) continue;
 
             for (File dir : dirs) {

@@ -13,6 +13,7 @@ import io.elasticore.base.model.loader.MainModelLoader;
 import io.elasticore.base.model.loader.ModelLoaderContext;
 import io.elasticore.base.model.repo.RepositoryModels;
 import io.elasticore.base.util.ConsoleLog;
+import io.elasticore.base.util.FileOrder;
 import lombok.SneakyThrows;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -55,7 +56,7 @@ public class JavaSrcFileMainModelLoader implements MainModelLoader {
     private void loadJavaSrcFile(File f, List<FileSource> fileSources) {
 
         if (f.isDirectory()) {
-            File[] files = f.listFiles();
+            File[] files = FileOrder.list(f);
             for (File child : files) {
                 loadJavaSrcFile(child, fileSources);
             }

@@ -17,6 +17,7 @@ import io.elasticore.base.model.enums.EnumModels;
 import io.elasticore.base.model.repo.Repository;
 import io.elasticore.base.model.repo.RepositoryModels;
 import io.elasticore.base.util.ConsoleLog;
+import io.elasticore.base.util.FileOrder;
 import io.elasticore.base.util.HashUtils;
 
 import java.io.BufferedReader;
@@ -119,7 +120,7 @@ public class JPACodePublisher implements CodePublisher {
             return;
         }
 
-        File[] files = directory.listFiles();
+        File[] files = FileOrder.list(directory);
         if (files == null) {
             return;
         }

@@ -23,6 +23,7 @@ import io.elasticore.base.model.port.PortModels;
 import io.elasticore.base.model.repo.Repository;
 import io.elasticore.base.model.repo.RepositoryModels;
 import io.elasticore.base.util.ConsoleLog;
+import io.elasticore.base.util.FileOrder;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -289,7 +290,7 @@ public class YamlFileMainModelLoader implements MainModelLoader {
     private void loadData(File f, List<FileSource> fileSources) {
 
         if (f.isDirectory()) {
-            File[] files = f.listFiles();
+            File[] files = FileOrder.list(f);
             for (File chidFile : files) {
                 loadData(chidFile, fileSources);
             }

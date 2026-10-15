@@ -20,6 +20,7 @@ import io.elasticore.base.model.loader.FileBasedModelLoader;
 import io.elasticore.base.model.pub.CodePublishManager;
 import io.elasticore.base.model.pub.schema.SchemaCodePublisher;
 import io.elasticore.base.util.ConsoleLog;
+import io.elasticore.base.util.FileOrder;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -240,7 +241,7 @@ public class ModelExtractor {
 
         List<String> dirList = new ArrayList<>();
 
-        File[] files = f.listFiles();
+        File[] files = FileOrder.list(f);
         if (files != null) {
             for (File child : files) {
                 if (child.isDirectory()) {
@@ -395,7 +396,7 @@ public class ModelExtractor {
                 copyGuideFilesToBlueprintRoot();
             }
 
-            File[] files = bpDir.listFiles();
+            File[] files = FileOrder.list(bpDir);
             if (files == null) continue;
 
             for (File child : files) {

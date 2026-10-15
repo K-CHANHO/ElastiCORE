@@ -17,6 +17,7 @@ import io.elasticore.base.model.repo.Repository;
 import io.elasticore.base.model.repo.RepositoryModels;
 import io.elasticore.base.model.port.Port;
 import io.elasticore.base.util.ConsoleLog;
+import io.elasticore.base.util.FileOrder;
 
 
 import java.io.File;
@@ -81,7 +82,7 @@ public class FileBasedModelLoader implements ModelLoader, ConstantParam {
     private void loadData(File f, List<FileSource> fileSources) {
 
         if (f.isDirectory()) {
-            File[] files = f.listFiles();
+            File[] files = FileOrder.list(f);
             for (File chidFile : files) {
                 loadData(chidFile, fileSources);
             }

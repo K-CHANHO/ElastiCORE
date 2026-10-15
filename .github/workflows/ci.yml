@@ -29,7 +29,7 @@ jobs:
       - name: Build and test every module
         run: |
           set -o pipefail
-          ./gradlew build --console=plain 2>&1 | tee build.log
+          ./gradlew build --continue --console=plain 2>&1 | tee build.log
 
       - name: Compatibility - rule engine output equals the 2.x output
         run: ./gradlew :elasticore-project:elasticore-template:elcoreRulesCheck -Pstrict --console=plain
