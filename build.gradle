@@ -134,3 +134,78 @@ project(':elasticore-project:elasticore-base').tasks.matching { it.name == 'chec
         dependsOn gradle.includedBuild('elasticore-gradle-plugin').task(':' + name)
     }
 }
+
+// A Maven Central release: the three libraries and the plugin with its marker,
+// signed, staged by gradle/publishing.gradle and zipped the way the Central
+// Portal takes it. The release workflow uploads build/central-bundle.zip;
+// RELEASING.md has the steps.
+def centralStaging = layout.buildDirectory.dir('central-bundle')
+def releaseVersion = version.toString()
+
+tasks.register('centralBundle', Zip) {
+    group = 'publishing'
+    description = 'Signs every published artifact and zips them for the Maven Central Portal'
+
+    ['elasticore-base', 'elasticore-springboot3', 'elasticore-springboot4'].each {
+        dependsOn ":elasticore-project:${it}:publishAllPublicationsToCentralBundleRepository"
+    }
+    dependsOn gradle.includedBuild('elasticore-gradle-plugin').task(':publishAllPublicationsToCentralBundleRepository')
+
+    archiveFileName = 'central-bundle.zip'
+    destinationDirectory = layout.buildDirectory
+    from(centralStaging) {
+        // This version only: the directory keeps what earlier runs staged, and
+        // each artifact's maven-metadata.xml is Central's to write, not ours.
+        include "**/${releaseVersion}/**"
+    }
+
+    // Central names a missing file only after validating the whole upload.
+    doFirst {
+        def problems = []
+        int poms = 0
+        centralStaging.get().asFile.eachFileRecurse(groovy.io.FileType.FILES) { file ->
+            String name = file.name
+            if (file.parentFile.name != releaseVersion || name ==~ /.*\.(asc|md5|sha1|sha256|sha512)/) {
+                return
+            }
+            ['.asc', '.md5', '.sha1'].each { suffix ->
+                if (!new File(file.parentFile, name + suffix).isFile()) {
+                    problems << name + suffix
+                }
+            }
+            if (name.endsWith('.pom')) {
+                poms++
+            }
+            if (name.endsWith("-${releaseVersion}.jar")) {
+                ['-sources.jar', '-javadoc.jar'].each { classifier ->
+                    String companion = name - '.jar' + classifier
+                    if (!new File(file.parentFile, companion).isFile()) {
+                        problems << companion
+                    }
+                }
+            }
+        }
+        // elasticore-base, -springboot3, -springboot4, the plugin, its marker
+        if (poms != 5) {
+            problems << "5 POMs (found ${poms})"
+        }
+        if (problems) {
+            throw new GradleException('The Central bundle is missing ' + problems.join(', '))
+        }
+    }
+}
+
+// Refused before anything is built: Central takes neither a snapshot nor an
+// unsigned file, and says so only after the upload.
+gradle.taskGraph.whenReady { graph ->
+    if (graph.hasTask(':centralBundle')) {
+        if (releaseVersion.endsWith('-SNAPSHOT')) {
+            throw new GradleException("Maven Central takes release versions only, and ${releaseVersion} is a snapshot. " +
+                    'Set elasticoreVersion in gradle.properties - see RELEASING.md.')
+        }
+        if (!findProperty('signingKey')) {
+            throw new GradleException('Maven Central refuses unsigned artifacts. Pass the signing key as ' +
+                    'ORG_GRADLE_PROJECT_signingKey and its passphrase as ORG_GRADLE_PROJECT_signingPassword - see RELEASING.md.')
+        }
+    }
+}

@@ -9,6 +9,13 @@
 //                     as ORG_GRADLE_PROJECT_signingKey="$(cat key.asc)" or -P
 //   signingPassword = its passphrase (-P or ~/.gradle/gradle.properties)
 // Without them, builds and publishToMavenLocal work as before.
+//
+// A Maven Central release is staged in the repository's build/central-bundle
+// and zipped by the root task centralBundle, which also checks it - a release
+// version, every file signed. Both builds stage there: the directory is found
+// from this file's own location, the repository's gradle/ folder. Staging is a
+// local directory only, so a plain publish that writes there too is harmless.
+// See RELEASING.md.
 
 apply plugin: 'signing'
 
@@ -38,6 +45,13 @@ publishing.publications.withType(MavenPublication).configureEach {
             connection = 'scm:git:https://github.com/xsko/ElastiCORE.git'
             developerConnection = 'scm:git:ssh://git@github.com/xsko/ElastiCORE.git'
         }
+    }
+}
+
+publishing.repositories {
+    maven {
+        name = 'centralBundle'
+        url = new File(buildscript.sourceFile.parentFile.parentFile, 'build/central-bundle')
     }
 }
 
