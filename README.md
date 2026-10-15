@@ -2,6 +2,7 @@
 
 # ElastiCORE
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.elasticore/elasticore-base.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/io.elasticore/elasticore-base)
 [![Java](https://img.shields.io/badge/Java-17+-orange.svg)](https://openjdk.java.net/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x%20%7C%204.x-green.svg)](https://spring.io/projects/spring-boot)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -29,7 +30,7 @@ team's own rules — and the model stays as it is.
 ```gradle
 plugins {
     id 'org.springframework.boot' version '4.0.8'      // 3.x works too - the version is read and followed
-    id 'io.elasticore' version '3.0.260901-SNAPSHOT'
+    id 'io.elasticore' version '3.0.261015-alpha1'
 }
 
 elasticore {
@@ -38,8 +39,8 @@ elasticore {
 }
 
 dependencies {
-    implementation 'io.elasticore:elasticore-base:3.0.260901-SNAPSHOT'
-    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.260901-SNAPSHOT'  // ...springboot3 on Boot 3
+    implementation 'io.elasticore:elasticore-base:3.0.261015-alpha1'
+    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.261015-alpha1'  // ...springboot3 on Boot 3
     // + spring-boot-starter-webmvc, -data-jpa, -validation, springdoc-openapi
 }
 ```
@@ -364,16 +365,29 @@ The declarations also produce `blueprint/context-map.md`, a Mermaid context map.
 
 ## Getting started (install)
 
-**Java 17 or later** for your project. Not yet on a public repository, so install it locally — the build itself runs on
-a JDK 17 to 22 and downloads the JDK 8 and 17 toolchains it compiles with if the machine lacks them:
+**Java 17 or later** for your project. ElastiCORE is on Maven Central, the Gradle plugin included, so name Maven
+Central for plugins in your project's `settings.gradle` and for dependencies in its `build.gradle`:
 
-```bash
-git clone https://github.com/xsko/ElastiCORE.git
-cd ElastiCORE && ./gradlew publishToMavenLocal
+```gradle
+// settings.gradle
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
 ```
 
-Add `pluginManagement { repositories { mavenLocal(); gradlePluginPortal() } }` to your project's `settings.gradle` and
-`repositories { mavenLocal(); mavenCentral() }` to its `build.gradle`, then follow the three steps above.
+```gradle
+// build.gradle
+repositories {
+    mavenCentral()
+}
+```
+
+Then follow the three steps above. To build it from source instead, run `./gradlew publishToMavenLocal` in a clone of
+this repository — on a JDK 17 to 22; the build downloads the JDK 8 and 17 toolchains it compiles with if the machine
+lacks them — and put `mavenLocal()` first in both lists.
 
 ## Documentation
 

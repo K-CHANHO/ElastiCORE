@@ -1376,7 +1376,7 @@ v3에 자기 스켈레톤이 없는 타깃은 호환 스켈레톤으로 떨어�
 ```gradle
 pluginManagement {
     repositories {
-        maven { url = 'https://repo.example.com/maven-snapshots/' }
+        mavenCentral()
         gradlePluginPortal()
     }
 }
@@ -1386,7 +1386,7 @@ pluginManagement {
 
 ```gradle
 plugins {
-    id 'io.elasticore' version '3.0.260901-SNAPSHOT'
+    id 'io.elasticore' version '3.0.261015-alpha1'
 }
 
 elasticore {

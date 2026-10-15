@@ -147,15 +147,14 @@ plugins {
 java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
 
 repositories {
-    mavenLocal()
     mavenCentral()
 }
 
 dependencies {
     // The generator runs these rules; it is not part of the application.
-    compileOnly 'io.elasticore:elasticore-base:3.0.260901-SNAPSHOT'
+    compileOnly 'io.elasticore:elasticore-base:3.0.261015-alpha1'
 
-    testImplementation 'io.elasticore:elasticore-base:3.0.260901-SNAPSHOT'
+    testImplementation 'io.elasticore:elasticore-base:3.0.261015-alpha1'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.2'
 }

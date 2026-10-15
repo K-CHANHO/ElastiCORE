@@ -192,7 +192,7 @@ title: string @size(min=5, max=200)  # 복합: min/max 동시 지정
 password: string(255)! @length(min=8)   # 타입 길이 + 최소 길이 -> @Size(min=8 , max=255)
 ```
 타입 길이(`string(255)`)와 `@length(min=..)` 를 함께 쓰면 최대는 타입 길이, 최소는 `@length` 의 값입니다.
-(3.0.261005 이전에는 이 조합에서 최소 길이가 조용히 빠졌습니다.)
+(2.x 에서는 이 조합에서 최소 길이가 조용히 빠졌습니다.)
 
 #### @default(value)
 필드 기본값. 스마트 인용부호 처리: 큰따옴표 유지, 작은따옴표를 큰따옴표 변환, 미지정시 자동 추가.
@@ -361,7 +361,7 @@ orderCount: int @formula("(select count(*) from orders o where o.customer_id = i
 createdByNm: string(100) @formula("coalesce((select u.name from system_user u where u.user_id = created_by), created_by)")
 ```
 - 표현식은 **큰따옴표**로 감싼다. 따옴표 안의 `=`, `,`, 괄호, SQL 문자열 `'Y'`는 표현식의 일부로 그대로
-  쓰인다(2.2.261012, 3.0.261005부터). 표현식 안에는 큰따옴표(`"`)를 쓸 수 없다.
+  쓰인다(2.2.261012, 3.0부터). 표현식 안에는 큰따옴표(`"`)를 쓸 수 없다.
   예: `activeCount: long @formula("(select count(*) from member m where m.team_id = team_id and m.use_yn = 'Y')")`
 - DB가 조회할 때 계산하는 값이므로 Mapper의 DTO→Entity 방향(`toEntity`, `mapping(dto, entity)`)에서는
   값을 넣지 않는다. Entity→DTO 방향과 검색 조건에는 일반 필드처럼 포함된다. TypeScript 클라이언트의

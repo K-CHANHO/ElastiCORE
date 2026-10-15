@@ -2,6 +2,8 @@
 
 # ElastiCORE
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.elasticore/elasticore-base.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/io.elasticore/elasticore-base)
+
 **업무 규칙은 YAML 몇 줄로. 코드는 원하는 언어·구조·Spring Boot 버전으로, 매번 똑같이.**
 
 ElastiCORE는 도메인 모델과 업무 규칙을 짧은 DSL로 받아 Spring Boot 애플리케이션을 생성합니다 - JPA 엔티티, DTO,
@@ -24,7 +26,7 @@ ElastiCORE는 도메인 모델과 업무 규칙을 짧은 DSL로 받아 Spring B
 ```gradle
 plugins {
     id 'org.springframework.boot' version '4.0.8'      // 3.x 도 됩니다 - 버전을 읽어 맞춰 생성
-    id 'io.elasticore' version '3.0.260901-SNAPSHOT'
+    id 'io.elasticore' version '3.0.261015-alpha1'
 }
 
 elasticore {
@@ -33,8 +35,8 @@ elasticore {
 }
 
 dependencies {
-    implementation 'io.elasticore:elasticore-base:3.0.260901-SNAPSHOT'
-    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.260901-SNAPSHOT'  // Boot 3 이면 ...springboot3
+    implementation 'io.elasticore:elasticore-base:3.0.261015-alpha1'
+    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.261015-alpha1'  // Boot 3 이면 ...springboot3
     // + spring-boot-starter-webmvc, -data-jpa, -validation, springdoc-openapi
 }
 ```
@@ -361,16 +363,28 @@ processManager:                              config:
 
 ## 시작하기 (설치)
 
-내 프로젝트는 **Java 17 이상**. 아직 공개 저장소에 올리지 않았으므로 로컬에 설치합니다. 빌드는 JDK 17~22에서
-실행하고, 컴파일에 쓰는 JDK 8·17 툴체인이 없으면 내려받습니다:
+내 프로젝트는 **Java 17 이상**. ElastiCORE 는 Gradle 플러그인까지 Maven Central 에 있습니다. 내 프로젝트의
+`settings.gradle` 에는 플러그인을, `build.gradle` 에는 의존성을 Maven Central 에서 받도록 적습니다:
 
-```bash
-git clone https://github.com/xsko/ElastiCORE.git
-cd ElastiCORE && ./gradlew publishToMavenLocal
+```gradle
+// settings.gradle
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
 ```
 
-내 프로젝트의 `settings.gradle` 에 `pluginManagement { repositories { mavenLocal(); gradlePluginPortal() } }`,
-`build.gradle` 에 `repositories { mavenLocal(); mavenCentral() }` 을 넣고 위 "3단계"를 따릅니다.
+```gradle
+// build.gradle
+repositories {
+    mavenCentral()
+}
+```
+
+그다음 위 "3단계"를 따릅니다. 소스에서 직접 빌드하려면 이 저장소를 받아 `./gradlew publishToMavenLocal` 을
+실행하고(JDK 17~22, 컴파일에 쓰는 JDK 8·17 툴체인이 없으면 내려받습니다) 두 목록의 맨 앞에 `mavenLocal()` 을 넣습니다.
 
 ## 문서
 
