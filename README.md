@@ -7,12 +7,15 @@
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x%20%7C%204.x-green.svg)](https://spring.io/projects/spring-boot)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-**Business rules in a few lines of YAML. Code in the language, architecture and Spring Boot version you choose — the same code every time.**
+**For business systems that have to last: the business rules in a few lines of YAML, the Spring Boot code generated
+from them — the same code every time.**
 
-ElastiCORE takes your domain model and business rules as a short DSL and generates the Spring Boot application:
-JPA entities, DTOs, services, REST APIs, access checks, state transitions, and a TypeScript client for the screens.
-Generation is **assembled from rulesets**, so you can switch the language, switch the architecture, or plug in your
-team's own rules — and the model stays as it is.
+ElastiCORE takes your domain model and business rules — who may do what, how an order moves along, how a value is
+decided — as a short DSL, and generates the Spring Boot application: JPA entities, DTOs, services, REST APIs, access
+checks, state transitions, and a TypeScript client for the screens. The rules stay in one place, which a developer or
+an AI assistant changes and a reviewer reads; the build carries them into every layer of the server, and
+`./gradlew elcore3ts` into the TypeScript client. Generation is **assembled from rulesets**, so you can switch the
+language, the architecture or the Spring Boot version, or plug in your team's own rules — and the model stays as it is.
 
 ```
   blueprint/shop/model/*.yml  ──►  Java  · Kotlin  · TypeScript
@@ -21,16 +24,28 @@ team's own rules — and the model stays as it is.
                                    + your team's rules (ruleset)
 ```
 
+**Built for** business systems that live for years and pass through many hands — orders, billing, contracts, back
+offices — where access rules and lifecycles must hold at every entry point, and every developer and every AI
+assistant must produce the same structure. **Not for** a UI-first application, a system whose persistence is not
+relational or not JPA, or logic that does not fit a declarative model ([how it compares](docs/comparison.md)). What is
+checked, and what is still pre-release: [Output you can trust](#output-you-can-trust).
+
 ---
 
-## Into your project in three steps
+## Into your project in five steps
 
-**① `build.gradle`** — one plugin line and two optional lines
+**① `build.gradle`** — a Spring Boot project, the plugin with its two settings, and what the generated code uses
 
 ```gradle
 plugins {
+    id 'java'
     id 'org.springframework.boot' version '4.0.8'      // 3.x works too - the version is read and followed
+    id 'io.spring.dependency-management' version '1.1.7'
     id 'io.elasticore' version '3.0.261015-alpha1'
+}
+
+repositories {
+    mavenCentral()
 }
 
 elasticore {
@@ -40,10 +55,23 @@ elasticore {
 
 dependencies {
     implementation 'io.elasticore:elasticore-base:3.0.261015-alpha1'
-    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.261015-alpha1'  // ...springboot3 on Boot 3
-    // + spring-boot-starter-webmvc, -data-jpa, -validation, springdoc-openapi
+    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.261015-alpha1'
+
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    runtimeOnly 'com.h2database:h2'               // an in-memory database to try it with
 }
 ```
+
+Starting from Spring Initializr (Spring Web, Spring Data JPA, Validation, Lombok, H2; its default Boot 4.1.1 works
+too)? Keep its `build.gradle`, whose test lines its generated test needs, and add what it lacks: the `io.elasticore`
+plugin line, the `elasticore` block, the two ElastiCORE dependencies and springdoc. On Spring Boot 3 (checked with 3.5.16): the Boot
+plugin `3.5.16`, `io.elasticore.springboot3:elasticore-springboot3` in place of `…springboot4`,
+`spring-boot-starter-web` in place of `-webmvc`, and springdoc `2.8.17` in place of `3.0.3`.
 
 **② `src/main/resources/blueprint/shop/`** — the domain's settings and its business
 
@@ -72,13 +100,13 @@ entity:
       price:     money(10.2)! @min(0.01, 'price must be positive')
 ```
 
-**③ Build**
+**③ Generate**
 
 ```bash
-./gradlew build
+./gradlew elcore3
 ```
 
-Generation runs before compilation and produces:
+The code appears under `src/main/java/com/acme/shop/`:
 
 ```
 domain/model/Product.java               JPA entity
@@ -86,14 +114,33 @@ application/ProductCoreService.java     CRUD, search, access checks (regenerated
 application/ProductService.java         where your code goes (generated once, yours afterwards)
 application/dto/ProductDTO.java         request and response (+ 400 validation)
 application/dto/ProductSrchDTO.java     search: name LIKE, paging, sorting (by name unless asked otherwise)
-adapter/in/web/ProductController.java   REST API + OpenAPI docs
-infrastructure/persistence/...          repository port and adapter
+adapter/in/web/ProductController.java   REST API + OpenAPI docs (generated once too)
+domain/repository/...                   repository port
+infrastructure/persistence/...          its JPA adapter
 ```
 
-`POST /api/shop/product/search`, `GET /api/shop/product/{id}`, … work right away; anyone may read, only an
-administrator may change (`@access(read=public)`). New here? Run
-[`elasticore-sample-petstore`](elasticore-project/elasticore-sample-petstore/) and open `/dsl-guide.html` to see,
-business area by business area, the DSL next to the code it generated.
+**④ Your part** — what the model does not say
+
+- **An application class**: `@SpringBootApplication` in `com.acme.shop` or a package above it, so that Spring finds the
+  generated classes. Spring Initializr writes one in the package of its group and artifact (`com.acme` and `shop` give
+  `com.acme.shop`).
+- **Your business logic**, in `ProductService.java`. Like the controller it is generated once: it follows the model
+  until you edit it, and from then on generating again leaves it alone (`SKIP(user-owned)` in the log).
+- **Signing in.** Changing a product needs the `ADMIN` role (`@access(read=public)`: anyone reads, everything else is
+  for the administrator). Your sign-in calls `SessionCurrentUser.signIn(request, userId, "ADMIN")` (package
+  `io.elasticore.springboot3.security`, on Boot 4 too); with Spring Security, register a `CurrentUser` bean instead.
+
+**⑤ Run**
+
+```bash
+./gradlew bootRun
+```
+
+`POST /api/shop/product/search` and `GET /api/shop/product/{id}` answer anyone; creating a product without signing in
+answers 401 "Sign in to create Product", and a price of 0 answers 400 "price must be positive". From here on a change
+starts in the model: `./gradlew build` and `bootRun` run `elcore3` before compiling, so the code never lags behind the
+model. New here? Run [`elasticore-sample-petstore`](elasticore-project/elasticore-sample-petstore/) and open
+`/dsl-guide.html` to see, business area by business area, the DSL next to the code it generated.
 
 ---
 
@@ -150,7 +197,7 @@ Compared with JHipster, Context Mapper, Sculptor, Spring Modulith, Amplication, 
 
 Your business rules outlive the language and the framework: the same DSL generates Java or Kotlin, for Boot 3 or
 Boot 4, and survived a complete rewrite of the generator (2.x → 3.0): of the 229 files 2.x generates for the
-reference project, 224 are byte-identical, one differs only in import order, and four differ by a 2.x bug fix the
+reference project, 224 are identical, one differs only in import order, and four differ by a 2.x bug fix the
 history lists.
 
 ---
@@ -236,9 +283,10 @@ shows the result of every step for someone writing their first rule.
 - **Spring Boot 3 → 4**: raise the Boot plugin's version and the generated code follows — including the places that
   would otherwise change a response without an error, such as Jackson 3's enum serialization. Boot 3 and Boot 4
   sample projects are both generated, compiled and tested.
-- **2.x → 3.0**: change nothing and you get **the same code** as 2.x — checked byte for byte over 150 files — apart
-  from bug fixes the [history](elasticore-project/elasticore-base/src/main/resources/elasticore-guide/elasticore-history.md)
-  lists. New capabilities switch on only when you use them.
+- **2.x → 3.0**: change nothing and you get **the same code** as 2.x — compared on every pull request over the 229
+  files 2.x generates for the reference project — apart from bug fixes the
+  [history](elasticore-project/elasticore-base/src/main/resources/elasticore-guide/elasticore-history.md) lists.
+  New capabilities switch on only when you use them.
 - **Your edits are kept**: regenerated files and generate-once files (service extensions, controllers, …) are kept
   apart, and a file you edited is recognised by its content hash and never overwritten.
 
@@ -246,8 +294,8 @@ shows the result of every step for someone writing their first rule.
 
 ## In the age of AI coding
 
-AI coding tools write code fast. The problem comes next — who reviews thousands of lines, and how do you make the
-next change keep the same rules?
+AI coding tools write code fast, and for a prototype that is enough. For a business system that will be changed for
+years, the problem comes next — who reviews thousands of lines, and how do you make the next change keep the same rules?
 
 | AI alone | ElastiCORE + AI |
 |---|---|
@@ -357,16 +405,39 @@ The declarations also produce `blueprint/context-map.md`, a Mermaid context map.
 ## Output you can trust
 
 - **More than 1,400 automated tests** across the modules run on every build. The sample projects are generated, compiled and run.
-- **Compatibility check**: the rule engine's output compared byte for byte with 2.x's (`150 MATCH / 0 DIFF`).
+- **Checked on every change**: on each pull request CI builds every module, then compares the rule engine's output
+  with 2.x's — per artifact (`150 MATCH / 0 DIFF / 2 ACCEPTED`, an entity by its fields) and over all 229 files 2.x
+  generates for the reference project (`0 differ / 0 missing / 0 extra`: the four files a 2.x bug fix changes are
+  accepted by name, one more differs only in import order). Each file's first line (its content hash and time), the
+  wording of the generated-once marker, line endings and trailing blanks are not compared.
 - **Checked by running**: access answers over HTTP, the SQL of business measures against a real database, every column
   of the semantic model against database metadata.
-- **Measured**: how much generated code one line of DSL moves, and whether two generations are identical —
+- **Measured**: adding a searchable field is one DSL line and 39 changed lines of generated code in 9 files; generated
+  twice from the same DSL, 0 of 130 files differ (each file's first line, its content hash and time, aside) —
   [change amplification benchmark](docs/benchmarks/change-amplification.md).
+- **Signed releases** on Maven Central, under the Apache License 2.0.
+- **The generated code is in the security scope**: an access check that lets a user read someone else's rows, or a
+  password in a response, is a vulnerability to report like one in the generator ([SECURITY.md](SECURITY.md)).
+
+### Status
+
+- **3.0 is in pre-release.** What 2.x generated stays as it was, apart from the bug fixes the history lists and, on
+  Spring Boot 4, enums written for Jackson 3: a project whose `elasticore` block declares no `architecture`,
+  `language` or `rules` runs 2.x's generator, and the rule engine's `jpa-springboot` bundle (layered Java) is compared
+  with it on every pull request.
+- The v3 bundles — `jpa-springboot-v3` (layered, `-Pv3`), DDD, hexagonal, Kotlin, TypeScript — may still change
+  between pre-releases; each change is listed with its reason in the
+  [history](elasticore-project/elasticore-base/src/main/resources/elasticore-guide/elasticore-history.md) (in Korean).
+- **3.0 is supported for three years from its first stable release**: bug and security fixes to the generator, the
+  Gradle plugin and both runtime libraries, released from the `release/3.0` branch as `3.0.YYMMDD` versions
+  ([SECURITY.md](SECURITY.md), [BRANCHING.md](BRANCHING.md)). Until then, fixes come in the next pre-release. How a
+  release is made: [RELEASING.md](RELEASING.md).
 
 ## Getting started (install)
 
-**Java 17 or later** for your project. ElastiCORE is on Maven Central, the Gradle plugin included, so name Maven
-Central for plugins in your project's `settings.gradle` and for dependencies in its `build.gradle`:
+**Java 17 or later** for your project, and with Spring Boot 4 **Gradle 8.14 or later** (what Boot 4's Gradle plugin
+requires). ElastiCORE is on Maven Central, the Gradle plugin included. The `build.gradle` above names Maven Central for
+dependencies; name it for plugins too, in your project's `settings.gradle`:
 
 ```gradle
 // settings.gradle
@@ -378,14 +449,7 @@ pluginManagement {
 }
 ```
 
-```gradle
-// build.gradle
-repositories {
-    mavenCentral()
-}
-```
-
-Then follow the three steps above. To build it from source instead, run `./gradlew publishToMavenLocal` in a clone of
+Then follow the five steps above. To build it from source instead, run `./gradlew publishToMavenLocal` in a clone of
 this repository — on a JDK 17 to 22; the build downloads the JDK 8 and 17 toolchains it compiles with if the machine
 lacks them — and put `mavenLocal()` first in both lists.
 

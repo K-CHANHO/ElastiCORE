@@ -4,11 +4,13 @@
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.elasticore/elasticore-base.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/io.elasticore/elasticore-base)
 
-**업무 규칙은 YAML 몇 줄로. 코드는 원하는 언어·구조·Spring Boot 버전으로, 매번 똑같이.**
+**오래 운영할 업무 시스템을 위해: 업무 규칙은 YAML 몇 줄로, Spring Boot 코드는 거기서 생성 - 매번 똑같이.**
 
-ElastiCORE는 도메인 모델과 업무 규칙을 짧은 DSL로 받아 Spring Boot 애플리케이션을 생성합니다 - JPA 엔티티, DTO,
-서비스, REST API, 권한 검사, 상태 전이, 그리고 화면용 TypeScript 클라이언트까지. 생성 방식은 **규칙(ruleset)으로
-조립**되어 있어서, 언어를 바꾸고 구조를 바꾸고 우리 팀의 규칙을 끼워 넣어도 모델은 그대로입니다.
+ElastiCORE는 도메인 모델과 업무 규칙(누가 무엇을 하는지, 주문이 어떻게 진행되는지, 값이 어떻게 정해지는지)을 짧은
+DSL로 받아 Spring Boot 애플리케이션을 생성합니다 - JPA 엔티티, DTO, 서비스, REST API, 권한 검사, 상태 전이, 그리고
+화면용 TypeScript 클라이언트까지. 업무 규칙은 개발자나 AI 도구가 고치고 리뷰어가 읽는 한 곳에 남고, 빌드가 그 규칙을
+서버의 모든 계층에, `./gradlew elcore3ts` 가 TypeScript 클라이언트에 반영합니다. 생성 방식은 **규칙(ruleset)으로
+조립**되어 있어서, 언어·구조·Spring Boot 버전을 바꾸거나 우리 팀의 규칙을 끼워 넣어도 모델은 그대로입니다.
 
 ```
   blueprint/shop/model/*.yml  ──►  Java  · Kotlin  · TypeScript
@@ -17,16 +19,28 @@ ElastiCORE는 도메인 모델과 업무 규칙을 짧은 DSL로 받아 Spring B
                                    + 우리 팀 규칙 (ruleset)
 ```
 
+**이런 시스템을 위해 만들었습니다.** 주문, 정산, 계약, 백오피스처럼 여러 사람의 손을 거치며 몇 년씩 운영되는 업무
+시스템 - 권한과 생명주기가 모든 진입점에서 지켜져야 하고, 어느 개발자가 쓰든 어느 AI 도구가 쓰든 같은 구조가 나와야
+하는 곳입니다. 화면이 대부분인 애플리케이션, 영속이 관계형이나 JPA 가 아닌 시스템, 선언형 모델로 나타내기 어려운
+로직에는 적합하지 않습니다 ([다른 도구와 비교](docs/comparison.ko.md)). 무엇을 검사하고 무엇이 아직 정식 출시
+전인지는 [믿을 수 있는 출력](#믿을-수-있는-출력)에 있습니다.
+
 ---
 
-## 3단계로 내 프로젝트에
+## 5단계로 내 프로젝트에
 
-**① `build.gradle`** - 플러그인 한 줄과 선택 두 줄
+**① `build.gradle`** - Spring Boot 프로젝트에 플러그인과 설정 두 줄, 그리고 생성된 코드가 쓰는 의존성
 
 ```gradle
 plugins {
+    id 'java'
     id 'org.springframework.boot' version '4.0.8'      // 3.x 도 됩니다 - 버전을 읽어 맞춰 생성
+    id 'io.spring.dependency-management' version '1.1.7'
     id 'io.elasticore' version '3.0.261015-alpha1'
+}
+
+repositories {
+    mavenCentral()
 }
 
 elasticore {
@@ -36,10 +50,23 @@ elasticore {
 
 dependencies {
     implementation 'io.elasticore:elasticore-base:3.0.261015-alpha1'
-    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.261015-alpha1'  // Boot 3 이면 ...springboot3
-    // + spring-boot-starter-webmvc, -data-jpa, -validation, springdoc-openapi
+    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.261015-alpha1'
+
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    runtimeOnly 'com.h2database:h2'               // 바로 실행해 볼 메모리 DB
 }
 ```
+
+Spring Initializr(Spring Web, Spring Data JPA, Validation, Lombok, H2. 기본값인 Boot 4.1.1 도 됩니다)로 시작했다면 그
+`build.gradle` 은 그대로 두고(함께 생성된 테스트가 그 파일의 테스트 의존성을 씁니다) 빠진 것만 더합니다: `io.elasticore` 플러그인 줄,
+`elasticore` 블록, ElastiCORE 의존성 두 줄과 springdoc. Spring Boot 3 이면 (3.5.16 에서 확인): Boot 플러그인 `3.5.16`,
+`…springboot4` 대신 `io.elasticore.springboot3:elasticore-springboot3`, `-webmvc` 대신 `spring-boot-starter-web`,
+springdoc `3.0.3` 대신 `2.8.17`.
 
 **② `src/main/resources/blueprint/shop/`** - 도메인 설정과 업무를 적습니다
 
@@ -68,13 +95,13 @@ entity:
       price:     money(10.2)! @min(0.01, 'price must be positive')
 ```
 
-**③ 빌드**
+**③ 생성**
 
 ```bash
-./gradlew build
+./gradlew elcore3
 ```
 
-컴파일 전에 생성이 먼저 돌고, 이런 것이 생깁니다:
+`src/main/java/com/acme/shop/` 아래에 이런 것이 생깁니다:
 
 ```
 domain/model/Product.java               JPA 엔티티
@@ -82,13 +109,33 @@ application/ProductCoreService.java     CRUD·검색·권한 검사 (다시 생�
 application/ProductService.java         내 코드를 쓰는 곳 (한 번만 생성, 그 뒤로 내 파일)
 application/dto/ProductDTO.java         요청·응답 (+ 400 검증)
 application/dto/ProductSrchDTO.java     검색 조건 - 이름 LIKE, 페이지, 정렬 (요청이 말하지 않으면 이름순)
-adapter/in/web/ProductController.java   REST API + OpenAPI 문서
-infrastructure/persistence/...          리포지터리 포트와 어댑터
+adapter/in/web/ProductController.java   REST API + OpenAPI 문서 (이것도 한 번만 생성)
+domain/repository/...                   리포지터리 포트
+infrastructure/persistence/...          그 JPA 어댑터
 ```
 
-`POST /api/shop/product/search`, `GET /api/shop/product/{id}`, … 가 바로 동작하고, 누구나 읽고 관리자만 고칩니다
-(`@access(read=public)`). 처음이라면 [`elasticore-sample-petstore`](elasticore-project/elasticore-sample-petstore/)를
-실행해 `/dsl-guide.html` 에서 업무마다 DSL과 생성된 코드를 나란히 보세요.
+**④ 내 작업** - 모델이 말하지 않는 것
+
+- **애플리케이션 클래스**: `com.acme.shop` 이나 그 위 패키지에 `@SpringBootApplication` 클래스를 둡니다. 그래야
+  Spring 이 생성된 클래스를 찾습니다. Spring Initializr 는 group 과 artifact 로 정한 패키지에 만들어 줍니다
+  (`com.acme` + `shop` 이면 `com.acme.shop`).
+- **업무 로직**은 `ProductService.java` 에 씁니다. 컨트롤러처럼 한 번만 생성되는 파일이라, 고치기 전까지는 모델을
+  따라 다시 생성되고, 한 번 고치면 그 뒤로는 다시 생성해도 건드리지 않습니다(로그에 `SKIP(user-owned)`).
+- **로그인**: 상품을 바꾸려면 `ADMIN` 역할이 필요합니다(`@access(read=public)`: 읽기는 누구나, 나머지는 관리자).
+  로그인 처리에서 `SessionCurrentUser.signIn(request, userId, "ADMIN")` 을 부르고(패키지는 Boot 4 에서도
+  `io.elasticore.springboot3.security`), Spring Security 를 쓰면 대신 `CurrentUser` 빈을 등록합니다.
+
+**⑤ 실행**
+
+```bash
+./gradlew bootRun
+```
+
+`POST /api/shop/product/search`, `GET /api/shop/product/{id}` 는 누구나 호출할 수 있고, 로그인 없이 상품을 만들면
+401 "Sign in to create Product", 가격 0 은 400 "price must be positive" 로 답합니다. 이후 변경은 모델에서 시작합니다:
+`./gradlew build` 와 `bootRun` 은 컴파일 전에 `elcore3` 를 먼저 돌리므로 코드가 모델보다 뒤처지지 않습니다.
+처음이라면 [`elasticore-sample-petstore`](elasticore-project/elasticore-sample-petstore/)를 실행해 `/dsl-guide.html`
+에서 업무마다 DSL과 생성된 코드를 나란히 보세요.
 
 ---
 
@@ -152,7 +199,7 @@ unitCost:  money(10.2)!  @min(0.01, 'price must be positive')  @terms(price, 가
 
 - 같은 DSL 로 Java 나 Kotlin 을, Boot 3 나 Boot 4 용으로 생성합니다.
 - 생성기를 통째로 다시 쓴 2.x → 3.0 에서도 출력을 재현했습니다. 기준 프로젝트에서 2.x 가 만드는 229개 파일 중
-  224개가 바이트 단위로 같고, 1개는 import 순서만 다르며, 4개는 이력에 적은 2.x 버그 수정만큼 다릅니다.
+  224개가 같고, 1개는 import 순서만 다르며, 4개는 이력에 적은 2.x 버그 수정만큼 다릅니다.
 
 ---
 
@@ -236,7 +283,8 @@ ElastiCORE 자신의 Java·Kotlin·TypeScript·DDD·헥사고날 생성도 모�
 
 - **Spring Boot 3 → 4**: Boot 플러그인 버전을 올리면 생성 코드가 따라갑니다 (Jackson 3 의 enum 직렬화처럼, 바꾸지 않으면
   오류 없이 응답이 달라지는 곳까지). Boot 3·4 예제 프로젝트가 모두 생성·컴파일·테스트됩니다.
-- **2.x 에서 3.0**: 아무것도 바꾸지 않으면 2.x 와 **같은 코드**입니다 - 150개 파일을 바이트 단위로 비교해 확인합니다
+- **2.x 에서 3.0**: 아무것도 바꾸지 않으면 2.x 와 **같은 코드**입니다 - 기준 프로젝트에서 2.x 가 만드는 229개 파일을
+  풀 리퀘스트마다 비교해 확인합니다
   ([이력](elasticore-project/elasticore-base/src/main/resources/elasticore-guide/elasticore-history.md)에 적은 버그 수정 제외).
   새 기능은 쓸 때만 켜집니다.
 - **고친 코드는 지켜집니다**: 다시 생성되는 파일과 한 번만 생성되는 파일(서비스 확장, 컨트롤러 등)이 나뉘어 있고,
@@ -246,8 +294,8 @@ ElastiCORE 자신의 Java·Kotlin·TypeScript·DDD·헥사고날 생성도 모�
 
 ## AI 코딩 시대에
 
-AI 코딩 도구는 코드를 빨리 씁니다. 그 다음이 문제입니다 - 수천 줄을 누가 검토하고, 다음에 고칠 때도 같은 규칙을
-지키게 할 것인가.
+AI 코딩 도구는 코드를 빨리 쓰고, 시제품이라면 그것으로 충분합니다. 몇 년을 고쳐 가며 운영할 업무 시스템에는 그
+다음이 문제입니다 - 수천 줄을 누가 검토하고, 다음에 고칠 때도 같은 규칙을 지키게 할 것인가.
 
 | AI만으로 | ElastiCORE + AI |
 |---|---|
@@ -356,15 +404,35 @@ processManager:                              config:
 ## 믿을 수 있는 출력
 
 - 모듈 전체에서 **자동 테스트 1,400개 이상**이 매 빌드에서 돕니다. 예제 프로젝트들은 생성 → 컴파일 → 실행까지 합니다.
-- **호환 검사**: 규칙 엔진의 출력을 2.x 출력과 바이트 단위로 비교 (`150 MATCH / 0 DIFF`).
+- **변경마다 검사**: 풀 리퀘스트마다 CI 가 모든 모듈을 빌드한 뒤 규칙 엔진의 출력을 2.x 출력과 비교합니다 -
+  산출물별로(`150 MATCH / 0 DIFF / 2 ACCEPTED`, 엔티티는 필드 부분), 그리고 기준 프로젝트에서 2.x 가 만드는 229개
+  파일 전부(`0 differ / 0 missing / 0 extra`: 2.x 버그 수정으로 달라지는 4개는 이름을 정해 허용, 1개는 import 순서만
+  다름). 각 파일의 첫 줄(내용 해시·시각), 한 번만 생성되는 파일 표시 주석의 표기, 줄바꿈 문자, 끝 공백은 비교하지
+  않습니다.
 - **동작으로 확인**: 권한 응답은 HTTP로, 업무 지표의 SQL은 실제 DB로, 시맨틱 모델의 모든 컬럼은 DB 메타데이터로 대조.
-- **측정**: DSL 한 줄이 생성 코드를 얼마나 움직이는지, 두 번 생성하면 똑같은지 -
-  [변경 증폭 벤치마크](docs/benchmarks/change-amplification.ko.md).
+- **측정**: 검색 필드 하나를 더하면 DSL 은 1줄, 생성 코드는 9개 파일에서 39줄이 바뀌고, 같은 DSL 로 두 번 생성하면
+  130개 파일 중 달라지는 파일이 없습니다(각 파일 첫 줄의 해시·시각 제외) - [변경 증폭 벤치마크](docs/benchmarks/change-amplification.ko.md).
+- **서명된 배포**: Maven Central 에 서명해 배포합니다. 라이선스는 Apache License 2.0 입니다.
+- **생성된 코드도 보안 신고 대상**: 남의 행을 읽게 하는 권한 검사, 응답에 나오는 비밀번호도 생성기의 결함처럼
+  신고받습니다 ([SECURITY.md](SECURITY.md)).
+
+### 현재 상태
+
+- **3.0 은 정식 출시 전(pre-release)입니다.** 이력에 적은 버그 수정과 Spring Boot 4 에서 Jackson 3 에 맞춘 enum 을
+  빼면 2.x 가 만들던 코드는 그대로입니다: `elasticore` 블록에 `architecture`·`language`·`rules` 를 적지 않은 프로젝트는
+  2.x 생성기가 생성하고, 규칙 엔진의 `jpa-springboot` 번들(레이어드 Java)은 풀 리퀘스트마다 그 출력과 비교됩니다.
+- v3 번들의 출력은 정식 출시 전까지 바뀔 수 있습니다 - `jpa-springboot-v3`(레이어드, `-Pv3`), DDD, 헥사고날, Kotlin,
+  TypeScript. 바뀔 때마다 그 이유를
+  [이력](elasticore-project/elasticore-base/src/main/resources/elasticore-guide/elasticore-history.md)에 적습니다.
+- **3.0 은 첫 정식 릴리스부터 3년간 지원합니다**: 생성기, Gradle 플러그인, 두 런타임 라이브러리의 버그·보안 수정을
+  `release/3.0` 브랜치에서 `3.0.YYMMDD` 버전으로 냅니다 ([SECURITY.md](SECURITY.md), [BRANCHING.md](BRANCHING.md)).
+  그 전까지는 다음 사전 릴리스(pre-release)에서 고칩니다. 릴리스 방법은 [RELEASING.md](RELEASING.md) 에 있습니다.
 
 ## 시작하기 (설치)
 
-내 프로젝트는 **Java 17 이상**. ElastiCORE 는 Gradle 플러그인까지 Maven Central 에 있습니다. 내 프로젝트의
-`settings.gradle` 에는 플러그인을, `build.gradle` 에는 의존성을 Maven Central 에서 받도록 적습니다:
+내 프로젝트는 **Java 17 이상**, Spring Boot 4 이면 **Gradle 8.14 이상**(Boot 4 Gradle 플러그인의 요구)입니다.
+ElastiCORE 는 Gradle 플러그인까지 Maven Central 에 있습니다. 위 `build.gradle` 이 의존성을 Maven Central 에서
+받으니, 플러그인도 받도록 내 프로젝트의 `settings.gradle` 에 적습니다:
 
 ```gradle
 // settings.gradle
@@ -376,14 +444,7 @@ pluginManagement {
 }
 ```
 
-```gradle
-// build.gradle
-repositories {
-    mavenCentral()
-}
-```
-
-그다음 위 "3단계"를 따릅니다. 소스에서 직접 빌드하려면 이 저장소를 받아 `./gradlew publishToMavenLocal` 을
+그다음 위 "5단계"를 따릅니다. 소스에서 직접 빌드하려면 이 저장소를 받아 `./gradlew publishToMavenLocal` 을
 실행하고(JDK 17~22, 컴파일에 쓰는 JDK 8·17 툴체인이 없으면 내려받습니다) 두 목록의 맨 앞에 `mavenLocal()` 을 넣습니다.
 
 ## 문서
