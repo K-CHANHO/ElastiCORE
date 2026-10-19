@@ -109,6 +109,19 @@ jobs:
           set -o pipefail
           ./gradlew build --console=plain 2>&1 | tee build.log
 
+      # The same check as in CI: the build regenerated the 2.x reference project,
+      # and it must come out as committed - no file changed, removed or added.
+      - name: Compatibility - the build left the 2.x reference tree as committed
+        run: |
+          tree=elasticore-project/elasticore-template/src/main/java
+          changed=$(git status --porcelain --untracked-files=all -- "$tree")
+          if [ -n "$changed" ]; then
+            printf '%s\n' "$changed"
+            files=$(printf '%s\n' "$changed" | head -20 | sed 's/%/%25/g' | awk 'BEGIN {ORS = "%0A"} {print}')
+            echo "::error title=2.x output changed::The build regenerated the 2.x reference project differently:%0A${files}"
+            exit 1
+          fi
+
       - name: Compatibility - rule engine output equals the 2.x output
         run: ./gradlew :elasticore-project:elasticore-template:elcoreRulesCheck -Pstrict --console=plain
 

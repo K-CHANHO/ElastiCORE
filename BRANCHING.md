@@ -6,17 +6,20 @@ This repository holds the 3.x line. The 2.x line (2.2) is maintained outside it;
 
 | Branch | Line | What goes in |
 |---|---|---|
-| `main` | 3.x mainline | Features and fixes through pull requests |
+| `main` | 3.x mainline | Features and fixes through pull requests whose CI passes |
 | `release/3.0` | 3.0 maintenance | Cut from `main` at the first stable 3.0 release (no `-alpha`, `-beta` or `-rc`). Bug and security fixes only; tags `v3.0.YYMMDD` |
 | `feature/*`, `fix/*` | - | Branched from the line they change; a 3.0 fix branches from `release/3.0` once it exists, from `main` before that |
+| `version/*` | - | One release's version commit, or the next `-SNAPSHOT`, merged into the line it is for (`RELEASING.md`) |
 
 ## Support
 
 **3.0 is supported for three years from its first stable release**: bug and security fixes to `elasticore-base`,
 the Gradle plugin (`io.elasticore`), `elasticore-springboot3` and `elasticore-springboot4`, released from
-`release/3.0` as `3.0.YYMMDD` versions. The end date is written here when that release is out. Until then, fixes
-come in the next pre-release from `main`. Supported versions and how to report a vulnerability:
-[SECURITY.md](SECURITY.md).
+`release/3.0` as `3.0.YYMMDD` versions. A fix is built and tested on a Spring Boot 4 version the Spring team
+still supports as open source when the fix is made, and `elasticore-springboot3` on 3.5.16 - the last open-source
+Spring Boot 3 release, since open-source support for 3.5 ended on 2026-06-30. The end date is written here when that
+release is out. Until then, fixes come in the next pre-release from `main`. Supported versions and how to report a
+vulnerability: [SECURITY.md](SECURITY.md).
 
 ## Rules
 
@@ -33,9 +36,14 @@ come in the next pre-release from `main`. Supported versions and how to report a
    without `-SNAPSHOT`, and Maven Central never lets a released version change;
    `-SNAPSHOT` is for work in progress only. A snapshot can be cached as "missing"
    or replaced under a user, which is what makes builds on other machines disagree.
-4. **Before a release:** `./gradlew build`, `elcoreTreeCheck` (every 2.x
-   generated file, 0 differ / 0 missing / 0 extra) and
-   `elcoreRulesCheck -Pstrict` pass on the release branch.
+4. **Before a release:** `./gradlew build`, which must leave the 2.x reference
+   tree (`elasticore-project/elasticore-template/src/main/java`) as committed,
+   `elcoreTreeCheck` (every 2.x generated file, 0 differ / 0 missing / 0 extra)
+   and `elcoreRulesCheck -Pstrict` pass on the release branch.
+5. **`main` and `release/**` change only through pull requests** whose CI check
+   ("Build, test and compatibility checks") passes - the version commits of a
+   release included. They are never pushed to directly, force-pushed or
+   deleted.
 
 ## Versions
 

@@ -19,20 +19,23 @@ as a pre-release. What is published:
 1. On `main` (or a `release/*` branch), everything passes:
    ```bash
    ./gradlew build
+   git status --short -- elasticore-project/elasticore-template/src/main/java     # must print nothing
    ./gradlew :elasticore-project:elasticore-template:elcoreRulesCheck -Pstrict   # 0 DIFF
    ./gradlew :elasticore-project:elasticore-template:elcoreTreeCheck             # 0 differ / missing / extra
    ```
-2. One commit names the version everywhere:
+2. On a branch of its own - `main` takes changes only through pull requests (`BRANCHING.md`) - one commit names the
+   version everywhere (`git switch -c version/3.0.261020` before committing):
    - `elasticoreVersion` and `elasticoreReleasedVersion` in `gradle.properties`, both the release version
    - the install snippets that carry the previous release (`git grep -n <previous version>` finds them in the
      READMEs and the guides; the build refreshes the guides' copies in the template `blueprint/` folders)
    - the `## {version}` heading in `elasticore-history.md` - and its three copies in the template `blueprint/`
      folders, by hand: the build does not copy the history
-3. Push the branch, then tag that commit and push the tag - the workflow refuses a tag whose commit is on no
-   branch yet:
+3. Push the branch, open its pull request and merge it once CI passes. Then tag the commit the merge made on `main` -
+   the pull request names it - and push the tag; the workflow refuses a tag whose commit is on no branch:
    ```bash
-   git push origin main
-   git tag -a v3.0.261020 -m "ElastiCORE 3.0.261020"
+   git push origin version/3.0.261020        # then open the pull request and merge it
+   git fetch origin
+   git tag -a v3.0.261020 -m "ElastiCORE 3.0.261020" <the commit the merge made on main>
    git push origin v3.0.261020
    ```
 4. The workflow waits for approval when the `release` environment asks for one. It stops unless the tag and both
@@ -45,9 +48,9 @@ as a pre-release. What is published:
    Central publishes as soon as the upload is valid, and the workflow waits for that and publishes the GitHub release;
    set required reviewers on the `release` environment first, since nothing else then stands between a `v*` tag and
    Maven Central.
-6. Set the next version: `elasticoreVersion` becomes a `-SNAPSHOT` that sorts after the release, the next day's date
-   (`3.0.261021-SNAPSHOT`). `elasticoreReleasedVersion` stays: the README keeps naming the version people can
-   download.
+6. Set the next version, in a pull request too: `elasticoreVersion` becomes a `-SNAPSHOT` that sorts after the
+   release, the next day's date (`3.0.261021-SNAPSHOT`). `elasticoreReleasedVersion` stays: the README keeps naming
+   the version people can download.
 
 A version on Maven Central never changes and is never removed. A deployment that fails validation or is dropped
 publishes nothing: fix the cause and move the tag to the fixed commit -
@@ -71,6 +74,10 @@ The public half of the signing key must be on a key server Central reads - `keys
 ```bash
 gpg --keyserver hkps://keyserver.ubuntu.com --send-keys <fingerprint>
 ```
+
+The current key expires on 2029-10-14, and 3.0 is supported past that. Before then, extend it
+(`gpg --quick-set-expire <fingerprint> <new date>`), send the public key to the key server again, and put the
+re-exported private key in `SIGNING_KEY`.
 
 ## The bundle, locally
 
