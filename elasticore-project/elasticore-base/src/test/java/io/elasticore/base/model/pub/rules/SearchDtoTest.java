@@ -170,6 +170,87 @@ public class SearchDtoTest {
                 render(e));
     }
 
+    // ---- emptiness: @search(isnull) ----------------------------------------
+
+    /** The clean (3.0) output, the only one that knows the isnull keyword. */
+    private String renderClean(EntitySpec e) {
+        return new RuleEngine().templateSet(SourceCode.TemplateSet.V3)
+                .register(new SearchDtoBaseRules())
+                .run(e, "srchdto").renderFieldBlock(1);
+    }
+
+    /**
+     * An emptiness check is a yes or no, not a value of the field's type:
+     * absent searches by nothing, true finds the empty rows, false the set
+     * ones. No date format and no example - there is no date to send.
+     */
+    @Test
+    public void isnullCondition_producesTriStateBoolean() {
+        EntitySpec e = srch("Loan").addField(loader.parse("returnedDate",
+                "date @search(isnull) -- returned on, empty until returned"));
+
+        String out = renderClean(e);
+        assertTrue(out.contains(
+                "@Schema(description = \"returned on, empty until returned Field is empty (true) or set (false). field:returnedDate\"  )\n"
+                + "private Boolean returnedDateEmpty;\n"), out);
+        assertFalse(out.contains("returnedDateFrom"), out);
+        assertFalse(out.contains("returnedDateTo"), out);
+        assertFalse(out.contains("LocalDate"), out);
+        assertFalse(out.contains("DateTimeFormat"), out);
+        assertFalse(out.contains("JsonFormat"), out);
+        assertFalse(out.contains("example"), out);
+    }
+
+    /** The alias names the property, as it does for every other condition. */
+    @Test
+    public void isnullCondition_aliasNamesTheProperty() {
+        EntitySpec e = srch("Loan").addField(loader.parse("returnedDate", "date @search(isnull,open)"));
+
+        String out = renderClean(e);
+        assertTrue(out.contains("private Boolean openEmpty;"), out);
+        assertTrue(out.contains("field:returnedDate"), out);
+        assertFalse(out.contains("returnedDateEmpty"), out);
+    }
+
+    /**
+     * The 2.x-compatible output does not know the keyword and keeps reading
+     * it as an equality on the field's own type, word for word as before.
+     */
+    @Test
+    public void isnullCondition_compatibleOutputUnchanged() {
+        EntitySpec e = srch("Loan").addField(loader.parse("returnedDate", "date @search(isnull)"));
+
+        String out = render(e);
+        assertTrue(out.contains(
+                "@Schema(description = \"Use 'like' if value has %, else 'equal' field:returnedDate\"  , example=\"yyyy-MM-dd\")\n"
+                + "@org.springframework.format.annotation.DateTimeFormat(pattern = \"yyyy-MM-dd\")\n"
+                + "@com.fasterxml.jackson.annotation.JsonFormat(pattern = \"yyyy-MM-dd\")\n"
+                + "private java.time.LocalDate returnedDate;\n"), out);
+        assertFalse(out.contains("Empty"), out);
+    }
+
+    /**
+     * The keyword changes nothing about what an @expose DTO derives: a date
+     * without @search is still a range, and only the field that asks for the
+     * emptiness check gets one.
+     */
+    @Test
+    public void exposedDto_dateStillDerivesBetween() {
+        EntitySpec e = exposed("Loan")
+                .addField(loader.parse("loanDate", "date"))
+                .addField(loader.parse("returnedDate", "date @search(isnull)"));
+
+        String out = renderClean(e);
+        assertTrue(out.contains(
+                "@Schema(description = \"Field is between two values (inclusive). field:loanDate\"  , example=\"yyyy-MM-dd\")"), out);
+        assertTrue(out.contains("LocalDate loanDateFrom;"), out);
+        assertTrue(out.contains("LocalDate loanDateTo;"), out);
+        assertTrue(out.contains(
+                "@Schema(description = \"Field is empty (true) or set (false). field:returnedDate\"  )\n"
+                + "private Boolean returnedDateEmpty;\n"), out);
+        assertFalse(out.contains("returnedDateFrom"), out);
+    }
+
     /** Without @expose only the annotated fields become properties. */
     @Test
     public void plainDto_keepsOnlyTheAnnotatedFields() {

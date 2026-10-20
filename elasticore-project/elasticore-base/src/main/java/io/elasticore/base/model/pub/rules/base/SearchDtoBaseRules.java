@@ -96,6 +96,14 @@ public class SearchDtoBaseRules implements CodeRules {
         String name = parts.length == 2 ? parts[1] : f.name();
         String conditionCode = parts[0].isEmpty() ? condition : parts[0];
 
+        // "@search(isnull)" asks whether the column is empty, so the caller
+        // sends a yes or no rather than a value of the field's own type.
+        // Clean output only: the 2.x publisher reads it as an equality.
+        if (isNullCheck(conditionCode) && !ctx(e).compatible()) {
+            nullCheckProperty(e, f, name);
+            return;
+        }
+
         ctx(e).field(f).ensure(AnnoCode.raw(
                 "io.swagger.v3.oas.annotations.media.Schema", schemaLine(e, f, conditionCode)));
 
@@ -167,17 +175,35 @@ public class SearchDtoBaseRules implements CodeRules {
                 String.format("%sTo", name), "", false));
     }
 
+    /**
+     * The three states of an emptiness check: absent searches by nothing,
+     * true finds the rows whose column is empty, false the ones where it is
+     * set. The field's own type, its date format and its example describe a
+     * value the caller no longer sends, so none of them is carried over.
+     */
+    private void nullCheckProperty(EntitySpec e, FieldSpec f, String name) {
+        ctx(e).field(f)
+              .ensure(AnnoCode.raw("io.swagger.v3.oas.annotations.media.Schema",
+                      String.format("@Schema(description = %s  )", RuleText.quote(conditionText(f,
+                              StringUtils.getOperatorDescription("isnull", true))))))
+              .type("Boolean")
+              .rename(String.format("%sEmpty", name));
+    }
+
     /** The @Schema line, whose description says what the condition means. */
     private String schemaLine(EntitySpec e, FieldSpec f, String conditionCode) {
-        String meaning = String.format("%s field:%s",
-                StringUtils.getOperatorDescription(conditionCode), f.name());
-
-        String declared = f.dslDescription();
-        String desc = declared == null ? meaning : String.format("%s %s", declared, meaning);
-
         // A search property is never required: an absent value means "any".
         return String.format("@Schema(description = %s  %s)",
-                RuleText.quote(desc), FieldDoc.exampleAttribute(e, f));
+                RuleText.quote(conditionText(f, StringUtils.getOperatorDescription(conditionCode))),
+                FieldDoc.exampleAttribute(e, f));
+    }
+
+    /** The field's own description followed by what its condition means. */
+    private static String conditionText(FieldSpec f, String operatorDescription) {
+        String meaning = String.format("%s field:%s", operatorDescription, f.name());
+
+        String declared = f.dslDescription();
+        return declared == null ? meaning : String.format("%s %s", declared, meaning);
     }
 
     /**
@@ -246,6 +272,14 @@ public class SearchDtoBaseRules implements CodeRules {
 
     private static boolean isEquality(String condition) {
         return "eq".equals(condition) || "=".equals(condition);
+    }
+
+    /**
+     * Whether a condition checks for an empty column. Shared with the mapper,
+     * which must read the same property the search DTO declares.
+     */
+    public static boolean isNullCheck(String condition) {
+        return "isnull".equals(condition);
     }
 
     /** Splits "like,alias" into its condition and the property it names. */

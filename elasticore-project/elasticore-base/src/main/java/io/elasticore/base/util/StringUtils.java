@@ -265,6 +265,23 @@ public class StringUtils {
         }
     }
 
+    /**
+     * The description of a search operator in the clean (3.0) output, which
+     * knows one keyword more than 2.x: "isnull", the three-state emptiness
+     * check. The 2.x publisher and the 2.x-compatible output still read that
+     * keyword as an equality, so they keep the text above for it.
+     *
+     * @param operator the search operator
+     * @param clean    whether the description is for the clean (3.0) output
+     * @return a description of the operator in English
+     */
+    public static String getOperatorDescription(String operator, boolean clean) {
+        if (clean && "isnull".equals(operator)) {
+            return "Field is empty (true) or set (false).";
+        }
+        return getOperatorDescription(operator);
+    }
+
 
     public static boolean equalsWithPureChars(String str1, String str2) {
         // Normalize the strings by trimming, removing newlines, and concatenating
