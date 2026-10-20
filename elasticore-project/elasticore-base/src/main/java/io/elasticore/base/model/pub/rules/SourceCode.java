@@ -995,6 +995,7 @@ public final class SourceCode {
         for (java.util.Map.Entry<String, java.util.Set<String>> en : bySimpleName().entrySet()) {
             if (en.getValue().size() > 1) contested.add(en.getKey());
         }
+        final java.util.Set<String> shadowing = shadowingAnnotations();
         // The clean mode imports what 2.x spelled out in full; the
         // compatibility mode writes what its rules asked for.
         final boolean clean = templateSet == TemplateSet.V3;
@@ -1009,6 +1010,7 @@ public final class SourceCode {
                 int dot = fqcn.lastIndexOf('.');
                 if (dot <= 0) return true;
                 if (contested.contains(fqcn.substring(dot + 1))) return false;
+                if (shadowing.contains(fqcn)) return false;
                 return clean || !ruleAsked;
             }
 
@@ -1023,12 +1025,59 @@ public final class SourceCode {
      * A contested name is spelled out where it is used instead.
      */
     public java.util.List<String> usedImports() {
+        java.util.Set<String> shadowing = shadowingAnnotations();
         java.util.List<String> out = new java.util.ArrayList<String>();
         for (java.util.Map.Entry<String, java.util.Set<String>> en : bySimpleName().entrySet()) {
             if (en.getValue().size() > 1) continue;
-            out.addAll(en.getValue());
+            for (String fqcn : en.getValue()) {
+                if (!shadowing.contains(fqcn)) out.add(fqcn);
+            }
         }
         java.util.Collections.sort(out);
+        return out;
+    }
+
+    /** Hibernate's column comment, which every field with a "-- label" gets. */
+    private static final String HIBERNATE_COMMENT = "org.hibernate.annotations.Comment";
+
+    /**
+     * The annotation types this artifact writes whose simple name is also a
+     * type of the domain - Hibernate's Comment where the domain has an entity
+     * named Comment. The domain's type is what the simple name has to mean in
+     * a generated file: an import of the annotation would shadow an entity of
+     * the same package, and a wildcard import would lose to it. So these are
+     * written in full and not imported.
+     *
+     * Only annotations the name style writes count: a raw line keeps the
+     * simple name its rule wrote and so keeps its import - and so does every
+     * other use of a type that is also written as a raw line in this file,
+     * since the import serves both. The compatibility
+     * mode does for Comment alone what the 2.x publisher does, and its output
+     * stays the 2.x output. A domain without such a name gets nothing here,
+     * and its files do not change.
+     */
+    private java.util.Set<String> shadowingAnnotations() {
+        java.util.Set<String> out = new java.util.HashSet<String>();
+        java.util.Set<String> names = entity.modelTypeNames();
+        java.util.List<AnnoCode> all = new java.util.ArrayList<AnnoCode>(classAnnotations);
+        for (FieldCode fc : fieldCodes.values()) {
+            if (fc.isRemoved()) continue;
+            all.addAll(fc.annotations());
+        }
+        java.util.Set<String> types = new java.util.HashSet<String>();
+        java.util.Set<String> raw = new java.util.HashSet<String>();
+        for (AnnoCode a : all) {
+            a.collectStyledTypes(types);
+            a.collectRawTypes(raw);
+        }
+        boolean compatible = templateSet == TemplateSet.COMPATIBLE;
+        for (String fqcn : types) {
+            if (fqcn == null || raw.contains(fqcn)) continue;
+            if (compatible && !HIBERNATE_COMMENT.equals(fqcn)) continue;
+            int dot = fqcn.lastIndexOf('.');
+            if (dot <= 0) continue;
+            if (names.contains(fqcn.substring(dot + 1))) out.add(fqcn);
+        }
         return out;
     }
 

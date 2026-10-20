@@ -350,6 +350,42 @@ public final class AnnoCode {
         }
     }
 
+    /**
+     * The annotation types the name style decides for: this one and the ones
+     * nested in it, except written lines. A raw line keeps the name its rule
+     * wrote, so it can never be spelled out in full and needs its import.
+     */
+    void collectStyledTypes(java.util.Set<String> out) {
+        if (isRaw()) return;
+        out.add(fqcn);
+        if (valueList != null) {
+            for (AnnoCode item : valueList.items) item.collectStyledTypes(out);
+        }
+        for (Object v : attrs.values()) {
+            if (v instanceof AnnoCode) ((AnnoCode) v).collectStyledTypes(out);
+            if (v instanceof AnnoList) {
+                for (AnnoCode item : ((AnnoList) v).items) item.collectStyledTypes(out);
+            }
+        }
+    }
+
+    /** The annotation types written as fixed lines: this one if it is one, and any nested in it. */
+    void collectRawTypes(java.util.Set<String> out) {
+        if (isRaw()) {
+            out.add(fqcn);
+            return;
+        }
+        if (valueList != null) {
+            for (AnnoCode item : valueList.items) item.collectRawTypes(out);
+        }
+        for (Object v : attrs.values()) {
+            if (v instanceof AnnoCode) ((AnnoCode) v).collectRawTypes(out);
+            if (v instanceof AnnoList) {
+                for (AnnoCode item : ((AnnoList) v).items) item.collectRawTypes(out);
+            }
+        }
+    }
+
     /** Whether this annotation is a line written out by its rule rather than built from attributes. */
     boolean isRaw() {
         return rawLine != null;

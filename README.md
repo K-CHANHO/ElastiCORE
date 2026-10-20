@@ -41,7 +41,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '4.0.8'      // 3.x works too - the version is read and followed
     id 'io.spring.dependency-management' version '1.1.7'
-    id 'io.elasticore' version '3.0.261015-alpha1'
+    id 'io.elasticore' version '3.0.261020-alpha2'
 }
 
 repositories {
@@ -54,8 +54,8 @@ elasticore {
 }
 
 dependencies {
-    implementation 'io.elasticore:elasticore-base:3.0.261015-alpha1'
-    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.261015-alpha1'
+    implementation 'io.elasticore:elasticore-base:3.0.261020-alpha2'
+    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.261020-alpha2'
 
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
