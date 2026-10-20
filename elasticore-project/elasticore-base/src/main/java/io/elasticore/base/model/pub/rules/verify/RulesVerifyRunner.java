@@ -93,6 +93,7 @@ public final class RulesVerifyRunner {
         // ran before it in this JVM.
         SpecFactory.valueObjectsInDto(false);
         SpecFactory.rootsSplitByDefault(false);
+        SpecFactory.referenceRequiredByKey(false);
         String basePath = System.getProperty("elasticore.base.path");
         if (basePath == null) basePath = System.getProperty("user.dir");
 

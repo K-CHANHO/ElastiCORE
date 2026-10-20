@@ -522,13 +522,60 @@ private String batchBatchId;         // 저장/수정 입력용 (FK id)
 
 - **중첩 DTO 필드(`batch`)**: OpenAPI 스키마에 `accessMode = READ_ONLY`로 표시되어
   **Swagger의 저장/수정 request body에서 제외**됩니다 (조회 응답에는 포함).
-  문서(스펙) 수준의 표시이며 런타임 직렬화/역직렬화 동작은 변경되지 않으므로,
-  기존에 중첩 객체로 전송하던 클라이언트도 계속 동작합니다.
+  문서(스펙) 수준의 표시이며 런타임 직렬화/역직렬화 동작은 변경되지 않습니다. 요청에 중첩 객체를 보내도
+  오류는 나지 않지만, 매퍼는 저장/수정할 때 중첩 객체를 읽지 않습니다 — 관계는 FK id 필드로만 연결됩니다.
 - **FK id 필드(`batchBatchId`)**: 저장/수정 시 관계를 지정하는 입력 필드입니다
   (`필드명 + 참조엔티티 @id 필드명` 네이밍, 내부적으로 `em.getReference()`로 연결).
+  참조 엔티티의 키가 `id`이면 `batchId`가 됩니다.
 - 중첩 DTO 자체를 생성에서 제외하려면 `dto.yml`에 `@template`로 DTO를 직접 선언하세요
   (관계 필드는 자동 제외되며, 필요한 필드만 `@ref(관계필드.대상필드)`로 평탄화 선언 —
   blueprint `hr/model/dto.yml`의 `EmployeeDTO` 참고).
+
+##### 필수 관계 (`!`): 저장 요청은 FK id 필드를 보낸다
+> **Since: 3.0.261021** (v3 · Kotlin · TypeScript 생성. 2.x와 `jpa-springboot` 호환 출력은 그대로)
+
+관계에 `!`를 붙이면 컬럼이 NOT NULL이 되고(`@JoinColumn(nullable = false)`), 자동 생성 DTO에서는
+**FK id 필드가 필수**, 중첩 DTO는 선택입니다.
+
+```yaml
+Post:
+  meta: entity @root @expose(20) -- post
+  fields:
+    postId:    long @id @sequence
+Comment:
+  meta: entity @root @expose(20) -- comment
+  fields:
+    commentId: long @id @sequence
+    post:      Post! -- parent post
+```
+```java
+// 자동 생성 CommentDTO (v3, Kotlin도 같은 어노테이션)
+@Schema(description = "parent post" , accessMode = Schema.AccessMode.READ_ONLY )
+private PostDTO post;                // 응답용 - 요청에서는 선택
+
+@Schema(description = "postPostId" , requiredMode=Schema.RequiredMode.REQUIRED )
+@NotNull
+private Long postPostId;             // 저장 요청에 필수
+```
+```ts
+// TypeScript 클라이언트 CommentDTO.ts
+post?: PostDTO;
+postPostId: number;
+```
+
+- 저장 요청(`POST`, `@Valid @RequestBody`)은 `{"postPostId": 1, ...}`처럼 **FK id 필드를 보냅니다**.
+  `postPostId`가 없으면 `@Valid` 검증에서 거절됩니다. 중첩 `post`는 보내지 않아도 됩니다.
+- 2.x(`build`/`elcore`)와 `jpa-springboot` 호환 출력은 이전과 같습니다: 중첩 `post`에 `@NotNull`과
+  `requiredMode=REQUIRED`가 붙고 `postPostId`에는 붙지 않습니다. 이 출력에서는 검증을 통과하는 데 `post`가,
+  관계를 저장하는 데 `postPostId`가 필요하므로 요청은 둘 다 보내야 합니다.
+- **3.0.261021 이전 v3 출력에서 바뀐 점**: 이전에는 v3도 2.x처럼 중첩 `post`를 요구했습니다. 이제 `postPostId`만
+  보낸 요청이 통과하고, 중첩 `post`만 보내던 요청은 `@Valid` 검증에서 거절됩니다 (그 요청은 이전에도 관계를
+  연결하지 못했습니다 - 매퍼는 `postPostId`만 읽습니다).
+- 검색 DTO(`CommentSrchDTO`)의 `postPostId`는 검색 조건이라 필수가 아닙니다. 중첩 `post`는 검색 DTO에 없습니다.
+- 다른 애그리거트를 ID로 참조하는 DDD·헥사고날 번들에서는 FK id 필드가 엔티티의 ID 필드(`memberId`)이고,
+  같은 규칙으로 그 필드가 필수입니다 - `elasticore-rule-guide.md` "다른 애그리거트는 ID 로 참조".
+- `dto.yml`에 직접 선언한 DTO에는 적용되지 않습니다. 직접 선언한 DTO에서는 `postId: long! @ref(post.postId)`처럼
+  필드에 `!`를 씁니다.
 
 ### 2.6 JPA 컬럼 매핑
 
