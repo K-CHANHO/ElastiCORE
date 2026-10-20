@@ -50,6 +50,19 @@ public final class EntitySpec {
         return this;
     }
 
+    /**
+     * The names of the model's own types this spec knows - its entities, its
+     * enums and itself. Generated files write them by simple name, from their
+     * own package or an import, so an annotation of the same name has to be
+     * written in full: an entity named Comment and Hibernate's @Comment.
+     */
+    public Set<String> modelTypeNames() {
+        Set<String> names = new HashSet<String>(knownEntities);
+        names.addAll(enumDbLength.keySet());
+        names.add(name);
+        return names;
+    }
+
     public EntitySpec addField(Field field) {
         this.fields.add(new FieldSpec(field, this));
         return this;

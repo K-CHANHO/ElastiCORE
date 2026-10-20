@@ -995,6 +995,7 @@ public final class SourceCode {
         for (java.util.Map.Entry<String, java.util.Set<String>> en : bySimpleName().entrySet()) {
             if (en.getValue().size() > 1) contested.add(en.getKey());
         }
+        final java.util.Set<String> shadowing = shadowingAnnotations();
         // The clean mode imports what 2.x spelled out in full; the
         // compatibility mode writes what its rules asked for.
         final boolean clean = templateSet == TemplateSet.V3;
@@ -1009,6 +1010,7 @@ public final class SourceCode {
                 int dot = fqcn.lastIndexOf('.');
                 if (dot <= 0) return true;
                 if (contested.contains(fqcn.substring(dot + 1))) return false;
+                if (shadowing.contains(fqcn)) return false;
                 return clean || !ruleAsked;
             }
 
@@ -1023,12 +1025,43 @@ public final class SourceCode {
      * A contested name is spelled out where it is used instead.
      */
     public java.util.List<String> usedImports() {
+        java.util.Set<String> shadowing = shadowingAnnotations();
         java.util.List<String> out = new java.util.ArrayList<String>();
         for (java.util.Map.Entry<String, java.util.Set<String>> en : bySimpleName().entrySet()) {
             if (en.getValue().size() > 1) continue;
-            out.addAll(en.getValue());
+            for (String fqcn : en.getValue()) {
+                if (!shadowing.contains(fqcn)) out.add(fqcn);
+            }
         }
         java.util.Collections.sort(out);
+        return out;
+    }
+
+    /**
+     * The annotation types this artifact writes whose simple name is also a
+     * type of the model - Hibernate's Comment where the model has an entity
+     * named Comment. The model's type is what the simple name has to mean in
+     * a generated file: an import of the annotation would shadow an entity of
+     * the same package, and a wildcard import would lose to it. So these are
+     * written in full and not imported. A model without such a name gets
+     * nothing here, and its files do not change.
+     */
+    private java.util.Set<String> shadowingAnnotations() {
+        java.util.Set<String> out = new java.util.HashSet<String>();
+        java.util.Set<String> names = entity.modelTypeNames();
+        java.util.List<AnnoCode> all = new java.util.ArrayList<AnnoCode>(classAnnotations);
+        for (FieldCode fc : fieldCodes.values()) {
+            if (fc.isRemoved()) continue;
+            all.addAll(fc.annotations());
+        }
+        java.util.Set<String> types = new java.util.HashSet<String>();
+        for (AnnoCode a : all) a.collectTypes(types);
+        for (String fqcn : types) {
+            if (fqcn == null) continue;
+            int dot = fqcn.lastIndexOf('.');
+            if (dot <= 0) continue;
+            if (names.contains(fqcn.substring(dot + 1))) out.add(fqcn);
+        }
         return out;
     }
 

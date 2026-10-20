@@ -1,5 +1,23 @@
 ## 3.0.261016
 
+### Bug fixes (생성기)
+
+#### 애노테이션과 이름이 같은 엔티티가 있어도 컴파일된다 - 게시판의 `Comment`
+- 엔티티나 enum 의 이름이 생성 코드가 쓰는 애노테이션의 이름과 같으면 생성된 코드가 컴파일되지 않았다. 게시판의
+  `Comment` 엔티티가 그 예다. `-- 설명` 이 붙은 필드마다 Hibernate 의 `@Comment` 가 붙는데
+  - 규칙 엔진(`elcore3`)은 `import org.hibernate.annotations.Comment;` 를 써서 같은 패키지의 `Comment` 엔티티를
+    가렸다. `PostBase` 의 `List<Comment>` 가 애노테이션을 가리켜 컴파일 오류가 났다
+  - 2.x 생성기(`elcore`)는 `org.hibernate.annotations.*` 를 import 하는데, 같은 패키지의 `Comment` 엔티티가 이름을
+    가져가 `@Comment("...")` 가 엔티티를 가리켰다
+- 이제 모델에 같은 이름의 엔티티나 enum 이 있으면 그 애노테이션을 import 하지 않고
+  `@org.hibernate.annotations.Comment("...")` 처럼 패키지까지 붙여 쓴다. 규칙 엔진은 모델의 타입과 이름이 겹치는 다른
+  애노테이션에도 같은 규칙을 쓴다. 그런 이름이 없는 모델의 생성 결과는 바뀌지 않는다(`elcoreRulesCheck`·
+  `elcoreTreeCheck` 결과 그대로)
+- 확인: 2.x 생성기, 규칙 엔진 layered·hexagonal 로 `Post`·`Comment` 게시판을 생성해 단순 이름 `@Comment` 와 그 import 가
+  없는 것을, 이름이 겹치지 않는 같은 모델은 전과 같은 것을 테스트로 확인했다. hexagonal 로 생성한 프로젝트는
+  Spring Boot 4 에서 컴파일하고 실행했다
+- 관련 파일: `SourceCode.java`, `EntitySpec.java`, `EntitySrcFilePublisher.java`, `ModelNamedLikeAnAnnotationTest.java`
+
 ### Documentation (README)
 
 #### 시작하기를 실제 작업 순서로, build.gradle 은 그대로 동작하게

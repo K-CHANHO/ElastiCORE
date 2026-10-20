@@ -1393,7 +1393,20 @@ public class EntitySrcFilePublisher extends SrcFilePublisher {
             return;
         String labelTxt = field.getAnnotationValue(EntityAnnotation.COMMENT);
         if (labelTxt != null && !labelTxt.isEmpty())
-            paragraph.add("@Comment(\"%s\")", labelTxt);
+            paragraph.add(commentAnnotation() + "(\"%s\")", labelTxt);
+    }
+
+    /**
+     * Hibernate's @Comment, by its simple name through the template's
+     * org.hibernate.annotations.* import - unless the model has an entity or
+     * an enum named Comment. Its own package, or its single-type import, then
+     * wins the simple name over the wildcard, and @Comment would not compile.
+     */
+    private String commentAnnotation() {
+        boolean taken = model != null
+                && ((model.getEntityModels() != null && model.getEntityModels().findByName("Comment") != null)
+                || (model.getEnumModels() != null && model.getEnumModels().findByName("Comment") != null));
+        return taken ? "@org.hibernate.annotations.Comment" : "@Comment";
     }
 
     /**
