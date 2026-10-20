@@ -861,6 +861,7 @@ public class OrderRepositoryAdapter implements OrderRepositoryPort, OrderQueryPo
 | 수정이 보낸 값이 제약 위반 (`@Size` 등) | 거절 (`ConstraintViolationException`). 보낸 필드만 검사 | 400 |
 | 없는 행 수정 | `EntityNotFoundException` | 404 |
 | 불변식 위반 | `InvariantViolationException` (`IllegalStateException` 하위) | 422 |
+| 손으로 쓴 규칙이 거절 (`beforeSave`, 루트 메서드) | `io.elasticore.springboot3.validation.BadRequestException` (잘못된 요청), `ConflictException` (저장된 것과 충돌 - 빌려줄 권수가 없다, 이미 반납했다) | 400, 409 - 던진 메시지가 `detail` 로 나간다 |
 | 조건 삭제 `delete(srchDTO)` | 한 건씩 읽어서 삭제 — 멤버·리스너가 함께 동작 | - |
 | 조건 수정 `updateBySpecification` | 한 건씩 읽어서 매퍼로 반영 — 버전·감사·불변식 적용 | - |
 

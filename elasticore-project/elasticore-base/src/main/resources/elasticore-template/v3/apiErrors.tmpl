@@ -216,6 +216,12 @@ public class ${className} {
         return problem(HttpStatus.BAD_REQUEST, "bad-request", "Invalid request", ex.getMessage());
     }
 
+    /** A request that conflicts with what is stored, refused by your own code: nothing left to lend, say. */
+    @ExceptionHandler(io.elasticore.springboot3.validation.ConflictException.class)
+    public ProblemDetail conflict(io.elasticore.springboot3.validation.ConflictException ex) {
+        return problem(HttpStatus.CONFLICT, "conflict", "Conflicts with stored data", ex.getMessage());
+    }
+
     /** A sort on a property the entity does not have. */
     @ExceptionHandler(${propertyReferenceException}.class)
     public ProblemDetail noSuchProperty(${propertyReferenceException} ex) {

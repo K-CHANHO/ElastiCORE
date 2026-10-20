@@ -170,4 +170,21 @@ public class ProjectRuleSetSupportTest {
         engine.suppress("spring-api-errors");
         assertFalse(engine.run(erp, "apiErrors").isMake());
     }
+
+    /** Hand-written rules answer 409 with their own message through ConflictException, in Java and Kotlin. */
+    @Test
+    public void theApiErrorsAnswerAConflictExceptionWith409() {
+        DomainSpec erp = new DomainSpec("erp", "Erp").entity(order().meta("expose", ""));
+        erp.pkg("control", "com.acme.erp.adapter.in.web");
+
+        String java = RuleCatalog.standard().engineFor("hexagonal-springboot")
+                .templateSet(SourceCode.TemplateSet.V3).run(erp, "apiErrors").render();
+        assertTrue(java.contains("@ExceptionHandler(io.elasticore.springboot3.validation.ConflictException.class)"), java);
+        assertTrue(java.contains("problem(HttpStatus.CONFLICT, \"conflict\", \"Conflicts with stored data\", ex.getMessage())"), java);
+
+        String kotlin = RuleCatalog.standard().engineFor("jpa-springboot-kt")
+                .templateSet(SourceCode.TemplateSet.KOTLIN).run(erp, "apiErrors").render();
+        assertTrue(kotlin.contains("@ExceptionHandler(io.elasticore.springboot3.validation.ConflictException::class)"), kotlin);
+        assertTrue(kotlin.contains("problem(HttpStatus.CONFLICT, \"conflict\", \"Conflicts with stored data\", ex.message)"), kotlin);
+    }
 }

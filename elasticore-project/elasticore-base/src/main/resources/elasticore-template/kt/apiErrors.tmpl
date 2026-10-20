@@ -180,6 +180,11 @@ class ${className}(validator: ObjectProvider<jakarta.validation.Validator>,
     fun badRequest(ex: io.elasticore.springboot3.validation.BadRequestException): ProblemDetail =
         problem(HttpStatus.BAD_REQUEST, "bad-request", "Invalid request", ex.message)
 
+    /** A request that conflicts with what is stored, refused by your own code: nothing left to lend, say. */
+    @ExceptionHandler(io.elasticore.springboot3.validation.ConflictException::class)
+    fun conflict(ex: io.elasticore.springboot3.validation.ConflictException): ProblemDetail =
+        problem(HttpStatus.CONFLICT, "conflict", "Conflicts with stored data", ex.message)
+
     /** A sort on a property the entity does not have. */
     @ExceptionHandler(${propertyReferenceException}::class)
     fun noSuchProperty(ex: ${propertyReferenceException}): ProblemDetail =
