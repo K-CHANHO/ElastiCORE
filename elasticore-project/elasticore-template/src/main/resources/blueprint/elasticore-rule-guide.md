@@ -334,6 +334,7 @@ DDD 번들에서 루트의 필드는 **기본으로 잠깁니다**. 공개 sette
 |---|---|---|---|---|
 | 기본 (잠김) | `protected` | 받음 | 같은 값이면 통과, 다르면 **422** | 루트의 메서드 |
 | `@behavior` | `protected` | 받지 않음 (`READ_ONLY`) | 받지 않음 | 루트의 메서드 |
+| `@readonly` / `@noinput` | `protected` (`@editable` 루트는 `public`) | 받지 않음 (`READ_ONLY`) | 받지 않음 | 서버 코드: 새 루트는 `creation()`, 그 뒤는 루트의 메서드 (`@editable` 루트는 `beforeSave` 의 setter) |
 | `@editable` | `public` | 받음 | 받음 | setter, PUT |
 | id, `@jpa:Version`, 감사 필드 | 그대로 | - | - | 영속성 계층 |
 
@@ -362,6 +363,10 @@ Item:                             # 기준정보 - 필드 단위로 고치는 �
 - **새 루트의 null**: 요청이 값을 보내지 않으면(null) 엔티티의 기본값(`@default`)을 덮어쓰지 않습니다.
   잠긴 필드와 `@behavior` 필드의 DTO 는 기본값을 들고 다니지 않습니다 - 들고 다니면 일부만 보내는
   PUT 이 기본값(예: 합계 0)을 함께 보내 잠긴 값을 바꾸려는 요청이 되기 때문입니다.
+  같은 이유로 **`creation().setX(null)` 은 새 루트에서 아무 일도 하지 않습니다** (`if (!settled && value == null) return;`).
+  서비스의 `beforeSave` 에서 클라이언트가 보낸 값을 지우는 길이 아닙니다. 요청으로 받지 않을 필드는
+  `@readonly`(서버가 정함) 나 `@behavior`(루트의 메서드만 바꿈) 로 선언하면 매퍼가 처음부터 쓰지 않고,
+  값을 지우는 일은 루트의 메서드가 `protected` setter 로 합니다.
 - **컬렉션**: 루트의 멤버 컬렉션도 잠깁니다 (`creation().replaceLines(...)` 는 새 루트에만).
   초안 편집처럼 요청으로 바꿔야 하면 `@editable` 을 붙입니다.
 - **생성 서비스 테스트**도 `creation()` 으로 픽스처를 만듭니다.
@@ -588,6 +593,23 @@ private Partner partner;                // 같은 컬럼의 읽기 전용 조인
 - 컬럼은 관계가 원래 쓰던 이름(`<필드>_<대상 키 컬럼>`, `@db` 가 있으면 그것)이라 **테이블은 바뀌지 않습니다**.
 - 필드 이름: 대상 키 이름이 참조 이름으로 시작하면 그 이름(`partner` -> `partnerId`, `item` -> `itemCode`),
   아니면 `참조 + 키`(`category` -> `categoryCatId`). 같은 이름의 필드가 이미 있으면 DSL 경고 후 객체 참조 유지.
+- 저장 요청이 보내는 것은 이 ID 필드입니다. 필수 참조(`member: Member!`)이면 DTO 에서 ID 필드가 필수이고,
+  응답용 중첩 DTO 는 선택입니다 (3.0.261021 부터. 이전에는 중첩 DTO 도 `@NotNull` 이라 ID 만 보낸 요청이
+  `@Valid` 검증에서 거절되었습니다). `member: Member!`, `book: Book!`(Book 의 키 `isbn`) 의 `LoanDTO`:
+
+  ```java
+  @Schema(description = "borrower" , accessMode = Schema.AccessMode.READ_ONLY )
+  private MemberDTO member;            // 응답용 - 요청에서는 선택
+  ...
+  @Schema(description = "memberId" , requiredMode=Schema.RequiredMode.REQUIRED )
+  @NotNull
+  private Long memberId;               // 저장 요청에 필수
+
+  @Schema(description = "bookIsbn" , requiredMode=Schema.RequiredMode.REQUIRED )
+  @NotNull
+  @Size(max=13)
+  private String bookIsbn;
+  ```
 - 매퍼는 `@ref(partner.partnerId)` 를 `partnerId` 로 씁니다 (관계 객체는 쓰지 않음).
 - 적용 대상: 같은 도메인의, 키가 하나인 다른 루트를 가리키는 to-one (`cascade`, `@embedded`, 역방향
   `@OneToOne(mappedBy)`, 이미 `@joinBy` 를 쓴 필드는 제외). 자기 루트를 가리키는 멤버의 역참조는 그대로.
