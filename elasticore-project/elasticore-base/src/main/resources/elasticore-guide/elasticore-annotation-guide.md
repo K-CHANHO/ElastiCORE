@@ -238,11 +238,50 @@ lines: List<SalesOrderLine> @OneToMany(mappedBy="order") @minsize(1, '수주에�
 DTO 를 `dto.yml` 에서 직접 선언하고 같은 필드를 다시 적으면 그 필드는 DSL 선언을 따르므로, 요청 단계(400)
 검사를 원하면 DTO 필드에도 적습니다. 저장 시점 검사(422)는 엔티티의 선언만으로 항상 걸립니다.
 
-#### @pattern(regexp, message)
-정규식 필드 검증. `@Pattern` 생성.
+#### @pattern('정규식', '메시지') / @pattern(regexp="...", message="...")
+문자열이 정규식과 **전체가** 맞아야 한다는 규칙. DTO 에 Bean Validation `@Pattern` 이 생기고(요청 검사, 400),
+TypeScript 클라이언트의 `validate...()` 도 같은 정규식과 메시지로 검사합니다.
+`@min` 처럼 값(정규식) 다음에 메시지를 적습니다. 이름을 붙인 형식도 같습니다.
 ```yaml
+isbn:  string(13)! @id @pattern('^[0-9]{13}$', 'ISBN must be 13 digits') -- ISBN, 13 digits
+code:  string(10) @pattern('^[A-Z]{3}[0-9]+$') -- Shelf code          # 메시지 생략
+range: string(13) @pattern(regexp="^[0-9]{10,13}$", message="10 to 13 digits")
 email: string @pattern(regexp="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", message="Invalid email")
 ```
+생성되는 DTO (v3 / Kotlin 번들):
+```java
+	@Schema(description = "ISBN, 13 digits" , requiredMode=Schema.RequiredMode.REQUIRED )
+	@NotNull
+	@Pattern(regexp = "^[0-9]{13}$", message = "ISBN must be 13 digits")
+	@Size(max=13)
+	private String isbn;
+
+	@Schema(description = "Shelf code"  )
+	@Pattern(regexp = "^[A-Z]{3}[0-9]+$", message = "Shelf code is not in the expected form")
+	@Size(max=10)
+	private String code;
+```
+TypeScript 클라이언트:
+```ts
+else if (value.isbn && !new RegExp("^(?:^[0-9]{13}$)$").test(String(value.isbn))) errors.isbn = "ISBN must be 13 digits";
+```
+- **메시지**는 생략할 수 있습니다. 그러면 서버와 클라이언트 모두 `"<라벨> is not in the expected form"` 이라고 합니다
+  (라벨은 `--` 주석, 없으면 필드 이름).
+- **백슬래시는 두 번** 씁니다. 정규식은 Java 문자열 리터럴의 내용으로 그대로 들어가기 때문입니다: `\\d`, `\\.`.
+  `[0-9]` 같은 문자 클래스가 더 쉽습니다. `\d` 처럼 하나만 쓰면 Java 는 컴파일하지 않고(`illegal escape character`)
+  TypeScript 는 `d` 로 읽으므로, 생성할 때 DSL 경고가 납니다:
+  `Book.digits: @pattern has \d, which a string literal does not read as a backslash. Write it doubled (\\d) or use a class such as [0-9].`
+- **Kotlin** 에서는 문자열 템플릿이 되는 `$`(영문자, `_`, `{` 앞의 `$`)를 `\$` 로 바꿔 씁니다. DSL 에는 Java 와 똑같이 적습니다.
+  `@pattern('^\\$USD[0-9]+$', 'write it as $USD100')` -> `@Pattern(regexp = "^\\\$USD[0-9]+$", message = "write it as \$USD100")`.
+  정규식 끝의 `$` 는 그대로입니다.
+- 정규식 안의 **쉼표**는 괜찮습니다(`{10,13}`). 메시지는 따옴표와 괄호 밖의 첫 쉼표 뒤입니다.
+  정규식에 `=` 가 들어가면 이름 붙인 형식을 쓰고, 그 값은 큰따옴표로 감쌉니다(작은따옴표 값은 공백에서 끊깁니다).
+- **문자열 필드에만** 붙습니다. 날짜 필드의 `@pattern(yyyyMMdd)` 는 지금처럼 날짜 형식(`@DateTimeFormat` / `@JsonFormat`)입니다.
+- **DTO 와 TS 클라이언트에만** 들어갑니다. 엔티티(`@Column` 만)와 검색 DTO 에는 없고, `@min` 과 달리 DDD 루트의
+  저장 시점 검사(422)도 아닙니다. 정규식은 Swagger `example` 로도 쓰지 않습니다(예시 값이 아니므로).
+- 2.x 호환 출력(`jpa-springboot`)은 바뀌지 않았습니다: 이름 붙인 형식에 메시지까지 있을 때만 여러 줄
+  `@jakarta.validation.constraints.Pattern( regexp="...", msg="..." )` 를 쓰는데, `msg` 는 Jakarta `@Pattern` 에 없는
+  속성이라 컴파일되지 않습니다. 이 수정은 v3 / Kotlin / TypeScript 번들의 출력입니다.
 
 ### 2.3 검색 어노테이션
 `@search(condition)` - Section 3에서 상세 설명.
@@ -747,6 +786,7 @@ optionalField: string @jsoninclude             # @JsonInclude
 
 ```yaml
 email: string(100) @email                       # @Email
+isbn: string(13) @pattern('^[0-9]{13}$', 'ISBN must be 13 digits')   # @Pattern(regexp = ..., message = ...) - 2.2 참조
 birthDate: date @past                           # @Past
 eventDate: datetime @future                     # @Future
 orderDate: datetime @pastorpresent              # @PastOrPresent
@@ -755,6 +795,7 @@ address: AddressDTO                             # DTO 타입 -> @Valid 자동 �
 ```
 
 메시지 패턴: `"{FieldName} required"`, `"{FieldName} max {n}"`, `"Email format invalid"`, `"Date must be past"` 등 간단한 영어.
+`@pattern` 은 메시지를 직접 줄 수 있고, 생략하면 `"<라벨> is not in the expected form"` 입니다(TS 클라이언트와 같은 문장).
 
 ---
 
