@@ -105,7 +105,7 @@ public class ModelNamedLikeAnAnnotationTest {
      * An enum named Size and an entity named Schema, next to a product whose DTOs carry @Size and
      * @Schema as fixed lines: those lines keep their simple names, so their imports have to stay.
      * (A field of the type Size in the same DTO is another matter: two types then claim the name,
-     * neither is imported, and the fixed @Size line does not compile - before this change as well.)
+     * neither is imported, and the fixed @Size line does not compile. That case is not handled yet.)
      */
     @Test
     public void annotationsWrittenAsFixedLinesKeepTheirImports() throws Exception {
@@ -134,6 +134,48 @@ public class ModelNamedLikeAnAnnotationTest {
         int checked = assertImportedWhereUsed(project, "Size", "jakarta.validation.constraints.Size")
                 + assertImportedWhereUsed(project, "Schema", "io.swagger.v3.oas.annotations.media.Schema");
         assertTrue(checked > 0, "no generated file writes @Size or @Schema by its simple name\n" + tree(project));
+    }
+
+    /**
+     * Entities named Setter and JoinColumn, where the same file writes lombok's @Setter and
+     * @JoinColumn both as a fixed line and as a built annotation: the import serves both, so it stays.
+     */
+    @Test
+    public void anAnnotationAlsoWrittenAsAFixedLineKeepsItsImport() throws Exception {
+        String model = "entity:\n"
+                + "  Pet:\n"
+                + "    meta: entity @root @expose(20) -- pet\n"
+                + "    fields:\n"
+                + "      petId:     long @id @sequence\n"
+                + "      name:      string(50)! -- pet name\n"
+                + "      vet:       Vet! @db(vet_id) -- vet\n"
+                + "      owner:     Owner @db(owner_id) -- owner\n"
+                + "  Vet:\n"
+                + "    meta: entity @root -- vet\n"
+                + "    fields:\n"
+                + "      vetId:     long @id @sequence\n"
+                + "      name:      string(50)! -- vet name\n"
+                + "  Owner:\n"
+                + "    meta: entity @root -- owner\n"
+                + "    fields:\n"
+                + "      ownerId:   long @id @sequence\n"
+                + "      name:      string(50)! -- owner name\n"
+                + "  Setter:\n"
+                + "    meta: entity @root -- setter\n"
+                + "    fields:\n"
+                + "      setterId:  long @id @sequence\n"
+                + "      label:     string(10) -- label\n"
+                + "  JoinColumn:\n"
+                + "    meta: entity @root -- join column\n"
+                + "    fields:\n"
+                + "      joinColumnId: long @id @sequence\n"
+                + "      label:        string(10) -- label\n";
+        Path project = project("fixed-and-built", model, env3());
+        generate(project, RulesGenRunner.class.getName(), "-Delasticore.architecture=hexagonal",
+                "-Delasticore.language=java", "-Delasticore.springBoot=4.0.8");
+        int checked = assertImportedWhereUsed(project, "Setter", "lombok.Setter")
+                + assertImportedWhereUsed(project, "JoinColumn", "jakarta.persistence.JoinColumn");
+        assertTrue(checked > 0, "no generated file writes @Setter or @JoinColumn by its simple name\n" + tree(project));
     }
 
     @Test

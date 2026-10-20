@@ -1049,7 +1049,9 @@ public final class SourceCode {
      * written in full and not imported.
      *
      * Only annotations the name style writes count: a raw line keeps the
-     * simple name its rule wrote and so keeps its import. The compatibility
+     * simple name its rule wrote and so keeps its import - and so does every
+     * other use of a type that is also written as a raw line in this file,
+     * since the import serves both. The compatibility
      * mode does for Comment alone what the 2.x publisher does, and its output
      * stays the 2.x output. A domain without such a name gets nothing here,
      * and its files do not change.
@@ -1063,10 +1065,14 @@ public final class SourceCode {
             all.addAll(fc.annotations());
         }
         java.util.Set<String> types = new java.util.HashSet<String>();
-        for (AnnoCode a : all) a.collectStyledTypes(types);
+        java.util.Set<String> raw = new java.util.HashSet<String>();
+        for (AnnoCode a : all) {
+            a.collectStyledTypes(types);
+            a.collectRawTypes(raw);
+        }
         boolean compatible = templateSet == TemplateSet.COMPATIBLE;
         for (String fqcn : types) {
-            if (fqcn == null) continue;
+            if (fqcn == null || raw.contains(fqcn)) continue;
             if (compatible && !HIBERNATE_COMMENT.equals(fqcn)) continue;
             int dot = fqcn.lastIndexOf('.');
             if (dot <= 0) continue;

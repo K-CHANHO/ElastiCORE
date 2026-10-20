@@ -369,6 +369,23 @@ public final class AnnoCode {
         }
     }
 
+    /** The annotation types written as fixed lines: this one if it is one, and any nested in it. */
+    void collectRawTypes(java.util.Set<String> out) {
+        if (isRaw()) {
+            out.add(fqcn);
+            return;
+        }
+        if (valueList != null) {
+            for (AnnoCode item : valueList.items) item.collectRawTypes(out);
+        }
+        for (Object v : attrs.values()) {
+            if (v instanceof AnnoCode) ((AnnoCode) v).collectRawTypes(out);
+            if (v instanceof AnnoList) {
+                for (AnnoCode item : ((AnnoList) v).items) item.collectRawTypes(out);
+            }
+        }
+    }
+
     /** Whether this annotation is a line written out by its rule rather than built from attributes. */
     boolean isRaw() {
         return rawLine != null;
