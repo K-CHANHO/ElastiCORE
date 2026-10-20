@@ -561,7 +561,7 @@ coordinates: int[] @env:integerarray       # env.yml annotations 참조
 customName: string @search(like$comName)   # comName 필드에 like 검색
 ```
 
-### 3.2 구현된 연산자 전체 목록 (16개)
+### 3.2 구현된 연산자 전체 목록 (17개)
 
 | DSL 문법 | JPA Criteria | 대소문자 무시 | 설명 |
 |----------|-------------|:---:|------|
@@ -579,11 +579,11 @@ customName: string @search(like$comName)   # comName 필드에 like 검색
 | `<=` | `lessThanOrEqualTo` | No | 이하 |
 | `in` | `.in()` / `Join.in()` | No | 다중 값 포함 |
 | `between`, `~` | `between` | No | 범위 검색 |
+| `isnull` | `isNull` / `isNotNull` | No | 비어 있는지 검색. 검색 속성 `<필드>Empty: Boolean` (3.4.1, v3 번들 전용) |
 | `auto` | Runtime 결정 | No | String 전용, %포함시 like 아니면 eq |
 
 **미구현 주의:**
 - `!=`, `neq` - 코드에 구현 없음
-- `ISNULL`, `ISNOTNULL` - 미구현
 - `gt`, `gte`, `lt`, `lte` 키워드 - 미구현 (기호 `>`, `>=`, `<`, `<=`만 동작)
 
 ### 3.3 auto 조건 동작
@@ -620,6 +620,77 @@ registDate: localDate @search(between)
 # -> SearchDTO: registDateFrom, registDateTo 필드 생성
 # -> LocalDate이므로 To+1일 자동 적용
 ```
+
+### 3.4.1 isnull - 비어 있는지 검색
+
+"아직 반납하지 않은 대출", "아직 입고된 적 없는 상품"처럼 **값이 비어 있는지**로 찾을 때 씁니다.
+검색 DTO 에는 필드 값 대신 `<필드>Empty` 라는 `Boolean` 속성 하나가 생기고, 그 값이 조건을 정합니다.
+
+| 요청의 `<필드>Empty` | 조건 |
+|---|---|
+| 보내지 않음 또는 `null` | 조건 없음 (모두) |
+| `true` | `IS NULL` - 비어 있는 행만 |
+| `false` | `IS NOT NULL` - 값이 있는 행만 |
+
+```yaml
+entity:
+  Product:
+    meta: entity @expose(20)
+    fields:
+      lastRestocked: datetime @search(isnull) -- last restocked, empty until the first restock
+```
+
+생성되는 `ProductSrchDTO` (날짜 형식 어노테이션과 `example` 은 붙지 않습니다 - 보내는 값이 날짜가 아니므로):
+```java
+/*
+  last restocked, empty until the first restock
+*/
+@Schema(description = "last restocked, empty until the first restock Field is empty (true) or set (false). field:lastRestocked"  )
+private Boolean lastRestockedEmpty;
+```
+
+생성되는 Mapper `toSpec(ProductSrchDTO searchDTO, Specification<Product> sp)`:
+```java
+Boolean lastRestockedEmpty = searchDTO.getLastRestockedEmpty();
+if(hasValue(lastRestockedEmpty)){
+    if(lastRestockedEmpty){
+        sp = sp.and((r,q,c) -> c.isNull(r.get("lastRestocked")));
+    }else{
+        sp = sp.and((r,q,c) -> c.isNotNull(r.get("lastRestocked")));
+    }
+}
+```
+
+호출: `POST /api/v1/shop/product/search {"name":"kettle","lastRestockedEmpty":true}` -> 이름에 kettle 이 들어가고
+아직 입고된 적 없는 상품만. 다른 검색 조건과 AND 로 묶입니다.
+
+Kotlin 과 TypeScript 도 같은 규칙에서 나옵니다:
+```kotlin
+var endDateEmpty: Boolean? = null                    // ProjectSrchDTO.kt
+
+val endDateEmpty = searchDTO.endDateEmpty            // HrMapper.kt toSpec
+if(hasValue(endDateEmpty)){
+    if(endDateEmpty!!){
+        sp = sp.and(Specification<Project> { r,q,c -> c.isNull(r.get<java.time.LocalDate>("endDate")) })
+    }else{
+        sp = sp.and(Specification<Project> { r,q,c -> c.isNotNull(r.get<java.time.LocalDate>("endDate")) })
+    }
+}
+```
+```typescript
+endDateEmpty?: boolean;                              // ProjectSrchDTO.ts
+```
+
+- **필드 하나에 조건 하나.** `isnull` 을 적은 필드는 `between` 의 From/To 를 만들지 않습니다. 기간 검색도 필요하면
+  지금은 Service 에서 `Q`/`Op` 로 직접 조건을 더합니다 (dev-guide "Op 열거형").
+- `@expose` 의 타입별 자동 할당(3.3, 날짜 -> `between`)은 그대로입니다. `@search(isnull)` 을 적은 필드만 바뀝니다.
+- `@ref(order.shippedDate)` 와 함께 쓰면 관계 너머의 컬럼을 검사합니다: `c.isNull(r.get("order").get("shippedDate"))`.
+- 두 번째 값(쉼표 뒤)은 다른 조건과 같이 **엔티티 필드 이름**입니다: `@search(isnull,returnedDate)` ->
+  속성 `returnedDateEmpty`, 조건 `r.get("returnedDate")`.
+- `!` / `@notnull` 필드에는 의미가 없습니다 (`true` 는 늘 빈 결과). 경고는 아직 없습니다.
+- 3.0 규칙 엔진(`elcore3`)의 v3 번들(`jpa-springboot-v3`, `ddd-springboot`, `hexagonal-springboot`, Kotlin 판,
+  `ts-model`)에서 동작합니다. 2.x 생성기(`elcore`)와 2.x 호환 번들(`jpa-springboot`)은 `isnull` 을 모르는 값으로 보고
+  예전처럼 필드 타입 그대로의 같은 값 비교(`c.equal`)를 만듭니다 - 2.x 출력은 바뀌지 않습니다.
 
 ### 3.5 List 필드 + eq = Join 생성
 
@@ -667,6 +738,7 @@ entity:
       email: string @search(%__%)
       status: string @search(in)
       registDate: localDate @search(between)
+      closeDate: localDate @search(isnull)
       score: int @search(>=)
       drivers: List<RentDriver> @search(eq)
 ```
@@ -677,6 +749,7 @@ entity:
 - `email: String` (%__% 대소문자 무시)
 - `status: String` (in)
 - `registDateFrom: LocalDate`, `registDateTo: LocalDate` (between)
+- `closeDateEmpty: Boolean` (isnull - `true` 영업 중, `false` 폐업, 생략 모두. v3 번들 전용)
 - `score: Integer` (>=)
 - `driversItem: RentDriver` (Join eq)
 - `sortCode: String`, `pageNumber: int`, `pageSize: int` (자동 생성)
@@ -1172,8 +1245,9 @@ Section 3.2의 구현된 연산자 외에는 **사용 불가**합니다. 다음 
 
 #### 미구현 연산자
 - `!=`, `neq` (부정 equal) - 미구현
-- `ISNULL`, `ISNOTNULL` - 미구현
 - `gt`, `gte`, `lt`, `lte` (키워드 형태) - 미구현
+
+비어 있는지(IS NULL / IS NOT NULL) 검색은 `@search(isnull)` 하나로 합니다 (3.4.1).
 
 #### 올바른 사용
 ```yaml

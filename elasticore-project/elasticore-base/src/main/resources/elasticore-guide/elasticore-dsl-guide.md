@@ -144,7 +144,7 @@ YAML 이 다르게 읽기 때문입니다. 자세한 이유는 annotation guide 
 | `@GeneratedValue` | JPA 자동 생성값 |
 | `@length(n)` | 문자열 최대 길이 |
 | `@default(value)` | 기본값 |
-| `@search(like\|eq\|between\|in)` | 검색 조건 (annotation-guide 참조) |
+| `@search(like\|eq\|between\|in\|isnull)` | 검색 조건 (annotation-guide 참조). `isnull` 은 비어 있는지 검색 - 검색 속성 `<필드>Empty: Boolean` (v3 번들) |
 | `@updatable(false)` | 수정 불가 필드 |
 | `@ref(path)` | 다른 필드 참조 |
 | `@dtype(type)` | DTO 변환 타입 지정 |

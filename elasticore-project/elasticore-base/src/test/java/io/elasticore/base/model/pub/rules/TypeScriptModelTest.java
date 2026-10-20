@@ -149,6 +149,25 @@ public class TypeScriptModelTest {
         assertFalse(out.contains("DateTimeFormat"), out);
     }
 
+    /**
+     * An emptiness check is a yes or no on every side: the shared rule makes
+     * it a Boolean, and the browser sends true, false or nothing.
+     */
+    @Test
+    public void anEmptinessCheckBecomesAnOptionalBoolean() {
+        EntitySpec e = new EntitySpec("Article")
+                .domain("content", "Content")
+                .meta("searchable", "entity=Article")
+                .pkg("dto", "io.acme.content.dto")
+                .addField(loader.parse("publishDate", "datetime @search(isnull)"));
+
+        String out = render(e, "srchdto");
+
+        assertTrue(out.contains("publishDateEmpty?: boolean;"), out);
+        assertFalse(out.contains("publishDate?:"), out);
+        assertFalse(out.contains("publishDateFrom"), out);
+    }
+
     // ---- the client for what the controller exposes ---------------------
 
     private EntitySpec exposed() {

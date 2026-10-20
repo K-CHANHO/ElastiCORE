@@ -32,6 +32,8 @@ import static io.elasticore.base.model.pub.rules.Ctx.ctx;
  *   %xxx  xxx%        prefix / suffix like, with __ marking ignore-case
  *   in                r.get("f").in(v), or a join for a collection field
  *   between ~         From/To pair, three branches, +1 day for LocalDate
+ *   isnull            Boolean xEmpty: true isNull, false isNotNull (not in
+ *                     the 2.x-compatible output, which reads it as equal)
  *   (anything else)   equal
  *
  * A collection field with an eq condition joins on a single item instead.
@@ -85,6 +87,13 @@ public class MapperSpecRules implements CodeRules {
                 entityFieldNm = ref;
             }
             isListEntityField = false;
+        }
+
+        // Clean output only, as the search DTO declares it: the 2.x
+        // publisher reads isnull as an equality.
+        if (SearchDtoBaseRules.isNullCheck(condition) && !c.compatible()) {
+            emitNullCheck(c, e.getName(), entityFieldNm, childField, fieldNm, type);
+            return;
         }
 
         boolean isBetween = "between".equals(condition) || "~".equals(condition);
@@ -227,6 +236,26 @@ public class MapperSpecRules implements CodeRules {
                             path(syntax, entityFieldNm, "", "Any"),
                             syntax.escapeName("in"), fieldNm)))));
         }
+    }
+
+    /**
+     * An emptiness check reads the three-state xEmpty property: absent
+     * searches by nothing, true finds an empty column, false a set one.
+     */
+    private void emitNullCheck(SourceCode c, String entityName, String entityFieldNm,
+                               String childField, String fieldNm, String type) {
+        String nm = String.format("%sEmpty", fieldNm);
+        Syntax syntax = c.syntax();
+        String path = path(syntax, entityFieldNm, childField, type);
+
+        c.line(BLOCK, "%s%s", I2, syntax.localVar("Boolean", nm, syntax.getter("searchDTO", nm)))
+         .line(BLOCK, "%sif(hasValue(%s)){", I2, nm)
+         .line(BLOCK, "%sif(%s){", I3, nn(syntax, nm))
+         .line(BLOCK, "%s    %s", I3, and(syntax, entityName, "c.isNull(%s)", path))
+         .line(BLOCK, "%s}else{", I3)
+         .line(BLOCK, "%s    %s", I3, and(syntax, entityName, "c.isNotNull(%s)", path))
+         .line(BLOCK, "%s}", I3)
+         .line(BLOCK, "%s}", I2);
     }
 
     /** From/To pair with three branches; LocalDate shifts the upper bound a day. */
