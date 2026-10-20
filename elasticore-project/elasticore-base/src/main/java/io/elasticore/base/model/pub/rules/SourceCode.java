@@ -1037,14 +1037,22 @@ public final class SourceCode {
         return out;
     }
 
+    /** Hibernate's column comment, which every field with a "-- label" gets. */
+    private static final String HIBERNATE_COMMENT = "org.hibernate.annotations.Comment";
+
     /**
      * The annotation types this artifact writes whose simple name is also a
-     * type of the model - Hibernate's Comment where the model has an entity
-     * named Comment. The model's type is what the simple name has to mean in
+     * type of the domain - Hibernate's Comment where the domain has an entity
+     * named Comment. The domain's type is what the simple name has to mean in
      * a generated file: an import of the annotation would shadow an entity of
      * the same package, and a wildcard import would lose to it. So these are
-     * written in full and not imported. A model without such a name gets
-     * nothing here, and its files do not change.
+     * written in full and not imported.
+     *
+     * Only annotations the name style writes count: a raw line keeps the
+     * simple name its rule wrote and so keeps its import. The compatibility
+     * mode does for Comment alone what the 2.x publisher does, and its output
+     * stays the 2.x output. A domain without such a name gets nothing here,
+     * and its files do not change.
      */
     private java.util.Set<String> shadowingAnnotations() {
         java.util.Set<String> out = new java.util.HashSet<String>();
@@ -1055,9 +1063,11 @@ public final class SourceCode {
             all.addAll(fc.annotations());
         }
         java.util.Set<String> types = new java.util.HashSet<String>();
-        for (AnnoCode a : all) a.collectTypes(types);
+        for (AnnoCode a : all) a.collectStyledTypes(types);
+        boolean compatible = templateSet == TemplateSet.COMPATIBLE;
         for (String fqcn : types) {
             if (fqcn == null) continue;
+            if (compatible && !HIBERNATE_COMMENT.equals(fqcn)) continue;
             int dot = fqcn.lastIndexOf('.');
             if (dot <= 0) continue;
             if (names.contains(fqcn.substring(dot + 1))) out.add(fqcn);

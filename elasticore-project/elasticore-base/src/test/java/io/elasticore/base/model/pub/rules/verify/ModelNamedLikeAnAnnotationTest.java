@@ -28,11 +28,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * files, and that import shadowed the entity of the same package: PostBase's
  * List of Comment meant the annotation, and nothing compiled. The 2.x
  * templates import org.hibernate.annotations.*, which loses to the entity, so
- * there @Comment("...") named the entity and did not compile either. Found by
- * the first two boards anyone built with the agent kit.
+ * there @Comment("...") named the entity and did not compile either.
  *
- * Each generator writes the annotation in full where the model has a type of
- * its name, and by its simple name as before where it does not.
+ * Each generator writes the annotation in full where the domain has a type of
+ * its name, and by its simple name as before where it does not. An annotation
+ * a rule writes as a fixed line - the DTOs' @Size and @Schema - keeps its
+ * simple name and so has to keep its import, whatever the domain is called.
  */
 public class ModelNamedLikeAnAnnotationTest {
 
@@ -53,7 +54,10 @@ public class ModelNamedLikeAnAnnotationTest {
     /** The same board with the comment called something no annotation is called. */
     private static final String CONTROL = BOARD.replace("Comment:", "Reply:").replace("commentId", "replyId");
 
-    private static final Pattern SIMPLE_COMMENT = Pattern.compile("(?m)^\\s*@Comment\\(");
+    /** @Comment by its simple name; Kotlin may put a use-site target first. */
+    private static final Pattern SIMPLE_COMMENT = Pattern.compile("(?m)^\\s*@(?:field:|get:|param:)?Comment\\(");
+    /** The import, in Java or Kotlin. */
+    private static final Pattern COMMENT_IMPORT_LINE = Pattern.compile("(?m)^import org\\.hibernate\\.annotations\\.Comment;?\\s*$");
     private static final String COMMENT_IMPORT = "import org.hibernate.annotations.Comment;";
 
     @TempDir
@@ -86,6 +90,50 @@ public class ModelNamedLikeAnAnnotationTest {
         assertTrue(anyFileContains(project, "@org.hibernate.annotations.Comment(\"title\")"),
                 "Post refers to the Comment entity too, so its own labels are written in full\n" + tree(project));
         assertNoSimpleComment(project);
+    }
+
+    @Test
+    public void theRuleEngineWritesItInFullInKotlin() throws Exception {
+        Path project = project("kotlin", BOARD, env3());
+        generate(project, RulesGenRunner.class.getName(), "-Delasticore.architecture=layered",
+                "-Delasticore.language=kotlin", "-Delasticore.springBoot=4.0.8");
+        assertTrue(anyFileContains(project, "org.hibernate.annotations.Comment(\"comment text\")"), tree(project));
+        assertNoSimpleComment(project);
+    }
+
+    /**
+     * An enum named Size and an entity named Schema, next to a product whose DTOs carry @Size and
+     * @Schema as fixed lines: those lines keep their simple names, so their imports have to stay.
+     * (A field of the type Size in the same DTO is another matter: two types then claim the name,
+     * neither is imported, and the fixed @Size line does not compile - before this change as well.)
+     */
+    @Test
+    public void annotationsWrittenAsFixedLinesKeepTheirImports() throws Exception {
+        String model = "entity:\n"
+                + "  Product:\n"
+                + "    meta: entity @root @expose(20) -- product\n"
+                + "    fields:\n"
+                + "      productId: long @id @sequence\n"
+                + "      name:      string(50)! -- product name\n"
+                + "  Schema:\n"
+                + "    meta: entity @root @expose(20) -- schema\n"
+                + "    fields:\n"
+                + "      schemaId:  long @id @sequence\n"
+                + "      title:     string(100)! -- schema title\n"
+                + "enumeration:\n"
+                + "  Size:\n"
+                + "    meta: enum -- size\n"
+                + "    fields:\n"
+                + "      code: string(1)\n"
+                + "    enum:\n"
+                + "      SMALL: S\n"
+                + "      LARGE: L\n";
+        Path project = project("fixed-lines", model, env3());
+        generate(project, RulesGenRunner.class.getName(), "-Delasticore.architecture=hexagonal",
+                "-Delasticore.language=java", "-Delasticore.springBoot=4.0.8");
+        int checked = assertImportedWhereUsed(project, "Size", "jakarta.validation.constraints.Size")
+                + assertImportedWhereUsed(project, "Schema", "io.swagger.v3.oas.annotations.media.Schema");
+        assertTrue(checked > 0, "no generated file writes @Size or @Schema by its simple name\n" + tree(project));
     }
 
     @Test
@@ -170,9 +218,23 @@ public class ModelNamedLikeAnAnnotationTest {
     private static void assertNoSimpleComment(Path project) throws IOException {
         for (Path file : javaFiles(project)) {
             String src = read(file);
-            assertFalse(src.contains(COMMENT_IMPORT), file + " imports Hibernate's Comment over the entity:\n" + src);
+            assertFalse(COMMENT_IMPORT_LINE.matcher(src).find(), file + " imports Hibernate's Comment over the entity:\n" + src);
             assertFalse(SIMPLE_COMMENT.matcher(src).find(), file + " writes @Comment, which names the entity:\n" + src);
         }
+    }
+
+    /** Every file that writes @name by its simple name imports fqcn; returns how many such files there were. */
+    private static int assertImportedWhereUsed(Path project, String name, String fqcn) throws IOException {
+        Pattern use = Pattern.compile("(?m)^\\s*@" + name + "\\b");
+        int files = 0;
+        for (Path file : javaFiles(project)) {
+            String src = read(file);
+            if (!use.matcher(src).find()) continue;
+            files++;
+            assertTrue(src.contains("import " + fqcn + ";"),
+                    file + " writes @" + name + " but does not import " + fqcn + ":\n" + src);
+        }
+        return files;
     }
 
     private static boolean anyFileContains(Path project, String text) throws IOException {
@@ -182,12 +244,18 @@ public class ModelNamedLikeAnAnnotationTest {
         return false;
     }
 
+    /** The generated Java and Kotlin sources. */
     private static List<Path> javaFiles(Path project) throws IOException {
-        Path java = project.resolve("src/main/java");
-        if (!Files.isDirectory(java)) return new ArrayList<Path>();
-        try (Stream<Path> files = Files.walk(java)) {
-            return files.filter(f -> f.toString().endsWith(".java")).sorted().collect(Collectors.toList());
+        List<Path> out = new ArrayList<Path>();
+        for (String root : new String[]{"src/main/java", "src/main/kotlin"}) {
+            Path dir = project.resolve(root);
+            if (!Files.isDirectory(dir)) continue;
+            try (Stream<Path> files = Files.walk(dir)) {
+                out.addAll(files.filter(f -> f.toString().endsWith(".java") || f.toString().endsWith(".kt"))
+                        .sorted().collect(Collectors.toList()));
+            }
         }
+        return out;
     }
 
     private static String tree(Path project) throws IOException {
