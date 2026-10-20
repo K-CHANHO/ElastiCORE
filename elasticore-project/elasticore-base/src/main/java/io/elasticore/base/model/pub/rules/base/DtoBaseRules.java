@@ -100,9 +100,13 @@ public class DtoBaseRules implements CodeRules {
         if (desc == null) desc = f.name();
 
         // A relation DTO added for the response is set through its flattened
-        // id instead, so the request schema leaves it out.
-        String access = f.hasDsl("autoRelation")
-                ? ", accessMode = Schema.AccessMode.READ_ONLY" : "";
+        // id instead, so the request schema leaves it out. So does a field
+        // the server sets (@readonly / @noinput), in the clean output.
+        // springdoc already reads READ_ONLY off @JsonProperty; the schema
+        // annotation says it too, for a reader that looks at @Schema alone.
+        boolean readOnly = f.hasDsl("autoRelation")
+                || (!ctx(e).compatible() && f.hasDslAny("readonly", "noinput"));
+        String access = readOnly ? ", accessMode = Schema.AccessMode.READ_ONLY" : "";
 
         String line = String.format("@Schema(description = %s %s%s %s)",
                 RuleText.quote(desc), req, access, FieldDoc.exampleAttribute(e, f));

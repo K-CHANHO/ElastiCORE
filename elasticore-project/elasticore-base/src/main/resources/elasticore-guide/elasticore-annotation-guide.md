@@ -215,6 +215,82 @@ email: string(100) @notnull
 createdDate: datetime @updatable(false)
 ```
 
+#### @readonly / @noinput - 서버가 정하는 필드
+응답에는 나가고 **요청으로는 받지 않는** 필드입니다. 가입일·등급·처리 번호처럼 서버 코드가 값을 정하는
+필드에 씁니다. `@noinput` 은 같은 뜻의 별칭입니다.
+
+```yaml
+Member:
+  meta: entity @root @editable @expose(20)
+  fields:
+    memberId: long @id @sequence
+    name: string(50)!
+    joinedAt: date @readonly          # 서비스의 beforeSave 가 채운다
+    grade: string(10)! @noinput       # 필수 컬럼이지만 요청은 보내지 않는다
+```
+
+| 생성물 | 2.x 호환 (`jpa-springboot`) | v3 번들 (`jpa-springboot-v3`, DDD·헥사고날, Kotlin) |
+|---|---|---|
+| DTO `@JsonProperty(access=READ_ONLY)` | 있음 | 있음 |
+| DTO `@Schema(... accessMode = READ_ONLY)` | 없음 | 있음 |
+| DTO `@NotNull` / `@NotBlank` (`!`, `@notblank`) | 남음 | **빠짐** - 요청이 보낼 수 없는 값이므로 |
+| 매퍼 엔티티 -> DTO (응답) | 씀 | 씀 |
+| 매퍼 DTO -> 엔티티 (`toEntity`, `mapping(dto, entity, ...)`, EntityManager 판 포함) | 씀 | **쓰지 않음** |
+| 엔티티 컬럼 (`nullable = false` 등) | 그대로 | 그대로 - 서버가 채워야 합니다 |
+
+v3 생성 결과 (Java, 위 `Member`):
+
+```java
+// MemberDTO.java
+@Schema(description = "grade" , requiredMode=Schema.RequiredMode.REQUIRED, accessMode = Schema.AccessMode.READ_ONLY )
+@Size(max=10)
+@JsonProperty(access=JsonProperty.Access.READ_ONLY)
+private String grade;
+
+// LibraryMapper.java - mapping(MemberDTO from, Member to, boolean isSkipNull, MappingContext c)
+setVal(from.getMemberId(), to::setMemberId, isSkipNull);
+setVal(from.getName(), to::setName, isSkipNull);
+// joinedAt, grade 는 없습니다. 반대 방향 mapping(Member from, MemberDTO to, ...) 에는 있습니다.
+```
+
+값은 서버 코드가 넣습니다. 확장 서비스의 `beforeSave` 는 생성·수정·일괄 수정·조건 수정 네 경로가 모두 지나갑니다.
+
+```java
+@Override
+protected void beforeSave(Member entity) {
+    if (entity.getJoinedAt() == null) entity.setJoinedAt(LocalDate.now());
+}
+```
+
+v3 에서 `string(10)! @readonly` 필드에 클라이언트가 값을 보낸 POST 는 200 이고, 응답에는 `beforeSave` 가
+넣은 값이 나갑니다. DTO 에 `@NotNull` 이 남아 있으면 같은 요청은 400 (`must not be null`) 입니다 - Jackson 이
+값을 버린 뒤에 검사하기 때문입니다.
+
+주의:
+- v3 에서는 **서버 코드가 DTO 에 넣은 값도 매퍼가 버립니다.** `dto.setGrade("A")` 다음 `service.save(dto)` 를
+  하던 코드는 값이 저장되지 않습니다. 엔티티에 넣으세요 (`beforeSave`, 루트의 메서드).
+- `@id` 에 붙은 `@readonly` (`@id @genid @readonly`) 는 JSON 입력만 막습니다. 매퍼는 식별자를 계속 씁니다.
+- 엔티티 필드에 붙이면 그 엔티티의 모든 DTO 에 적용됩니다. `dto.yml` 의 DTO 가 템플릿 필드를 다시 적으며
+  `@readonly` 를 붙이면 **그 DTO 의 매핑만** 이 필드를 쓰지 않습니다.
+- `@jpa:CreatedDate`·`@jpa:Version` 같은 영속성 필드는 `@readonly` 없이도 v3 매퍼가 쓰지 않습니다 (§2.8).
+- springdoc 은 `@JsonProperty(access=READ_ONLY)` 만으로도 OpenAPI 에 `readOnly: true` 를 냅니다. v3 의
+  `@Schema(accessMode = READ_ONLY)` 는 같은 사실을 `@Schema` 만 읽는 도구에도 적어 둡니다.
+
+DDD 번들에서 나뉜 루트(`XxxBase`)의 `@readonly` 필드는 여전히 잠긴 필드입니다: setter 는 `protected` 이고
+`creation()` 에 setter 가 있습니다. 서버 코드는 새 루트에 `entity.creation().setLoanDate(v)` 로 넣고, 그 뒤에는
+루트의 메서드로 바꿉니다. **만든 뒤에 바뀌는 서버 값**(반납일, 상태)은 `@behavior` 가 맞습니다 - 요청으로
+받지 않는 것은 같고, `creation()` 에도 없어 루트의 메서드만 바꿉니다 ([@behavior](#behavior--엔티티-행위-ddd-룰셋)).
+
+| | `@readonly` | `@behavior` (필드) |
+|---|---|---|
+| 적용되는 엔티티 | 모든 엔티티, v3 번들 | DDD 번들의 나뉜 루트만 (`@editable` 루트·멤버에서는 경고만) |
+| 요청 (JSON, 매퍼) | 받지 않음 | 받지 않음 |
+| 나뉜 루트의 `creation()` | 있음 - 새 루트에 서버 코드가 넣음 | 없음 |
+| 바꾸는 쪽 | 서버 코드 (`beforeSave`, 루트의 메서드) | 루트의 메서드 |
+
+`creation().setX(null)` 은 새 루트에서 아무 일도 하지 않습니다 (요청이 보내지 않은 값이 `@default` 를 덮지 않게
+하는 장치). 값을 지우는 길이 아니므로, 지우려면 루트의 메서드에서 `protected` setter 를 부릅니다.
+
 #### @min(value) / @max(value) / @min(value, '메시지')
 숫자 범위 검증. Bean Validation `@Min`/`@Max`(BigDecimal 은 `@DecimalMin`/`@DecimalMax`) 생성.
 두 번째 인자로 메시지를 줄 수 있습니다.
@@ -542,6 +618,14 @@ lastModifiedDate: datetime @jpa:org.springframework.data.annotation.LastModified
 lastModifiedBy: string(20) @jpa:org.springframework.data.annotation.LastModifiedBy
 ```
 
+v3 번들에서는 이 네 필드와 `@jpa:Version` 을 매퍼가 DTO 에서 엔티티로 쓰지 않고, DTO 의 `@NotNull` 도
+빠집니다 (`jpa-write-guard`). 응답에는 그대로 나갑니다. DTO 와 OpenAPI 에도 읽기 전용으로 적으려면
+`@readonly` 를 함께 붙입니다 (§2.2 `@readonly / @noinput`):
+
+```yaml
+createdBy: string(20) @jpa:org.springframework.data.annotation.CreatedBy @readonly
+```
+
 ### 2.9 기타
 
 ```yaml
@@ -830,7 +914,7 @@ fields:
 | `@jpa:LastModifiedDate` | ❌ | ❌ | ✅ | 자동 주입 필드 |
 | `@jpa:Version` | ❌ | ❌ | ✅ | 낙관적 잠금 |
 | `@formula(...)` | ❌ | ❌ | ✅ | 계산 필드 |
-| `@readonly` | ❌ | ❌ | ✅ | 읽기 전용 |
+| `@readonly` / `@noinput` | ❌ | ❌ | ✅ | 서버가 정하는 필드 (§2.2) |
 | `@writeonly` | ✅ | ✅ | ❌ | 쓰기 전용 |
 | 일반 필드 | ✅ | ✅ | ✅ | 기본값 |
 
@@ -1334,6 +1418,10 @@ public class PricingDomainService extends PricingDomainServiceBase {
 |---|---|---|---|
 | 엔티티 meta | 없음 | 루트는 분리, `@editable` 이면 분리 안 함 | `XxxBase`(@MappedSuperclass, 재생성) + `Xxx`(@Entity, generate-once) |
 | 필드 | 없음 | 잠김(생성 때만 받음) | setter `protected`, 매퍼가 쓰지 않음, DTO `READ_ONLY` |
+
+필드 `@behavior` 는 **나뉜 루트에서만** 효과가 있습니다. `@editable` 루트나 멤버처럼 나뉘지 않는 엔티티에서는
+DSL 경고만 남기고 필드는 요청으로 그대로 쓸 수 있습니다. 어느 엔티티에서나 "요청으로 받지 않는 서버 값" 이
+필요하면 `@readonly` 를 씁니다 ([§2.2 @readonly / @noinput](#readonly--noinput---서버가-정하는-필드)).
 
 ## @editable — 요청으로 고치는 필드·루트 (DDD 룰셋)
 
