@@ -6,6 +6,8 @@ import io.elasticore.base.model.pub.rules.FieldSpec;
 
 import java.util.List;
 
+import static io.elasticore.base.model.pub.rules.Ctx.ctx;
+
 /**
  * The documentation a field carries into every DTO shape: the date pattern it
  * formats with, and the example Swagger shows for it.
@@ -46,6 +48,14 @@ public final class FieldDoc {
         // A declared @format / @pattern documents any field; the temporal
         // defaults apply only to temporal ones.
         String format = f.dslValueAny("format", "pattern");
+        // On a string, the clean output reads @pattern as the regex the value
+        // must match (DtoBaseRules writes it as @Pattern), not as an example:
+        // offered as a value, it would fail its own check, and its positional
+        // form 'regex', 'message' is not one value. The compatible output
+        // keeps 2.x's example.
+        if (format != null && f.isStringType() && !f.hasDsl("format") && !ctx(e).compatible()) {
+            format = null;
+        }
         if (format == null) {
             if (f.isDate()) format = DATE;
             else if (f.isDateTime()) format = DATETIME;

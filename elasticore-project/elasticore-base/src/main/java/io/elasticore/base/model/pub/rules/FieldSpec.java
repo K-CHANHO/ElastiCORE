@@ -163,6 +163,84 @@ public final class FieldSpec {
         return field.getAnnotationValue(names);
     }
 
+    /**
+     * The regular expression of @pattern, or null.
+     *
+     * Two forms are read. The named one, @pattern(regexp="...", message="..."),
+     * comes first. Otherwise the positional one, @pattern('regex', 'message')
+     * or @pattern('regex'): the value as written, split at the first comma
+     * outside quotes and brackets - so a quantifier such as {10,13} stays whole -
+     * with the quotes taken off each part.
+     *
+     * The text is the content of a string literal, as written: a backslash is
+     * written doubled (\\d), or avoided with a class such as [0-9].
+     */
+    public String patternRegexp() {
+        String named = unquoted(dslValueAny("pattern.regexp"));
+        if (named != null) return named.isEmpty() ? null : named;
+        return patternArguments()[0];
+    }
+
+    /**
+     * The message of @pattern, or null when none is given. Double quotes in it
+     * become single ones, as in the message of a bound, so it can sit in a
+     * string literal.
+     */
+    public String patternMessage() {
+        String message = unquoted(dslValueAny("pattern.message"));
+        if (message == null) message = patternArguments()[1];
+        if (message == null || message.trim().isEmpty()) return null;
+        return message.replace("\"", "'");
+    }
+
+    /** {regex, message}, each null when absent, from the positional form of @pattern. */
+    private String[] patternArguments() {
+        io.elasticore.base.model.core.Annotation a = field.getAnnotation("pattern");
+        // The raw value: getValue() takes off an outer pair of quotes, which
+        // in 'regex', 'message' are the first and the last of two strings.
+        String raw = a == null || a.getProperties() != null ? null : a.value;
+        if (raw == null || raw.trim().isEmpty()) return new String[]{null, null};
+        String t = raw.trim();
+        int comma = -1;
+        char quote = 0;
+        int depth = 0;
+        for (int i = 0; i < t.length(); i++) {
+            char ch = t.charAt(i);
+            if (ch == '\\') {
+                i++;
+                continue;
+            }
+            if (quote != 0) {
+                if (ch == quote) quote = 0;
+                continue;
+            }
+            if (ch == '\'' || ch == '"') {
+                quote = ch;
+            } else if (ch == '[' || ch == '{' || ch == '(') {
+                depth++;
+            } else if ((ch == ']' || ch == '}' || ch == ')') && depth > 0) {
+                depth--;
+            } else if (ch == ',' && depth == 0) {
+                comma = i;
+                break;
+            }
+        }
+        String regex = unquoted(comma < 0 ? t : t.substring(0, comma).trim());
+        String message = comma < 0 ? null : unquoted(t.substring(comma + 1).trim());
+        return new String[]{regex == null || regex.isEmpty() ? null : regex, message};
+    }
+
+    /** 'x' or "x" -> x; anything else as it is. */
+    private static String unquoted(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        if (t.length() >= 2 && (t.charAt(0) == '\'' || t.charAt(0) == '"')
+                && t.charAt(t.length() - 1) == t.charAt(0)) {
+            return t.substring(1, t.length() - 1);
+        }
+        return t;
+    }
+
     /** True when any of the alias names is present. */
     public boolean hasDslAny(String... names) {
         for (String n : names) {
