@@ -1497,12 +1497,12 @@ datasets:
       - name: status
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "status"
         datatype: String
         ai_context: "Codes: PLC = Placed, SHP = Shipped, CAN = Cancelled"
       - name: total
-        expression: { dialects: [ { dialect: ANSI_SQL, expression: "total" } ] }
+        expression: { dialects: [ { dialect: OSSIE_SQL_2026, expression: "total" } ] }
         datatype: Decimal
       - name: city                       # 임베디드 값(deliveryAddress)의 컬럼
         description: "deliveryAddress.city"
@@ -1527,8 +1527,8 @@ relationships:
 | `-- 라벨` | `description` | |
 | `@id` 필드 (복합 키 포함) | `primary_key` | |
 | `@unique`, `@Index(unique="true")` | `unique_keys` | |
-| 값 필드 | `fields[]` + `expression`(컬럼) + `datatype` | 타입 대응은 DSL 가이드 "값 타입 한눈에" 표 |
-| `@formula(sql)` | `expression` = 그 SQL | 계산 컬럼 |
+| 값 필드 | `fields[]` + `expression`(컬럼, `OSSIE_SQL_2026`) + `datatype` | 타입 대응은 DSL 가이드 "값 타입 한눈에" 표 |
+| `@formula(sql)` | `expression` = 그 SQL | 계산 컬럼. 식이면 `OSSIE_SQL_2026`, 서브쿼리(SELECT)가 들어 있으면 `ANSI_SQL` 항목 하나 - 아래 "dialect" |
 | `@extend(Parent)` 의 필드 | 자식 dataset 의 `fields` | 상속된 컬럼도 그 테이블에 있으므로 |
 | `@Embedded` 값 객체 | 그 컬럼들 (`deliveryAddress.city`) | `@embedded(prefix)` 면 `prefix_city` |
 | enum 필드 | `datatype: String` + `ai_context: "Codes: PLC = Placed, ..."` | 테이블에는 코드만 있으므로 뜻을 함께 |
@@ -1536,8 +1536,17 @@ relationships:
 | `@password`, `@writeonly` | **내보내지 않음** | 애플리케이션도 읽어 주지 않는 값. `omitted_columns` 에 기록 |
 | `states:`, `@access`, `@owner`, `@event` | `custom_extensions` (`ELASTICORE`) | Ossie 에 해당 어휘가 없음 |
 | `@compute`, `@snapshot`, `money`/`quantity` | 필드의 `custom_extensions` | 파생 규칙과 값 타입 |
-| `metrics:` 의 지표 | `metrics[]` (ANSI SQL, `datatype`, `description`) | 선언한 것만. 문법은 DSL 가이드 "업무 지표" |
+| `metrics:` 의 지표 | `metrics[]` (`OSSIE_SQL_2026`, `datatype`, `description`) | 선언한 것만. 문법은 DSL 가이드 "업무 지표" |
 | `@terms(…)` (엔티티·필드·지표) | `ai_context.synonyms` | 업무 용어 |
+
+**dialect**: 스펙이 등록한 dialect 이름은 열두 개지만 의미를 정의한 것은 `OSSIE_SQL_2026` 하나입니다
+(`core-spec/expression_language.md` 의 이식 가능한 식 언어 - 컬럼 참조, 산술·비교·논리 연산, `CASE WHEN`, 집계,
+`COALESCE`·`NULLIF`·`CAST` 같은 함수). `ANSI_SQL` 을 비롯한 나머지는 벤더 언어 이름이라 소비자가 **무시해도 되는** 항목입니다.
+그래서 컬럼 이름인 필드 식과 `metrics:` 에서 만든 지표 식은 모두 `OSSIE_SQL_2026` 으로 내보냅니다. `@formula` 는 식에 따라
+갈립니다: `unit_price * quantity` 처럼 그 언어 안의 식이면 `OSSIE_SQL_2026`, `(select count(*) from ...)` 처럼 서브쿼리가
+들어 있으면 그 언어로 쓸 수 없으므로(스펙 "Not Supported in Expressions": SELECT/FROM/JOIN, 서브쿼리, CTE) `ANSI_SQL`
+항목 하나만 내보냅니다 - 읽는 쪽이 그 SQL 을 이해하면 쓰고, 아니면 건너뜁니다. `@formula` 필드는 `custom_extensions` 에
+`"formula": "database"` 가 붙어 데이터베이스가 계산하는 컬럼임을 알립니다.
 
 **내보내지 않는 것**: 선언하지 않은 지표 - 엔티티 필드에서 매출 공식을 지어내는 것은 추측을 내보내는 일입니다.
 `is_time` 은 쓰지 않습니다 - 스펙이 `datatype`(Date/Time/DateTime/DateTimeTz)

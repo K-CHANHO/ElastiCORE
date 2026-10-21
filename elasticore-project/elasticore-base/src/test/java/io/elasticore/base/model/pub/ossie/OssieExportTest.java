@@ -107,12 +107,15 @@ public class OssieExportTest {
     }
 
     @Test
-    @DisplayName("every field is an expression: the spec requires one")
+    @DisplayName("every field is an expression in the Ossie language: the spec requires one")
     public void everyFieldHasAnExpression() throws IOException {
         String yaml = exportedModel();
         int fields = count(yaml, "\n      - name: ");
-        int expressions = count(yaml, "\n        expression:\n          dialects:\n            - dialect: ANSI_SQL\n");
+        // OSSIE_SQL_2026 is the one dialect the spec defines; ANSI_SQL names
+        // SQL a consumer may ignore, and no field of this sample needs it.
+        int expressions = count(yaml, "\n        expression:\n          dialects:\n            - dialect: OSSIE_SQL_2026\n");
         assertTrue(fields > 0 && fields == expressions, fields + " fields, " + expressions + " expressions");
+        assertTrue(!yaml.contains("dialect: ANSI_SQL"), "a column name was exported as opaque SQL");
     }
 
     @Test

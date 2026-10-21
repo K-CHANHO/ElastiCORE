@@ -693,19 +693,19 @@ private void moveStatus(String command, OrderStatus to, OrderStatus... from) {
       - name: order_id
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "order_id"
         datatype: String
       - name: order_date
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "order_date"
         datatype: Date
       - name: status
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "status"
         datatype: String
         ai_context: "Codes: PLC = Placed, SHP = Shipped, CAN = Cancelled"
@@ -715,49 +715,49 @@ private void moveStatus(String command, OrderStatus to, OrderStatus... from) {
       - name: street1
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "street1"
         datatype: String
         description: "deliveryAddress.street1"
       - name: street2
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "street2"
         datatype: String
         description: "deliveryAddress.street2"
       - name: city
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "city"
         datatype: String
         description: "deliveryAddress.city"
       - name: state
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "state"
         datatype: String
         description: "deliveryAddress.state"
       - name: zipcode
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "zipcode"
         datatype: String
         description: "deliveryAddress.zipcode"
       - name: country_code
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "country_code"
         datatype: String
         description: "deliveryAddress.countryCode"
       - name: credit_card_type
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "credit_card_type"
         datatype: String
         description: "creditCard.creditCardType"
@@ -768,14 +768,14 @@ private void moveStatus(String command, OrderStatus to, OrderStatus... from) {
       - name: credit_card_exp_date
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "credit_card_exp_date"
         datatype: String
         description: "creditCard.creditCardExpDate"
       - name: total_without_vat
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "total_without_vat"
         datatype: Decimal
         custom_extensions:
@@ -784,13 +784,13 @@ private void moveStatus(String command, OrderStatus to, OrderStatus... from) {
       - name: vat_rate
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "vat_rate"
         datatype: Decimal
       - name: vat
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "vat"
         datatype: Decimal
         custom_extensions:
@@ -799,13 +799,13 @@ private void moveStatus(String command, OrderStatus to, OrderStatus... from) {
       - name: discount_rate
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "discount_rate"
         datatype: Decimal
       - name: discount
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "discount"
         datatype: Decimal
         custom_extensions:
@@ -814,7 +814,7 @@ private void moveStatus(String command, OrderStatus to, OrderStatus... from) {
       - name: total
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "total"
         datatype: Decimal
         custom_extensions:
@@ -823,13 +823,13 @@ private void moveStatus(String command, OrderStatus to, OrderStatus... from) {
       - name: version
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "version"
         datatype: Integer
       - name: customer_id
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "customer_id"
         datatype: Integer
     custom_extensions:
@@ -849,7 +849,7 @@ metrics:
   - name: revenue
     expression:
       dialects:
-        - dialect: ANSI_SQL
+        - dialect: OSSIE_SQL_2026
           expression: "SUM(CASE WHEN PurchaseOrder.status <> 'CAN' THEN PurchaseOrder.total END)"
     description: "매출 (취소 제외, VAT 포함·할인 후 금액)"
     datatype: Decimal
