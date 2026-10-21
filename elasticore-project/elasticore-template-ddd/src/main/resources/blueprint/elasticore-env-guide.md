@@ -164,6 +164,7 @@ dependencies {
 | outbox recorder (DDD) | Jackson 2 `ObjectMapper` | Jackson 3 `JsonMapper` (앱이 등록한 것) |
 | Kotlin (`language = 'kotlin'`) | 그대로 | `Specification` 타입 파라미터에 `T : Any`, `Page.map`에 `!!` (Spring Data 4의 JSpecify 선언) |
 | HTTP 포트 클라이언트 (런타임) | Jackson 2 코덱 | Jackson 3 코덱 (`elasticore-springboot4`) |
+| 요청 본문에서 거절된 필드 (`RequestShapeAdvice`, API 오류의 `typeMismatch`) | Jackson 2 의 경로 | Jackson 3 의 경로 (`elasticore-springboot4`; 웹 계층을 Jackson 2 로 되돌린 앱은 Jackson 2 의 경로) - 응답은 같음 |
 | HTTP 포트 (선택: `httpPort: spring`) | ElastiCORE 런타임 | Spring이 구현하는 `@HttpExchange` 인터페이스 + `@ImportHttpServices` (`elasticore-dsl-port-guide.md` 2.7) |
 | 엔티티, 리포지터리, 서비스, 컨트롤러 | 그대로 | 그대로 (Hibernate 7·Spring Data 4에서 컴파일·실행 확인) |
 
@@ -427,7 +428,8 @@ config:
   (`customer_id`) 만듭니다. **새 프로젝트용** 입니다: 이미 있는 DB 의 컬럼 이름이 바뀌므로 2.x 에서
   옮겨오는 프로젝트는 그대로 두거나 마이그레이션과 함께 켭니다.
 - `adminRole` - `SessionCurrentUser.signIn(request, id, "ADMIN")` 처럼 로그인 때 넣은 역할 중 이 이름이
-  있으면 관리자입니다.
+  있으면 관리자입니다. 엔티티 줄의 `@signin` 으로 생성되는 `signin` 은 그 엔티티의 `role` 필드(또는 `@role` 필드)가
+  `@access(admin)` 인 enum·문자열일 때 그 값을 넣습니다.
 
 ## 7. apiPath 설정
 
@@ -540,6 +542,10 @@ dependencies { elasticore project(':acme-rules') }
 
 `rules: [jpa-springboot-kt]` 만 적고 스위치를 켜지 않으면 `.kt` 파일이 나오지
 않습니다. 도메인 초기화 마법사는 이 둘을 함께 정해주므로 어긋나지 않습니다.
+
+TypeScript 클라이언트(`src/main/ts`)는 서버 코드와 함께 쓰는 두 번째 출력이라 Gradle 플러그인의 `elcore3ts` 태스크가
+씁니다. `build` 는 그 태스크를 부르지 않으므로, 빌드마다 함께 쓰려면 `elasticore { typescriptClient = true }` 를 적습니다
+(`elasticore-rule-guide.md` "TypeScript 클라이언트"). 적지 않았는데 생성된 클라이언트가 있으면 `elcore3` 가 경고합니다.
 
 ---
 

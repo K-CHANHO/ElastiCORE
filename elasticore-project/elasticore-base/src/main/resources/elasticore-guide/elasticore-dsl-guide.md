@@ -304,7 +304,7 @@ entity:
 ```
 
 - **화살표가 나가지 않는 상태는 끝(최종) 상태**입니다. 위 예에서 `SHIPPED` 와 `CANCELLED` 에서는
-  어떤 명령도 받지 않습니다. 예를 들어 배송된 주문에 `cancel` 을 보내면 422:
+  어떤 명령도 받지 않습니다. 예를 들어 배송된 주문에 `cancel` 을 보내면 409 (지금 상태와 충돌):
   `PurchaseOrder cannot cancel when status is SHIPPED; it must be [PLACED]` (Kotlin: `... it must be PLACED`)
 - SHIPPED 다음 단계가 필요하면 enum 에 상태를 더하고 명령 한 줄을 더합니다:
 
@@ -345,7 +345,7 @@ entity:
 | 생성물 | 내용 |
 |---|---|
 | `private OrderStatus status = OrderStatus.PLACED` | 시작 상태. `initial` 이 없으면 새 행의 상태는 비어 있고(null), 어떤 명령도 통과하지 못합니다 |
-| `PurchaseOrderBase.ship()` | 지금 상태 확인 -> 이동 -> `raiseShipped()` (도착 상태와 같은 이름의 `@event` 가 있을 때). 시작 상태가 아니면 **422** |
+| `PurchaseOrderBase.ship()` | 지금 상태 확인 -> 이동 -> `raiseShipped()` (도착 상태와 같은 이름의 `@event` 가 있을 때). 시작 상태가 아니면 **409** |
 | `PurchaseOrderBase.canShip()` | 지금 이 명령을 할 수 있는지 (`status == PLACED`) |
 | `commands:` 항목, 엔드포인트, 유스케이스, 서비스 | `commands:` 와 같음 (`POST /{id}/ship`) |
 | TypeScript `PurchaseOrderApi.canShip(dto)` | 화면에서 "배송" 버튼을 보일지 정할 때 |
@@ -421,7 +421,7 @@ public void cancel() {
 }
 ```
 
-- **모두 아니면 아무것도**: 하나라도 시작 상태가 아니면 422 를 던지고 **어느 필드도 바뀌지 않습니다.**
+- **모두 아니면 아무것도**: 하나라도 시작 상태가 아니면 거부하고(409) **어느 필드도 바뀌지 않습니다.**
   예) 배송비를 안 낸(`DUE`) 배송을 취소하면 `Shipment cannot cancel when fee is DUE; it must be [PAID]`,
   `status` 는 `READY` 그대로.
 - TypeScript `ShipmentApi.canCancel(dto)` 도 두 조건을 모두 봅니다.
@@ -452,14 +452,14 @@ public void cancel() {
 | 생성물 | 내용 |
 |---|---|
 | `PurchaseOrderBase.canDelete()` | 지금 지울 수 있는지 (`status == CANCELLED`) |
-| `PurchaseOrderBase.checkDeletable()` | 다른 상태면 **422** (`state.PurchaseOrder.status.delete`), 행은 그대로. JPA `@PreRemove` 로 불리므로 id 로 삭제·조건 삭제·cascade 등 **모든 삭제 경로**에 걸림 |
+| `PurchaseOrderBase.checkDeletable()` | 다른 상태면 **409** (`state.PurchaseOrder.status.delete`), 행은 그대로. JPA `@PreRemove` 로 불리므로 id 로 삭제·조건 삭제·cascade 등 **모든 삭제 경로**에 걸림 |
 | TypeScript `canDelete(dto)` | 삭제 버튼 표시용, 같은 조건 |
 
 Pet Store 에서 (`ShopFlowTest.onlyACancelledOrderIsDeleted`):
 
 ```http
 DELETE /api/petstore/purchaseOrder/{배송된 주문}
-HTTP/1.1 422
+HTTP/1.1 409
 { "code": "state.PurchaseOrder.status.delete",
   "detail": "PurchaseOrder cannot be deleted when status is SHIPPED; it must be [CANCELLED]" }
 ```
@@ -511,7 +511,7 @@ metrics:
 | 쓰는 법 | 뜻 | Ossie SQL |
 |---|---|---|
 | `sum(엔티티.필드)` / `avg` / `min` / `max` | 한 엔티티의 필드 집계 | `SUM(PurchaseOrder.total)` |
-| `count(엔티티)` / `count(엔티티.필드)` | 행 수 / 값 있는 행 수 | `COUNT(*)` |
+| `count(엔티티)` / `count(엔티티.필드)` | 행 수 / 값 있는 행 수 | `COUNT(PurchaseOrder.order_id)` (키 컬럼 - BI 도구가 어느 dataset 을 세는지 알도록) / `COUNT(PurchaseOrder.total)` |
 | `… where 필드 != 값 and 필드 >= 값` | 조건 (`=`, `!=`, `<`, `<=`, `>`, `>=`, `and`) | `SUM(CASE WHEN … THEN … END)` |
 | 값 | 숫자, `'글자'`(안의 `'` 는 `''`), `true`/`false`, **enum 상수 이름** (저장된 값으로 바뀜: `@db` 코드 `'CAN'`, `@jpa:Enumerated(STRING)` 면 이름, 둘 다 없으면 순번 `2`) | |
 | `지표A / 지표B` (`+ - * /`) | 앞에서 선언한 지표끼리 계산. 나누기는 0 으로 나누지 않고, 개수 / 개수는 소수로 | `(…) / NULLIF((…), 0)` |
@@ -549,9 +549,11 @@ Item:
 |---|---|---|
 | 엔티티 meta | `@access(read=owner, create=user, ship=admin)` | 연산별 허용 수준 (public/user/owner/admin/none, 안 적으면 admin) |
 | 엔티티 meta | `@owner(customerId)` | 행의 주인을 담는 필드 |
+| 엔티티 meta | `@signin` | 로그인 API: `me()`, 컨트롤러의 `signin`·`signout`·`me`, TypeScript `signIn`·`signOut`·`me`. `@login`·`@password`·`@expose`, 키 하나, 본인·관리자만 수정(`update=owner` + 키의 `@owner`, 또는 `update=admin`), 요청이 정하는 키면 삭제도 본인·관리자만, 애플리케이션에 하나일 때만 - 아니면 DSL 경고. 로그인 컬럼 unique 는 `@signin` 만으로 (거절되어도) |
 | 필드 | `@access(admin)` | 관리자만 쓰는 필드 |
 | 필드 | `@password` | 해시로만 저장, 응답·검색에 없음 |
-| 필드 | `@login` | `@password` 와 함께 `authenticate(login, password)` 생성 |
+| 필드 | `@login` | `@password` 와 함께 `authenticate(login, password)` 생성. 유일해야 함 (`@signin` 이면 자동, 아니면 `@unique` - 없으면 DSL 경고) |
+| 필드 | `@role` | `@signin` 의 로그인이 세션에 넣는 역할 (없으면 `role` 필드). `@access(admin)` 인 enum·문자열만 - 아니면 역할 없이 로그인하고 DSL 경고 |
 | 필드 | `@snapshot(item.unitCost)` | 참조한 행의 값을 한 번 복사 |
 | 필드 | `@compute(unitCost * quantity)`, `@compute(sum(lines.subTotal))` | 저장할 때마다 계산 |
 

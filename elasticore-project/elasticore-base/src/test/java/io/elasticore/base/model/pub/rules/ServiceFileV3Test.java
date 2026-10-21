@@ -71,6 +71,22 @@ public class ServiceFileV3Test {
         assertFalse(out.contains("${"), "no unresolved template variables:\n" + out);
     }
 
+    /** A rule set of the project's that drops update alone: batchUpdate, which calls it, goes too. */
+    @Test
+    public void excludingUpdateByARuleTakesTheBatch() {
+        SourceCode code = RuleCatalog.standard()
+                .engineFor("jpa-service-file")
+                .templateSet(SourceCode.TemplateSet.V3)
+                .run(order(), "service");
+        code.excludeMethod("update");
+        String out = code.render();
+
+        assertFalse(out.contains("public OrderDTO update("), out);
+        assertFalse(out.contains("batchUpdate"), out);
+        assertTrue(out.contains("public OrderDTO save(OrderDTO dto)"), out);
+        assertTrue(code.isMethodExcluded("batchUpdate"));
+    }
+
     @Test
     public void readonly_dropsWriteMethodsFromService() {
         String out = renderService(order().meta("readonly", null));
@@ -94,9 +110,10 @@ public class ServiceFileV3Test {
         String out = renderService(order().meta("restexclude", "deleteById"));
 
         assertFalse(out.contains("public boolean deleteById"), out);
-        // the list-delete overload has its own id and survives
-        assertTrue(out.contains("public List<Boolean> delete(List<OrderKeyDTO> dtoList)"), out);
+        // the list delete calls deleteById, so it goes with it rather than not compiling
+        assertFalse(out.contains("public List<Boolean> delete(List<OrderKeyDTO> dtoList)"), out);
         assertTrue(out.contains("public OrderDTO save(OrderDTO dto)"), out);
+        assertTrue(out.contains("public void batchUpdate("), out);
     }
 
     /** One meta drives both artifacts - no dead service code behind a removed endpoint. */

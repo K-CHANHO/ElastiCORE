@@ -212,7 +212,7 @@ Sort.Order desc = field.getDescOrder();
 |----|-------------|------|
 | `EQ` | `equal` | 같음 |
 | `NEQ` | `notEqual` | 다름 |
-| `LIKE` | `like` | LIKE 검색 (`%value%`, 대소문자 구분) |
+| `LIKE` | `like` | LIKE 검색 (`%value%`, 대소문자 구분). DSL 의 v3 `@search(like)` 는 대소문자를 무시하므로 손으로 같은 검색을 쓸 때는 `ILIKE` |
 | `NOT_LIKE` | `notLike` | NOT LIKE |
 | `STARTS_WITH` | `like` | 접두 일치 (`value%`) |
 | `ENDS_WITH` | `like` | 접미 일치 (`%value`) |
@@ -240,8 +240,8 @@ Sort.Order desc = field.getDescOrder();
 
 ```java
 // 대소문자 무시 부분검색
-Specification<VendorInfo> spec = Q.VendorInfo.vendorName(Op.ILIKE, "autosure");
-// -> WHERE LOWER(vendor_name) LIKE LOWER('%autosure%')  (Auto, AUTO, AutoSure 모두 매칭)
+Specification<VendorInfo> spec = Q.VendorInfo.vendorName(Op.ILIKE, "acme");
+// -> WHERE LOWER(vendor_name) LIKE LOWER('%acme%')  (acme, ACME, Acme Supply 모두 매칭)
 ```
 
 **DSL `@search` vs 런타임 `Op` 차이:**
@@ -626,4 +626,11 @@ entity:
 - Q 클래스 재생성: `./gradlew clean build`
 - Specification 디버깅: 개별 조건을 분리하여 단위 테스트
 - 생성 코드 확인: `build/generated/sources/` 또는 namespace 경로 직접 확인
-- YAML 파싱 오류: `./gradlew elcore --info` 로 상세 로그 확인
+- YAML 파싱 오류: 출력의 `* LOAD ERROR: <파일>` 과 바로 아래 파서 메시지(`mapping values are not allowed here ...
+  line 41, column 40`)가 고칠 곳입니다. 흔한 원인은 `-- 설명` 안의 `: ` (예: `-- 주문한 사람: 로그인한 회원`) 이고,
+  `,` 나 ` - ` 로 바꾸면 됩니다. 규칙 엔진(`elcore3`)은 3.0.261021 부터 이때 빌드를 멈춥니다
+  (`[elcore3] the model check failed`). 전에는 그 파일을 빼고 생성이 성공해, 엉뚱한 곳의 컴파일 오류로만 드러났습니다.
+  멈춘 실행은 DSL 이 더 만들지 않는 생성 파일을 지우지 않습니다 - 읽지 못한 파일이 선언한 엔티티의 DTO·매퍼 등이 그대로
+  남고(`generated files the DSL no longer produces are kept until the model check passes`), YAML 을 고친 다음 실행이
+  정리합니다. 주석(`#`)이나 빈 줄만 있는 파일(모델 파일을 주석으로 꺼 둔 경우)은 빈 파일처럼 `* EMPTY:` 로 건너뜁니다.
+  2.x 생성기(`elcore`)는 그대로 경고만 합니다.

@@ -342,6 +342,10 @@ public final class SpecFactory {
             spec.addStateMachine(machine.getKey(), machine.getValue());
         }
         registerDeriving(spec, model);
+        registerReferencing(spec, model);
+        registerOptionalEmbeddables(spec, model);
+        spec.knownSignInEntities(signInsFor(model));
+        spec.knownOtherLoginEntities(otherLoginsFor(model));
         registerReadLevels(spec, model);
         if (entity.getCommands() != null) {
             for (java.util.Map.Entry<String, io.elasticore.base.model.core.Items<Field>> cmd
@@ -1651,6 +1655,268 @@ public final class SpecFactory {
         }
     }
 
+    /**
+     * Tells a spec which entities name rows of other aggregates by identity
+     * (an @idof field, written by the id-reference rewrite) - directly, or
+     * through a collection of members of their own aggregate that do.
+     */
+    static void registerReferencing(EntitySpec spec, ECoreModel model) {
+        for (String name : facts(model).referencing) spec.knownReferencing(name);
+    }
+
+    /**
+     * What the model-wide registrations find, worked out once per model:
+     * every entity's spec asks the same question of the same model, and a
+     * fixed point over all entities for each of them grew with the cube.
+     */
+    private static final class ModelFacts {
+        final java.util.Set<String> referencing;
+        final java.util.Set<String> optionalEmbeddables;
+
+        ModelFacts(java.util.Set<String> referencing, java.util.Set<String> optionalEmbeddables) {
+            this.referencing = referencing;
+            this.optionalEmbeddables = optionalEmbeddables;
+        }
+    }
+
+    private static ECoreModel factsModel;
+    private static int factsFingerprint;
+    private static ModelFacts modelFacts;
+
+    /**
+     * Cached per model and per its shape - the id-reference rewrite adds fields
+     * to the same model object, and facts taken before it would be stale.
+     */
+    private static synchronized ModelFacts facts(ECoreModel model) {
+        int fingerprint = fingerprint(model);
+        if (model != factsModel || fingerprint != factsFingerprint || modelFacts == null) {
+            modelFacts = new ModelFacts(referencing(model), optionalEmbeddables(model));
+            factsModel = model;
+            factsFingerprint = fingerprint;
+        }
+        return modelFacts;
+    }
+
+    private static int fingerprint(ECoreModel model) {
+        if (model.getEntityModels() == null) return 0;
+        ModelComponentItems<Entity> all = model.getEntityModels().getItems();
+        int fields = all.size();
+        for (int i = 0; i < all.size(); i++) fields = 31 * fields + fieldsOf(all.get(i)).size();
+        return fields;
+    }
+
+    /**
+     * @signin entities of the application the model's controllers belong to,
+     * said by the runner before each model; -1 when not said.
+     */
+    private static int applicationSignIns = -1;
+
+    /** The application's other @login + @password entities, said with it; null when not said. */
+    private static java.util.List<String> applicationOtherLogins;
+
+    static void applicationSignIns(int count, java.util.List<String> otherLogins) {
+        applicationSignIns = count;
+        applicationOtherLogins = otherLogins;
+    }
+
+    /** What a spec is told: the application's count when the runner said it, this model's otherwise. */
+    private static int signInsFor(ECoreModel model) {
+        return applicationSignIns >= 0 ? applicationSignIns : signInEntities(model).size();
+    }
+
+    private static java.util.List<String> otherLoginsFor(ECoreModel model) {
+        return applicationOtherLogins != null ? applicationOtherLogins : otherLoginEntities(model);
+    }
+
+    /** The entities of this model that say @signin - counted from the meta lines, nothing else worked out. */
+    static java.util.List<String> signInEntities(ECoreModel model) {
+        java.util.List<String> names = new java.util.ArrayList<String>();
+        if (model.getEntityModels() == null) return names;
+        ModelComponentItems<Entity> all = model.getEntityModels().getItems();
+        for (int i = 0; i < all.size(); i++) {
+            if (all.get(i).getMetaInfo().hasMetaAnnotation("signin")) names.add(all.get(i).getIdentity().getName());
+        }
+        return names;
+    }
+
+    /**
+     * The entities of this model with a @login and one @password that do not
+     * say @signin - they sign in some other way, and the generated sign-in's
+     * session key could be read as theirs.
+     */
+    static java.util.List<String> otherLoginEntities(ECoreModel model) {
+        java.util.List<String> names = new java.util.ArrayList<String>();
+        if (model.getEntityModels() == null) return names;
+        ModelComponentItems<Entity> all = model.getEntityModels().getItems();
+        for (int i = 0; i < all.size(); i++) {
+            Entity entity = all.get(i);
+            if (entity.getMetaInfo().hasMetaAnnotation("signin") || entity.getMetaInfo().hasMetaAnnotation("readonly")) continue;
+            ModelComponentItems<Field> fields = entity.getItems();
+            boolean login = false;
+            int passwords = 0;
+            for (int j = 0; fields != null && j < fields.size(); j++) {
+                if (fields.get(j).hasAnnotation("login")) login = true;
+                if (fields.get(j).hasAnnotation("password")) passwords++;
+            }
+            if (login && passwords == 1) names.add(entity.getIdentity().getName());
+        }
+        return names;
+    }
+
+    private static java.util.Set<String> referencing(ECoreModel model) {
+        java.util.Set<String> referencing = new java.util.HashSet<String>();
+        if (model.getEntityModels() == null) return referencing;
+        ModelComponentItems<Entity> all = model.getEntityModels().getItems();
+        java.util.List<Entity> entities = new java.util.ArrayList<Entity>();
+        for (int i = 0; i < all.size(); i++) entities.add(all.get(i));
+        java.util.Map<String, String> roots = new java.util.HashMap<String, String>();
+        for (Entity candidate : entities) {
+            String name = candidate.getIdentity().getName();
+            String root = aggregateOfModel(name, model);
+            roots.put(name, root == null ? name : root);
+        }
+        for (Entity candidate : entities) {
+            for (Field f : fieldsOf(candidate)) {
+                if (f.hasAnnotation("idof")) {
+                    referencing.add(candidate.getIdentity().getName());
+                    break;
+                }
+            }
+        }
+        // A root whose lines name items checks them too: until nothing changes.
+        boolean grew = true;
+        while (grew) {
+            grew = false;
+            for (Entity candidate : entities) {
+                String name = candidate.getIdentity().getName();
+                if (referencing.contains(name)) continue;
+                String root = roots.get(name);
+                for (Field f : fieldsOf(candidate)) {
+                    if (f.getTypeInfo() == null || !f.getTypeInfo().isList()) continue;
+                    String member = f.getTypeInfo().getCoreItemType();
+                    if (member == null || !referencing.contains(member)) continue;
+                    if (!root.equals(roots.get(member)) && !f.hasAnnotation("cascade")) continue;
+                    referencing.add(name);
+                    grew = true;
+                    break;
+                }
+            }
+        }
+        return referencing;
+    }
+
+    /**
+     * Tells a spec which value types (@embeddable) an entity embeds without
+     * requiring them - an order's optional delivery address. Their columns
+     * live in that entity's table, so a field the value requires when it is
+     * there cannot be NOT NULL in the database.
+     */
+    static void registerOptionalEmbeddables(EntitySpec spec, ECoreModel model) {
+        for (String name : facts(model).optionalEmbeddables) spec.knownOptionalEmbeddable(name);
+    }
+
+    /**
+     * The same over every model of the run: a value type declared in one
+     * domain is embedded in another, and its columns are written on its own
+     * class, which the domain declaring it generates. Worked out once per run
+     * (the id-reference rewrite does not touch embedded values) and handed to
+     * each spec with {@link #knownOptionalEmbeddables}.
+     */
+    public static java.util.Set<String> optionalEmbeddables(java.util.List<ECoreModel> models) {
+        java.util.List<Entity> entities = new java.util.ArrayList<Entity>();
+        for (ECoreModel model : models) {
+            if (model == null || model.getEntityModels() == null) continue;
+            ModelComponentItems<Entity> all = model.getEntityModels().getItems();
+            for (int i = 0; i < all.size(); i++) entities.add(all.get(i));
+        }
+        return optionalAmong(entities);
+    }
+
+    /** Tells a spec which value types the run embeds without requiring them. */
+    public static void knownOptionalEmbeddables(EntitySpec spec, java.util.Set<String> names) {
+        if (names == null) return;
+        for (String name : names) spec.knownOptionalEmbeddable(name);
+    }
+
+    private static java.util.Set<String> optionalEmbeddables(ECoreModel model) {
+        java.util.List<Entity> entities = new java.util.ArrayList<Entity>();
+        if (model.getEntityModels() != null) {
+            ModelComponentItems<Entity> all = model.getEntityModels().getItems();
+            for (int i = 0; i < all.size(); i++) entities.add(all.get(i));
+        }
+        return optionalAmong(entities);
+    }
+
+    /**
+     * An embedding is required only when the field says so - "!", @required
+     * or @nn, the words FieldSpec.required reads. A value inside a value
+     * embedded optionally is optional too, required inside it or not: when the
+     * outer one is absent, so are the inner one's columns.
+     */
+    private static java.util.Set<String> optionalAmong(java.util.List<Entity> entities) {
+        java.util.Set<String> optional = new java.util.HashSet<String>();
+        java.util.Map<String, Entity> embeddables = new java.util.HashMap<String, Entity>();
+        for (Entity candidate : entities) {
+            if (candidate.getMetaInfo().hasMetaAnnotation("embeddable")) {
+                embeddables.put(candidate.getIdentity().getName(), candidate);
+            }
+        }
+        if (embeddables.isEmpty()) return optional;
+        for (Entity candidate : entities) {
+            for (Field f : fieldsOf(candidate)) {
+                String type = embeddedType(f, embeddables);
+                if (type != null && !requiredField(f)) optional.add(type);
+            }
+        }
+        boolean grew = !optional.isEmpty();
+        while (grew) {
+            grew = false;
+            for (String outer : new java.util.ArrayList<String>(optional)) {
+                for (Field f : fieldsOf(embeddables.get(outer))) {
+                    String type = embeddedType(f, embeddables);
+                    if (type != null && optional.add(type)) grew = true;
+                }
+            }
+        }
+        return optional;
+    }
+
+    /** The value type a single field embeds, or null. */
+    private static String embeddedType(Field f, java.util.Map<String, Entity> embeddables) {
+        if (f.getTypeInfo() == null || f.getTypeInfo().isList()) return null;
+        String type = f.getTypeInfo().getBaseTypeName();
+        return type != null && embeddables.containsKey(type) ? type : null;
+    }
+
+    private static boolean requiredField(Field f) {
+        return f.hasAnnotation("notnull") || f.hasAnnotation("required") || f.hasAnnotation("nn");
+    }
+
+    /**
+     * An @extend parent declared in another domain: whether its class checks
+     * references (and so has requireReferences, which the child inherits) is a
+     * fact of that domain's model, not of this one - registerReferencing
+     * holds only this model's entities.
+     */
+    public static void registerParentReferencing(EntitySpec spec, ECoreModel model, java.util.List<ECoreModel> models) {
+        String parent = spec.parentName();
+        if (parent == null || parent.trim().isEmpty()) return;
+        parent = parent.trim();
+        if (model.getEntityModels() != null && model.getEntityModels().findByName(parent) != null) return;
+        for (ECoreModel other : models) {
+            if (other == null || other == model || other.getEntityModels() == null) continue;
+            if (other.getEntityModels().findByName(parent) == null) continue;
+            if (referencing(other).contains(parent)) spec.knownReferencing(parent);
+            return;
+        }
+    }
+
+    /** Every field of an entity, inherited and derived ones included. */
+    private static java.util.Collection<Field> fieldsOf(Entity entity) {
+        io.elasticore.base.model.core.ListMap<String, Field> fields = entity.getAllFieldListMap();
+        return fields == null ? java.util.Collections.<Field>emptyList() : fields.values();
+    }
+
     /** An annotation's key=value pairs as written, joined: "read=public, ship=admin"; null when it has none. */
     static String keyValues(io.elasticore.base.model.core.Annotation a) {
         java.util.Properties p = a.getProperties();
@@ -1772,6 +2038,17 @@ public final class SpecFactory {
 
     public static boolean commandOnlyRoots() {
         return commandOnlyRoots;
+    }
+
+    /** Whether a TypeScript run's server renders the 2.x-compatible skeletons (no v3, no Kotlin). */
+    private static volatile boolean compatibleServer;
+
+    public static void compatibleServer(boolean on) {
+        compatibleServer = on;
+    }
+
+    public static boolean compatibleServer() {
+        return compatibleServer;
     }
 
     private static boolean isEmbeddable(String typeName, ECoreModel model) {

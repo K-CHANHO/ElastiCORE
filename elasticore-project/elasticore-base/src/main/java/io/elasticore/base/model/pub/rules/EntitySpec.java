@@ -347,6 +347,62 @@ public final class EntitySpec {
         return derivingEntities.contains(entityName);
     }
 
+    private final java.util.Set<String> referencingEntities = new java.util.HashSet<String>();
+
+    /**
+     * Registers an entity of the model that names rows of other aggregates by
+     * their identity - itself, or through the members it owns.
+     */
+    public EntitySpec knownReferencing(String entityName) {
+        referencingEntities.add(entityName);
+        return this;
+    }
+
+    /** Whether that entity checks the rows it names - and so has requireReferences(). */
+    public boolean references(String entityName) {
+        return referencingEntities.contains(entityName);
+    }
+
+    private int signInEntities;
+
+    /** How many entities of the application say @signin - the generated sign-in is written for one only. */
+    public EntitySpec knownSignInEntities(int count) {
+        this.signInEntities = count;
+        return this;
+    }
+
+    public int signInEntities() {
+        return signInEntities;
+    }
+
+    private java.util.List<String> otherLoginEntities = java.util.Collections.emptyList();
+
+    /** The application's entities with @login and @password that do not say @signin. */
+    public EntitySpec knownOtherLoginEntities(java.util.List<String> names) {
+        this.otherLoginEntities = names == null ? java.util.Collections.<String>emptyList() : names;
+        return this;
+    }
+
+    public java.util.List<String> otherLoginEntities() {
+        return otherLoginEntities;
+    }
+
+    private final java.util.Set<String> optionalEmbeddables = new java.util.HashSet<String>();
+
+    /** Registers a value type (@embeddable) some entity of the model embeds without requiring it. */
+    public EntitySpec knownOptionalEmbeddable(String embeddableName) {
+        optionalEmbeddables.add(embeddableName);
+        return this;
+    }
+
+    /**
+     * Whether that value type is embedded somewhere as optional - so its columns
+     * may be empty there, whatever its own fields require when it is present.
+     */
+    public boolean embeddedOptionally(String embeddableName) {
+        return optionalEmbeddables.contains(embeddableName);
+    }
+
     /** Declares a business command; its parameters are parsed like fields. */
     public EntitySpec addCommand(String name, List<Field> params) {
         List<FieldSpec> specs = new ArrayList<FieldSpec>();

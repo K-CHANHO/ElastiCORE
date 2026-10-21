@@ -7,7 +7,7 @@
 엔티티 선언부(`meta:`)에 사용하는 어노테이션. 복수 조합 가능.
 
 ### @expose
-DTO, Repository, Service, Controller, SearchDTO 자동 생성. 기본적으로 string 필드는 like, datetime 필드는 between 검색 자동 적용.
+DTO, Repository, Service, Controller, SearchDTO 자동 생성. 기본적으로 string 필드는 auto(값에 `%` 가 있으면 like, 아니면 정확 일치), datetime 필드는 between 검색 자동 적용.
 ```yaml
 Product:
   meta: entity @expose(30)  # pageSize=30, Controller 포함 전체 CRUD 생성
@@ -78,6 +78,16 @@ private String creditCardNumber;
 private CreditCard creditCard;
 ```
 
+값 객체의 컬럼은 그것을 담는 엔티티의 테이블에 생깁니다. 그래서 어느 엔티티가 값 객체를 **선택으로**
+담으면(`shipTo: Address @Embedded`, `!` 없음) 그 값 객체의 `!` 필드는 컬럼에 `nullable = false` 를 붙이지
+않습니다 (3.0.261021 부터, v3). 값이 오면 DTO 가 필수 필드를 검사하고(400), 값이 없는 행은 그대로 저장됩니다.
+전에는 배송지를 보내지 않은 주문이 `NULL not allowed for column "ZIPCODE"` (400 `required`) 로 저장되지 않았습니다.
+- 담는 엔티티가 **다른 도메인**에 있어도 같습니다(`common` 의 `Address` 를 `shop` 의 주문이 선택으로 담음).
+- 선택으로 담은 값 객체 **안의** 값 객체(`contact: Contact @Embedded` 의 `place: Place! @Embedded`)도 선택입니다 -
+  바깥 값이 없으면 안쪽 컬럼도 비기 때문입니다.
+- 필수로 담는 표시는 `!`, `@required`, `@nn` 입니다. 늘 필수로만 담는 값 객체(`card: Card! @Embedded`,
+  `card: Card @Embedded @required`)는 지금처럼 NOT NULL 입니다.
+
 > **주의**: 값 객체는 통째로 교체됩니다. 응답에 없는 `@writeonly` 필드를 가진 값 객체를 읽어서
 > 그대로 다시 저장하면 그 필드는 비어서 옵니다 - 필수면 400, 선택이면 null 로 저장됩니다.
 > 카드처럼 **생성할 때만 받는 값**에 쓰고, 수정이 필요하면 값 전체를 다시 받으세요.
@@ -137,6 +147,9 @@ Album:
   fields:
     artist: string
 ```
+판별값(`@DiscriminatorValue`)은 `@rollup(discriminator=ALB)`(또는 `value=`·`type=`), 없으면 `@rollup(target=...)`(또는
+`entity=`), 그것도 없으면 엔티티 이름(`"Album"`)입니다. `@rollup(Item)` 처럼 이름 없이 쓴 값은 판별값이 아닙니다 - 2.x 와
+3.0 의 모든 번들이 같습니다.
 
 ### @terms(용어, 동의어, …)
 업무에서 이 엔티티를 부르는 이름과 동의어. 필드와 `metrics:` 의 지표에도 씁니다. 코드 생성에는 영향이 없고,
@@ -201,7 +214,21 @@ status: string @default("ACTIVE")        # 그대로 유지
 category: string @default('GENERAL')     # 큰따옴표로 변환
 isActive: boolean @default(true)
 processType: ProcessType @default(ProcessType.HANG)
+createdAt: datetime @default(now)        # LocalDateTime.now() - date, time, timestamp(Instant) 도 now
 ```
+
+**서버가 정하는 생성 시각**은 `@readonly` 와 함께 씁니다 - 손으로 `beforeSave` 를 쓰지 않아도 됩니다:
+
+```yaml
+orderedAt: datetime @readonly @default(now)   # 만들 때 그 시각, 요청 값은 무시, 수정해도 그대로
+joinedOn:  date @readonly @default(now)       # 오늘
+```
+
+엔티티 필드의 초기값(`= LocalDateTime.now()`)이라 행이 만들어질 때 정해지고, `@readonly` 라 요청이 보낸 값은
+쓰이지 않으며, 수정할 때는 DB 에서 읽은 값이 그대로 남습니다. DTO 에는 기본값이 붙지 않습니다(날짜 기본값은 DTO 에서
+뺌). `timestamp` 의 기본값도 `now` 든 다른 값(`@default(java.time.Instant.EPOCH)`)이든 엔티티에만 붙습니다(3.0.261021
+부터 - 전에는 DTO 에도 `@Builder.Default ... = java.time.Instant.EPOCH` 가 붙었습니다). 마지막 수정 시각처럼
+**매번 바뀌는** 값은 `@jpa:org.springframework.data.annotation.LastModifiedDate` 와 `@EnableJpaAuditing` 을 씁니다.
 
 #### @notnull / @notblank / @required
 NOT NULL 제약. `@Column(nullable = false)` 생성. `@id`와 함께 사용 불필요.
@@ -213,7 +240,11 @@ email: string(100) @notnull
 수정 불가 필드. `@Column(updatable = false)` 생성.
 ```yaml
 createdDate: datetime @updatable(false)
+item:        Item @ManyToOne @updatable(false)   # 리뷰는 처음 정한 상품에 남는다
 ```
+DDD·헥사고날 번들에서 다른 루트로 가는 참조는 식별자 필드(`itemId`)로 쓰이므로, 그 식별자 필드가 `@updatable(false)` 를
+물려받습니다: `@Column(name = "item_item_id", updatable = false)` 이고, 매퍼는 행에 값이 없을 때(생성)만 씁니다 - 수정
+요청이 다른 `itemId` 를 보내도 저장된 값과 응답은 처음 상품 그대로입니다.
 
 #### @readonly / @noinput - 서버가 정하는 필드
 응답에는 나가고 **요청으로는 받지 않는** 필드입니다. 가입일·등급·처리 번호처럼 서버 코드가 값을 정하는
@@ -306,8 +337,10 @@ onHand: int! @min(0, '재고는 음수가 될 수 없다')
 쓰면 됩니다. `@invariant` 는 **두 필드 이상을 비교하는 규칙**에만 씁니다.
 
 #### @minsize(n, '메시지') / @maxsize(n, '메시지') - 컬렉션 개수
-컬렉션이 담을 멤버 수. DTO 에는 `@Size(min=n, message=...)`, DDD 루트에는 저장 시점 검사(422)가 됩니다.
-최소 개수는 컬렉션이 아예 없을 때(null)도 위반입니다.
+컬렉션이 담을 멤버 수. DTO 에는 `@Size(min=n, message=...)` (n 이 1 이상이면 `@NotNull` 도 - 목록을 아예 보내지 않아도 400), DDD 루트에는 저장 시점 검사(422)가 됩니다.
+최소 개수는 컬렉션이 아예 없을 때(null)도 위반입니다. n 이 1 이상이면 TypeScript 클라이언트의 `validate...()` 도
+같은 메시지로 먼저 검사합니다 - `if (!partial && (value.lines == null || value.lines.length < 1)) errors.lines = "..."`
+(부분 수정 `partial` 에서는 묻지 않음). `...Fields` 상수에는 컬렉션이 들어가지 않습니다.
 ```yaml
 lines: List<SalesOrderLine> @OneToMany(mappedBy="order") @minsize(1, '수주에는 품목이 하나 이상 있어야 한다')
 ```
@@ -370,6 +403,14 @@ DTO에서 다른 엔티티 필드 참조. nested get 생성.
 boardName: string @ref(board.name)           # r.get("board").get("name")
 boardTypeName: string @ref(board.boardType.name)
 ```
+
+수정(DTO -> 엔티티)에서는 관계 너머의 행에 그 값을 씁니다 (`to.getBoard().setName(from.getBoardName())`). 3.0 규칙
+엔진의 v3 번들(`jpa-service-access` 가 든 `jpa-springboot-v3`·`jpa-springboot-kt`)에서는 **누가 쓸 수 있는지 정한
+엔티티**(`@access`·`@owner`·`@password`·필드의 `@access(admin)` 이 있는 엔티티)로 가는 `@ref` 는 **읽기 전용**입니다 -
+티켓을 고칠 수 있는 사람이 담당자의 로그인이나 비밀번호를 바꾸면 그 엔티티의 검사를 건너뛰기 때문입니다. 관계의 키를
+가리키는 `@ref(assignee.memberId)` 는 전처럼 관계가 가리키는 행을 바꿉니다. `@password` 를 읽는 `@ref` 는 DTO 에서 빠지고
+DSL 경고가 납니다 (`... is left out: @ref(assignee.password) reads a @password ...`). DDD·헥사고날 번들은 다른 애그리거트로
+가는 `@ref` 를 원래 모두 읽기 전용으로 둡니다. 2.x 호환 번들(`jpa-springboot`)은 그대로입니다.
 
 #### @fk(Target) / @fk(Target.field) / @fk(Target.field, groupName)
 
@@ -519,6 +560,24 @@ address: Address @Embedded
 address: Address @relation(mappedBy="market_post_id")
 ```
 cascade 타입: `ALL`, `PERSIST`, `MERGE`, `REMOVE`
+
+cascade 가 붙은 관계를 DTO 로 통째로 담으면(`member: QmMember @OneToOne @cascade(merge) @dtype(QmMemberDTO)`, 다른 도메인
+엔티티의 `List<...> @OneToMany @cascade`), 수정(DTO -> 엔티티) 때 요청이 보낸 행이 관계에 붙고 저장이 cascade 로 그 행까지
+씁니다. 3.0 규칙 엔진의 v3 번들(`jpa-service-access` 가 든 `jpa-springboot-v3`·`jpa-springboot-kt`·DDD·헥사고날)에서는
+**누가 쓸 수 있는지 정한 엔티티**(`@access`·`@owner`·`@password`·필드의 `@access(admin)` 이 있는 엔티티, `@signin` 엔티티 포함)로
+가는 cascade 관계를 DTO 에서 쓰지 않습니다 - 프로필을 고칠 수 있는 사람이 회원의 로그인이나 비밀번호(해시를 직접 만들어)를
+바꿀 수 있었기 때문입니다. 그 행은 자기 서비스(자기 API)로 고치고, DTO 가 함께 보내는 키(`memberMemberId`)는 전처럼 관계를
+가리킵니다. 응답에는 그대로 담깁니다. 빌드가 필드를 짚어 알려 줍니다:
+`[qmshop] QmProfile.member is not written from the DTO: QmMember says who may write it (@access, @owner, @password), and the
+cascade would save the row past those checks. ...`. 생성(`POST`)도 같아서, 요청에 담아 보낸 그 행은 저장되지 않습니다.
+검사가 없는 엔티티로 가는 cascade, cascade 가 없는 관계(`@jpa:OneToOne(cascade = ...)` 처럼 직접 쓴 cascade 는 cascade 로
+봅니다), 2.x 호환 번들(`jpa-springboot`)은 그대로입니다.
+
+DDD·헥사고날 번들에서 **같은 애그리거트의 멤버**는 루트와 함께 오는 것이 설계라 위 규칙에서 빠지고 루트를 통해 쓰입니다.
+다만 멤버에는 자기 서비스가 없어 루트의 서비스가 해시·검사하지 못하므로, 멤버의 `@password` 와 `@access(admin)` 필드는
+DTO 에서 쓰지 않고 빌드가 알려 줍니다(`QdAccount.secret is not written from a DTO: QdAccount is a member of QdCustomer's
+aggregate and arrives with it, and the root's service hashes a @password of only its own fields. Declare it on QdCustomer.`).
+그런 필드는 루트에 둡니다.
 
 #### FK 컬럼명 지정 (@column / @col)
 
@@ -726,17 +785,18 @@ coordinates: int[] @env:integerarray       # env.yml annotations 참조
 ### 3.1 개요
 
 `@search(condition)` 또는 `@s(condition)` 또는 `@srch(condition)` 또는 `@filter(condition)` 모두 동일.
-조건과 매핑 필드 구분자: `$` 또는 공백.
+조건과 매핑 필드 구분자: `,` (생성기가 쉼표로 나눕니다).
 ```yaml
-customName: string @search(like$comName)   # comName 필드에 like 검색
+customName: string @search(like,comName)   # comName 필드에 like 검색
 ```
 
 ### 3.2 구현된 연산자 전체 목록 (17개)
 
 | DSL 문법 | JPA Criteria | 대소문자 무시 | 설명 |
 |----------|-------------|:---:|------|
-| `eq`, `=`, (기본값) | `equal` | No | 정확 일치 |
-| `like`, `%_%`, `%%` | `like` (%v%) | No | 포함 검색 |
+| `eq`, `=` | `equal` | No | 정확 일치 |
+| `like` | `like` (%v%) | **v3: Yes** / 2.x 호환: No | 포함 검색. v3 모드(헥사고날·DDD, `-Pv3`, 모든 Kotlin 빌드)에서는 문자열 필드에 `%__%` 와 같음 - 이름 일부를 대소문자와 관계없이 찾습니다. 레이어드 Java(2.x 호환)는 그대로 구분 |
+| `%_%`, `%%` | `like` (%v%) | No | 대소문자를 구분하는 포함 검색 (모든 모드) |
 | `%__%` | `like` (%v%) | Yes | 대소문자 무시 포함 검색 |
 | `__=`, `=__` | `equal` | Yes | 대소문자 무시 정확 일치 |
 | `%_` | `like` (%v) | No | 접미사 검색 (ends-with) |
@@ -750,11 +810,23 @@ customName: string @search(like$comName)   # comName 필드에 like 검색
 | `in` | `.in()` / `Join.in()` | No | 다중 값 포함 |
 | `between`, `~` | `between` | No | 범위 검색 |
 | `isnull` | `isNull` / `isNotNull` | No | 비어 있는지 검색. 검색 속성 `<필드>Empty: Boolean` (3.4.1, v3 번들 전용) |
-| `auto` | Runtime 결정 | No | String 전용, %포함시 like 아니면 eq |
+| `auto`, (기본값 - 조건 없는 `@search`) | Runtime 결정 | No | String 전용, %포함시 like 아니면 eq |
+
+- v3 모드에서 대소문자를 무시하는 조건(`like`, `%__%`, `%__`, `__%`)은 값의 앞뒤 공백을 지우고(`like` 처럼),
+  값을 로캘과 무관하게 소문자로 바꿉니다 (Java `toLowerCase(Locale.ROOT)`, Kotlin `lowercase()` - Kotlin 2.x 에서
+  `toLowerCase()` 는 컴파일 오류). 컬럼은 `lower(...)` 로 비교합니다.
+- 호출자가 값에 넣은 `%`·`_` 는 그대로 와일드카드입니다 (`{"name":"%Puppy%"}`).
+- 인덱스: 포함 검색(`%v%`)은 어느 DB 에서도 B-tree 범위를 쓰지 못하므로 `lower()` 가 비용을 더하지 않습니다. 접두사
+  `__%`·정확 일치 `__=` 를 인덱스로 찾으려면 `lower(col)` 식 인덱스가 필요합니다. MySQL·SQL Server 의 기본 CI 콜레이션은
+  원래 대소문자를 무시합니다.
 
 **미구현 주의:**
 - `!=`, `neq` - 코드에 구현 없음
-- `gt`, `gte`, `lt`, `lte` 키워드 - 미구현 (기호 `>`, `>=`, `<`, `<=`만 동작)
+- `gt`, `gte`, `lt`, `lte`, `ilike` 키워드 - 미구현 (기호 `>`, `>=`, `<`, `<=`만 동작). 모르는 조건은 정확 일치가 되며,
+  v3 모드에서는 빌드가 `... @search(ilike) is not a search condition, so it searches by equality ...` DSL 경고를 냅니다
+- `%` 하나만 쓴 `@search(%)` 는 끝 일치(`like '%' + 값`, `%_` 와 같음)입니다. v3 모드에서는 빌드가
+  `... @search(%) searches by the end of the value (like '%' + value) - say %_ for that, _% for the start or %_% for any part.`
+  DSL 경고를 냅니다
 
 ### 3.3 auto 조건 동작
 
@@ -1218,7 +1290,7 @@ port:
 
 ### 검색 조건 선택
 - **정확한 코드/ID 검색**: `eq` 또는 `=` (기본값)
-- **텍스트 부분 검색**: `like` (대소문자 구분) 또는 `%__%` (무시)
+- **텍스트 부분 검색**: `like` (v3 모드는 대소문자 무시, 레이어드 Java 는 구분), `%_%` (항상 구분), `%__%` (항상 무시)
 - **날짜 범위**: `between` (LocalDate는 자동 +1일 포함)
 - **다중 선택 필터**: `in`
 - **숫자 비교**: `>=`, `<=`, `>`, `<` (기호만 사용, 키워드 미지원)
@@ -1818,8 +1890,8 @@ PurchaseOrder:
 | 권한 없음 | 403 |
 | `owner` 조회·수정·삭제·명령에서 남의 행 | 404 (존재 자체를 알리지 않음) |
 | `owner` 검색 | 소유자 필드 **동등 조건**(`=`)을 검색에 덧붙임 - 내 것만 나옴 (필드의 `@search` 방식과 무관) |
-| `create` | 소유자 필드를 로그인 ID 로 덮어씀 - 방문자가 보낸 값도 지움 (관리자는 요청 값 그대로). 소유자가 기본키이고 자동 생성이 아니면 기본키를 로그인 ID 로 |
-| `update` | 소유자 필드와 `@access(admin)` 필드는 **행의 현재 값** 으로 (보낸 값 무시, `@dynamicupdate(false)` 에서도 지워지지 않음) |
+| `create` | 소유자 필드를 로그인 ID 로 덮어씀 - 방문자가 보낸 값도 지움 (관리자는 요청 값 그대로). 소유자가 기본키이고 자동 생성이 아니면 기본키를 로그인 ID 로. 소유자 필드가 `@readonly`·`@noinput` 이면(요청이 보낼 수 없는 값) 관리자를 포함해 로그인한 사람이 소유자 - `runAsSystem` 안에서는 손대지 않음 |
+| `update` | 소유자 필드와 `@access(admin)` 필드는 **행의 현재 값** 으로 (보낸 값 무시, `@dynamicupdate(false)` 에서도 지워지지 않음). `@readonly` 소유자는 관리자의 수정에서도 그대로 |
 | `owner` 의 `findAll`·조건 삭제·조건 수정 | 관리자만 (한 건씩 확인할 수 없으므로) |
 | `owner` 수준인데 `@owner` 가 안 풀림 | 빌드 경고(DSL_WARN) + 실행 시 관리자만 (검색은 403) |
 | 로그인 안 한 호출 (요청 밖·WebFlux·gRPC·`@Async` 포함) | **방문자** - fail-closed |
@@ -1853,26 +1925,102 @@ Customer:
     role: UserRole @default(UserRole.USER) @access(admin)   # 가입자가 스스로 관리자가 될 수 없음
 ```
 
-로그인 처리 (세션 기본값):
+로그인 API 는 **엔티티 줄에 `@signin` 을 쓰면 생성됩니다** (세션 기본값, 3.0.261021 부터). `@login` 과
+`@password` 가 있고 `@expose` 된 엔티티이며, **그 행의 비밀번호와 로그인은 본인과 관리자만 바꿀 수 있어야** 합니다
+(`update=owner` 와 키를 가리키는 `@owner`, 또는 `update=admin`·`none` - 아래 "수정 수준"):
+
+```yaml
+Customer:
+  meta: entity @root @editable @expose(20) @signin @owner(customerId) @access(read=owner, create=public, update=owner)
+```
+
+| 요청 | 답 |
+|---|---|
+| `POST /api/shop/customer/signin` `{"login": "...", "password": "..."}` (키는 두 필드의 이름) | 200 고객 (비밀번호 없음), 세션 시작. 틀리면 401 `Wrong login or password` |
+| `POST /api/shop/customer/signout` | 204, 세션 끝 |
+| `GET /api/shop/customer/me` | 200 로그인한 고객, 방문자는 401. 키가 문자열이면 키가 `me` 인 행은 `GET /{id}` 가 아니라 이 엔드포인트(로그인한 사람)가 답합니다 |
+
+CoreService·유스케이스에 `me()` 가, TypeScript 클라이언트에 `signIn(login, password)`, `signOut()`, `me()` (방문자면
+null) 가 생깁니다. 쿠키 세션이라 화면과 API 가 같은 출처(origin)일 때 동작합니다. `@signin` 이 없으면 `me()` 도 없고
+`authenticate` 만 있습니다 (아래 "@password / @login").
+
+세션에는 행의 키와 **역할**이 들어갑니다. 역할은 `@role` 을 붙인 필드, 없으면 `role` 이라는 필드의 값으로,
+**`@access(admin)` 인 enum 이나 문자열 필드만** 씁니다 (enum 이면 상수 이름 - `UserRole.ADMIN` 이면 `ADMIN`,
+`adminRole` 과 비교). 관리자만 쓰는 필드가 아니면 가입자가 `"role":"ADMIN"` 을 보내고 로그인해 관리자가 되므로,
+빌드가 DSL 경고를 내고 역할 없이 로그인합니다. 역할 필드가 없으면 모두 일반 사용자입니다.
+
+- **수정 수준.** 행을 쓰는 요청(`PUT`, `PUT /batch`, 조건 수정)은 모두 `update` 수준을 묻습니다 - `update`, 없으면 `*`,
+  그것도 없으면 `admin`, `@access` 가 아예 없으면 `public`. 이것이 `admin`·`none` 이거나, `owner` 이면서 `@owner` 가 키일
+  때만 로그인 API 를 만듭니다. `public`·`user` 이거나 키가 아닌 필드의 `owner` 이면 남이 관리자의 비밀번호를 바꾸고 관리자로
+  로그인할 수 있으므로 만들지 않고, 이유와 고칠 문장(`@access` 가 없으면 `@owner(customerId)
+  @access(read=owner, create=public, update=owner)`)을 DSL 경고로 알려 줍니다. `@access` 에 적지 않은 연산은 `admin` 이므로
+  `@access` 를 처음 쓸 때는 가입(`create=public`)과 조회도 함께 적습니다. `*` 는 다른 항목과 함께 써도 됩니다
+  (`@access(read=public, create=public, *=owner)` 의 수정은 `owner`). 다른 엔티티의 DTO 가 `@ref(member.login)`·
+  `@ref(member.password)` 로 이 엔티티를 읽어도 그 길로는 쓰지 못합니다 (위 "@ref" - 비밀번호는 읽지도 않음).
+- **키를 요청이 정하면 삭제도 본인과 관리자만.** 키가 생성되지 않으면(`@genid`·`@sequence` 가 아님) 누가 `alice` 행을 지운 뒤
+  `alice` 로 다시 가입해 `alice` 가 주인이던 모든 행을 가집니다. 그래서 `delete` 수준(없으면 `*`, 그것도 없으면 `admin`)이
+  `admin`·`none` 이거나 키를 가리키는 `@owner` 의 `owner` 일 때만 만들고, 아니면 `delete is user and its key handle is one
+  the request chooses ...` DSL 경고를 냅니다. 키를 생성되게 해도 됩니다.
+- **로그인은 유일.** 엔티티 줄에 `@signin` 이 있으면 `@login` 컬럼에 `unique = true` 가 붙습니다 - 위 조건에 걸려 로그인
+  API 를 만들지 않을 때도 붙어서, `@access` 를 고쳐도 테이블은 바뀌지 않습니다 (이미 `@unique` 이거나, 키이거나,
+  그 컬럼 하나만의 unique `@Index` 가 있으면 그대로). 이미 있는 로그인으로 가입하거나 로그인을 바꾸면 다른 제약 위반처럼
+  409 입니다. 같은 로그인이 두 행이면 `authenticate` 가 둘 다 거절하므로, 남의 로그인으로 행을 만들어 그 사람을 못 들어오게
+  하는 일을 DB 가 막습니다. 이미 운영 중인 DB 는 마이그레이션으로 unique 제약을 더합니다 (중복이 있으면 먼저 정리).
+- **애플리케이션에 `@signin` 엔티티는 하나만.** 세션은 맨 키만 들고 있어, 둘이면 판매자 7 이 고객 7 로 읽힙니다. 한 번의
+  생성 안에서 컨트롤러가 같은 애플리케이션에 생기는 엔티티끼리 셉니다: 단일 모듈 프로젝트는 모든 도메인이 하나의
+  애플리케이션이고, 멀티 모듈(`elasticore.modules`)에서는 컨트롤러가 생기는 모듈(`control` 의 `모듈명://` 이 가리키는 모듈,
+  없으면 그 blueprint 가 있는 모듈)마다 하나입니다. 둘 이상이면 그 애플리케이션 어디에도 만들지 않고 DSL 경고를 냅니다.
+  두 모듈이 한 애플리케이션으로 함께 실행되는지는 생성기가 알 수 없으니, 그런 두 모듈에는 한쪽에만 `@signin` 을 씁니다.
+  둘 이상의 모듈이 각자 `@signin` 엔티티를 가지면 빌드가 `@signin is counted per module: Staff and Customer each sign in
+  through their own module - if these modules run as one application, only one of them may say @signin.` 을 한 번 알려 줍니다.
+- **같은 애플리케이션의 다른 `@login`·`@password` 엔티티.** 그 엔티티를 손으로 `SessionCurrentUser.signIn` 하면 그 키도
+  같은 세션 키라, `me()` 와 모든 소유자 검사가 `@signin` 엔티티의 같은 키 행으로 읽습니다 (직원 7 = 고객 7). 빌드가
+  `Customer: the session the generated sign-in starts holds only a bare Customer key, and Staff has @login and @password
+  too ...` DSL 경고로 알려 줍니다. 그 엔티티는 자기 `CurrentUser` 빈(Spring Security 등)으로 로그인하거나, 로그인은
+  `@signin` 엔티티로만 합니다.
+- 키가 둘 이상이거나, `@expose` 가 없거나, `@login`·`@password` 가 모자라도 만들지 않고 DSL 경고를 냅니다.
+- 키가 요청이 정하는 문자열이면(`@genid`·`@sequence` 가 아님) 키가 `me` 인 행은 `GET /{id}` 로 읽을 수 없으므로(`GET /me`
+  가 로그인한 사람을 답함) 빌드가 경고합니다. `beforeSave` 에서 `me` 를 거절하거나 키를 생성되게 합니다.
+- 틀린 비밀번호를 몇 번까지 허용할지, 정지된 계정을 막을지 같은 로그인 규칙은 개발자 소유인 `CustomerService` 에서
+  `authenticate(login, password)` 를 override 해 씁니다 - 생성된 `signin` 이 그것을 부릅니다.
+- 컨트롤러는 개발자 소유라 **손댄 컨트롤러에는 들어가지 않습니다.** 빌드가 `... is yours and does not serve POST /signin,
+  POST /signout, GET /me ...` 를 DSL 경고로 알려 주면, 그 파일을 지우고 빌드해(손댄 내용은 옮겨 두고) 생성된 것을 보거나
+  세 메서드를 옮겨 적습니다. 이 비교는 경로 변수 이름(`/{id}` 와 `/{customerId}`), 끝의 `/`, Kotlin 의 배열 형식
+  (`@GetMapping(value = ["/me"])`), `@RequestMapping(value = "/me", method = RequestMethod.GET)` 을 같은 엔드포인트로
+  읽고, 상수로 쓴 경로(`@GetMapping(ME)`)처럼 읽지 못한 매핑이 있으면 그 HTTP 메서드의 엔드포인트는 묻지 않습니다.
+  2.x 호환 번들(`jpa-springboot`)은 TypeScript 클라이언트가 없으므로 이 경고를 하지 않습니다.
+  거꾸로 손댄 컨트롤러가 DSL 이 더는 만들지 않는 `POST /signin`·`GET /me` 를 아직 가지고 있거나(`@signin` 을
+  지웠거나 위 이유로 거절됨), 관리자만 쓰는 필드가 아닌 역할을 세션에 넣으면 `... is yours and still
+  serves POST /signin, GET /me ...` / `... still puts a role in the session ...` 경고가 납니다 - 그 로그인은 생성된 검사가
+  믿는 세션을 계속 만들기 때문입니다. 그 메서드를 지우거나 역할 인자를 뺍니다.
+
+손으로 세션을 다룰 때 (가입하고 바로 로그인 같은 것):
 
 ```java
 SessionCurrentUser.signIn(request, customer.getCustomerId(), customer.getRole().name());
 SessionCurrentUser.signOut(request);
 ```
 
-Spring Security 를 쓰면 `io.elasticore.springboot3.security.CurrentUser` 빈을 등록하면 됩니다.
+Spring Security 를 쓰면 `io.elasticore.springboot3.security.CurrentUser` 빈을 등록하고 `@signin` 은 쓰지 않습니다
+(`authenticate` 는 남음).
 
 ## @password / @login — 자격 증명 (v3)
 
 ```yaml
-login:    string(10)! @login
+login:    string(10)! @login @unique
 password: string(255)! @password      # 해시 길이를 담을 만큼 (PBKDF2 약 100자)
 ```
 
 - 요청으로 받은 비밀번호는 **모든 쓰기 경로에서 해시로만** 저장 (기본 PBKDF2-SHA256, `PasswordHasher` 빈으로 교체).
 - 응답·검색·DTO 복사에 나오지 않음 (`@writeonly` 와 같음), TypeScript 에서 optional.
-- `@login` 과 `@password` 가 함께 있으면 CoreService·유스케이스에 `authenticate(login, password)` 생성.
-  없는 로그인도 같은 해시 비용을 치러 응답 시간으로 계정 존재를 알 수 없음.
+- `@login` 과 `@password` 가 함께 있으면 CoreService·유스케이스에 `authenticate(login, password)` 생성 - 행, 또는
+  로그인이 없거나 두 행 이상이거나 비밀번호가 틀리면 비어 있음. 없는 로그인도 같은 해시 비용을 치러 응답 시간으로 계정
+  존재를 알 수 없음.
+- 로그인은 유일해야 합니다: 같은 로그인이 두 행이면 `authenticate` 가 둘 다 거절하므로, 누가 남의 로그인으로 행을 만들면
+  그 사람이 로그인하지 못합니다. `@signin` 없이 쓰는 엔티티의 로그인이 유일하지 않으면(`@unique`, 키, 그 컬럼 하나만의
+  unique `@Index` 가 아님) DSL 경고를 냅니다.
+- 엔티티 줄에 `@signin` 까지 쓰면 `me()`, 컨트롤러의 `signin`·`signout`·`me` (위 "@access / @owner" 의 로그인 표), 그리고
+  로그인 컬럼의 unique (unique 는 로그인 API 가 거절되어도 `@signin` 만으로 붙음).
 
 ## @snapshot / @compute — 파생 값 (DDD 룰셋)
 
@@ -1891,7 +2039,7 @@ PurchaseOrder:
 - 둘 다 요청으로 쓸 수 없는 필드입니다 (DTO 에서 읽기 전용, 매퍼가 쓰지 않음 - `@editable` 엔티티에서도).
 - `@compute` 가 다른 `@compute` 를 쓰면 그 필드를 먼저 선언하세요 (거꾸로면 빌드 경고).
 - `@snapshot` 은 값이 비었을 때만 채웁니다 - 이후 상품 가격이 바뀌어도 주문 줄은 그대로.
-  참조한 행이 없으면 422 (`OrderLine.item 99 does not exist`).
+  참조한 행이 없으면 404 (`Item 99 does not exist`, 코드 `reference.OrderLine.item`).
 - `@compute` 는 저장할 때마다 다시 계산합니다. 피연산자 중 하나가 null 이면 결과도 null.
 - **`@formula` 와 다릅니다**: `@formula("...")` 는 DB 가 계산하는 Hibernate SQL 식입니다.
 

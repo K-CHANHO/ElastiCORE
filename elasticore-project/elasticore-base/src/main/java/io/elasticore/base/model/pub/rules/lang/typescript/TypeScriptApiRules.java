@@ -172,6 +172,31 @@ public class TypeScriptApiRules implements CodeRules {
                         String.format("The %s command: %s decides, and answers with what it became.", cmd.name(), e.getName()));
             }
         }
+
+        // Signing in, as the controller serves it where the DSL marks @login and @password.
+        if (io.elasticore.base.model.pub.rules.base.ServiceAccessRules.signsIn(e)) {
+            String login = io.elasticore.base.model.pub.rules.base.ServiceAccessRules.loginField(e);
+            String password = "password";
+            for (FieldSpec f : e.fields()) {
+                if (f.hasDsl("password")) password = f.name();
+            }
+            method(c, "signIn", syntax.parameter("string", login) + ", " + syntax.parameter("string", password), dto,
+                    String.format("request<%s>('POST', BASE + '/signin', { %s, %s })", dto, login, password),
+                    "Signs in: the session cookie is set (same origin) and the " + e.getName() + " answered; ApiError 401 when the "
+                            + login + " or the password is wrong.");
+            method(c, "signOut", "", "void", "request<void>('POST', BASE + '/signout')",
+                    "Signs out: the session ends.");
+            c.varLine("methodList", "/** The %s signed in now, or null for a visitor. */", e.getName())
+             .varLine("methodList", "export async function me(): Promise<%s | null> {", dto)
+             .varLine("methodList", "    try {")
+             .varLine("methodList", "        return await request<%s>('GET', BASE + '/me');", dto)
+             .varLine("methodList", "    } catch (e) {")
+             .varLine("methodList", "        if (e instanceof ApiError && e.status === 401) return null;")
+             .varLine("methodList", "        throw e;")
+             .varLine("methodList", "    }")
+             .varLine("methodList", "}")
+             .varLine("methodList", "");
+        }
     }
 
     /**
@@ -187,12 +212,10 @@ public class TypeScriptApiRules implements CodeRules {
         if (e.hasMeta("readonly")) {
             gone.addAll(java.util.Arrays.asList("create", "update", "batchUpdate", "deleteBatch", "deleteById"));
         }
-        String exclude = e.metaValue("restexclude");
-        if (exclude != null) {
-            for (String id : exclude.split("[,\\s]+")) {
-                if (!id.isEmpty()) gone.add(id);
-            }
-        }
+        // The server's controller drops what goes with each (restExcluded) -
+        // a clean one; a 2.x server drops only what is named, and keeps the rest.
+        gone.addAll(io.elasticore.base.model.pub.rules.base.ControllerBaseRules.restExcluded(e,
+                !io.elasticore.base.model.pub.rules.verify.SpecFactory.compatibleServer()));
         if (io.elasticore.base.model.pub.rules.verify.SpecFactory.commandOnlyRoots()
                 && io.elasticore.base.model.pub.rules.ddd.DddCommandRules.nothingEditable(e)) {
             gone.add("update");
@@ -258,6 +281,7 @@ public class TypeScriptApiRules implements CodeRules {
         runtime.add("requestOrNull");
         runtime.add("seg");
         if (paged) runtime.add("Page");
+        if (io.elasticore.base.model.pub.rules.base.ServiceAccessRules.signsIn(e)) runtime.add("ApiError");
         sb.append(String.format("import { %s } from './apiSupport';%n",
                 String.join(", ", runtime)));
 

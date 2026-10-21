@@ -250,7 +250,7 @@ public final class SourceCode {
             if (li < lines.length - 1) out.append('\n');
         }
         // Method-level control: no-op (byte-identical) unless rules asked for it.
-        return MethodSections.apply(out.toString(), excludedMethods, addedMethods);
+        return MethodSections.apply(out.toString(), effectiveExcluded(), addedMethods);
     }
 
     /** A line that opens, alternates or closes a conditional block. */
@@ -382,9 +382,34 @@ public final class SourceCode {
         return this;
     }
 
-    /** Whether a rule has dropped this endpoint method. */
+    /** Whether a rule has dropped this endpoint method - or, in the clean output, one it calls. */
     public boolean isMethodExcluded(String sectionId) {
-        return excludedMethods.contains(sectionId);
+        return effectiveExcluded().contains(sectionId);
+    }
+
+    /**
+     * The methods dropped, with what calls them in the clean output: a rule
+     * set that excluded update alone left batchUpdate calling a method that
+     * was gone, and the service did not compile. The 2.x output drops what
+     * it was told, as it always did.
+     */
+    private java.util.Set<String> effectiveExcluded() {
+        return compatible() ? excludedMethods : withCallers(excludedMethods);
+    }
+
+    /**
+     * The method ids with every method that calls one of them, in the clean
+     * skeletons: update takes batchUpdate (it loops over update), deleteById
+     * takes delete (the list delete calls it) and deleteBatch, delete takes
+     * deleteBatch, save takes create.
+     */
+    public static java.util.Set<String> withCallers(java.util.Set<String> ids) {
+        java.util.Set<String> out = new java.util.LinkedHashSet<String>(ids);
+        if (out.contains("update")) out.add("batchUpdate");
+        if (out.contains("deleteById")) out.add("delete");
+        if (out.contains("delete")) out.add("deleteBatch");
+        if (out.contains("save")) out.add("create");
+        return out;
     }
 
     /** Appends a hand-written method before the closing brace of the class. */
@@ -675,6 +700,38 @@ public final class SourceCode {
         return readOnlyRefs.contains(dtoFieldName);
     }
 
+    private final java.util.Set<String> hiddenRefs = new java.util.HashSet<String>();
+
+    /**
+     * States that a DTO field carrying @ref is not read through the relation
+     * either: the DTO does not carry it (a password of the related row). As
+     * with refReadOnly, nothing is hidden until a rule says so.
+     */
+    public SourceCode refHidden(String dtoFieldName) {
+        hiddenRefs.add(dtoFieldName);
+        return this;
+    }
+
+    /** Whether a rule has declined the read through the relation for this DTO field. */
+    public boolean isRefHidden(String dtoFieldName) {
+        return hiddenRefs.contains(dtoFieldName);
+    }
+
+    // ---- relations an aggregate root writes its members through -----------
+
+    private final java.util.Set<String> writtenByRoot = new java.util.HashSet<String>();
+
+    /** States that the root writes its member through this entity field (ddd-mapper-members). */
+    public SourceCode writtenByRoot(String entityFieldName) {
+        writtenByRoot.add(entityFieldName);
+        return this;
+    }
+
+    /** Whether a rule said the root writes its member through this field. */
+    public boolean isWrittenByRoot(String entityFieldName) {
+        return writtenByRoot.contains(entityFieldName);
+    }
+
     // ---- fields the persistence layer owns ----------------------------------
 
     private final java.util.Set<String> systemManaged = new java.util.HashSet<String>();
@@ -780,7 +837,20 @@ public final class SourceCode {
     /** Forgets the warnings said so far: each generation run says its own. */
     public static void resetWarnings() {
         REMOVAL_WARNED.clear();
+        DSL_WARNED.clear();
         DeclarationText.resetWarnings();
+    }
+
+    private static final java.util.Set<String> DSL_WARNED =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+
+    /**
+     * A DSL warning said once per run: a rule runs for each artifact of an
+     * entity (its DTO, its search DTO ...), and the same finding printed twice
+     * reads as two problems.
+     */
+    public static void dslWarnOnce(String message) {
+        if (DSL_WARNED.add(message)) io.elasticore.base.util.ConsoleLog.storeLog("DSL_WARN", message);
     }
 
     // ---- method-level annotations (project rules) --------------------------
