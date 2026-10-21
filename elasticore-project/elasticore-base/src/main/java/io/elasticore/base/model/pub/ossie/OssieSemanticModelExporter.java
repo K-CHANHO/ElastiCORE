@@ -42,7 +42,10 @@ import java.util.TreeMap;
  * Written to the core spec 0.2.0.dev0 (core-spec/spec.md): one model per
  * document, flat at the root; every field an expression; each value type one
  * of the spec's DataTypes. One document for the whole project, so the
- * relationships that cross domain files stay inside one model.
+ * relationships that cross domain files stay inside one model. Expressions
+ * are declared in OSSIE_SQL_2026, the one dialect the spec gives a meaning;
+ * a @formula the Ossie language cannot say keeps its SQL as ANSI_SQL, which
+ * a consumer may ignore (OssieSql).
  *
  * Only what the blueprint actually knows is emitted:
  * - columns as the generated entities map them - an enum by its column, an
@@ -338,12 +341,16 @@ public final class OssieSemanticModelExporter {
         StringBuilder b = new StringBuilder();
         b.append("      - name: ").append(plain(column)).append('\n');
 
-        // A @formula column is computed by the database: its SQL is the expression.
+        // A @formula column is computed by the database: its SQL is the
+        // expression. A column name, or a formula the Ossie language can say,
+        // is declared in that language; a formula it cannot say - one with a
+        // subquery - keeps its SQL under the opaque ANSI_SQL name, which a
+        // consumer may ignore, rather than a claim it would read and get wrong.
         String formula = f.getAnnotationValue("formula");
         String expression = formula != null && !formula.isEmpty() ? formula : column;
         b.append("        expression:\n");
         b.append("          dialects:\n");
-        b.append("            - dialect: ANSI_SQL\n");
+        b.append("            - dialect: ").append(OssieSql.dialect(expression)).append('\n');
         b.append("              expression: ").append(yaml(expression)).append('\n');
 
         EnumStorage stored = en == null ? null : storage(f, en);
@@ -366,6 +373,7 @@ public final class OssieSemanticModelExporter {
         }
 
         Map<String, Object> ext = new LinkedHashMap<String, Object>();
+        if (formula != null && !formula.isEmpty()) ext.put("formula", "database");
         String compute = f.getAnnotationValue("compute");
         if (compute != null) ext.put("compute", compute);
         String snapshot = f.getAnnotationValue("snapshot");
@@ -502,9 +510,11 @@ public final class OssieSemanticModelExporter {
                 String name = seen.get(m.name) > 1 ? u.domain + "_" + m.name : m.name;
                 StringBuilder b = new StringBuilder();
                 b.append("  - name: ").append(plain(name)).append('\n');
+                // Aggregates, CASE WHEN, CAST, NULLIF and comparisons: all of
+                // it in the Ossie language, so declared as such.
                 b.append("    expression:\n");
                 b.append("      dialects:\n");
-                b.append("        - dialect: ANSI_SQL\n");
+                b.append("        - dialect: ").append(OssieSql.dialect(m.sql)).append('\n');
                 b.append("          expression: ").append(yaml(m.sql)).append('\n');
                 if (m.label != null && !m.label.isEmpty()) b.append("    description: ").append(yaml(m.label)).append('\n');
                 if (m.datatype != null) b.append("    datatype: ").append(m.datatype).append('\n');

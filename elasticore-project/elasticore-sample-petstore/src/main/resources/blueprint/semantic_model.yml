@@ -15,19 +15,19 @@ datasets:
       - name: category_id
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "category_id"
         datatype: Integer
       - name: name
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "name"
         datatype: String
       - name: description
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "description"
         datatype: String
     custom_extensions:
@@ -41,25 +41,25 @@ datasets:
       - name: product_id
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "product_id"
         datatype: Integer
       - name: name
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "name"
         datatype: String
       - name: description
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "description"
         datatype: String
       - name: category_id
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "category_id"
         datatype: Integer
     custom_extensions:
@@ -75,31 +75,31 @@ datasets:
       - name: item_id
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "item_id"
         datatype: Integer
       - name: name
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "name"
         datatype: String
       - name: description
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "description"
         datatype: String
       - name: image_path
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "image_path"
         datatype: String
       - name: unit_cost
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "unit_cost"
         datatype: Decimal
         ai_context:
@@ -110,7 +110,7 @@ datasets:
       - name: product_id
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "product_id"
         datatype: Integer
     custom_extensions:
@@ -124,19 +124,19 @@ datasets:
       - name: iso_code
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "iso_code"
         datatype: String
       - name: name
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "name"
         datatype: String
       - name: printable_name
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "printable_name"
         datatype: String
     custom_extensions:
@@ -154,13 +154,13 @@ datasets:
       - name: customer_id
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "customer_id"
         datatype: Integer
       - name: login
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "login"
         datatype: String
         custom_extensions:
@@ -169,37 +169,37 @@ datasets:
       - name: first_name
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "first_name"
         datatype: String
       - name: last_name
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "last_name"
         datatype: String
       - name: telephone
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "telephone"
         datatype: String
       - name: email
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "email"
         datatype: String
       - name: date_of_birth
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "date_of_birth"
         datatype: Date
       - name: role
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "role"
         datatype: String
         ai_context: "Codes: U = User, A = Administrator"
@@ -209,42 +209,42 @@ datasets:
       - name: street1
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "street1"
         datatype: String
         description: "homeAddress.street1"
       - name: street2
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "street2"
         datatype: String
         description: "homeAddress.street2"
       - name: city
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "city"
         datatype: String
         description: "homeAddress.city"
       - name: state
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "state"
         datatype: String
         description: "homeAddress.state"
       - name: zipcode
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "zipcode"
         datatype: String
         description: "homeAddress.zipcode"
       - name: country_code
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "country_code"
         datatype: String
         description: "homeAddress.countryCode"
@@ -261,19 +261,19 @@ datasets:
       - name: order_id
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "order_id"
         datatype: String
       - name: order_date
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "order_date"
         datatype: Date
       - name: status
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "status"
         datatype: String
         ai_context: "Codes: PLC = Placed, SHP = Shipped, CAN = Cancelled"
@@ -283,49 +283,49 @@ datasets:
       - name: street1
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "street1"
         datatype: String
         description: "deliveryAddress.street1"
       - name: street2
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "street2"
         datatype: String
         description: "deliveryAddress.street2"
       - name: city
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "city"
         datatype: String
         description: "deliveryAddress.city"
       - name: state
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "state"
         datatype: String
         description: "deliveryAddress.state"
       - name: zipcode
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "zipcode"
         datatype: String
         description: "deliveryAddress.zipcode"
       - name: country_code
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "country_code"
         datatype: String
         description: "deliveryAddress.countryCode"
       - name: credit_card_type
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "credit_card_type"
         datatype: String
         description: "creditCard.creditCardType"
@@ -336,14 +336,14 @@ datasets:
       - name: credit_card_exp_date
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "credit_card_exp_date"
         datatype: String
         description: "creditCard.creditCardExpDate"
       - name: total_without_vat
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "total_without_vat"
         datatype: Decimal
         custom_extensions:
@@ -352,13 +352,13 @@ datasets:
       - name: vat_rate
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "vat_rate"
         datatype: Decimal
       - name: vat
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "vat"
         datatype: Decimal
         custom_extensions:
@@ -367,13 +367,13 @@ datasets:
       - name: discount_rate
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "discount_rate"
         datatype: Decimal
       - name: discount
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "discount"
         datatype: Decimal
         custom_extensions:
@@ -382,7 +382,7 @@ datasets:
       - name: total
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "total"
         datatype: Decimal
         custom_extensions:
@@ -391,13 +391,13 @@ datasets:
       - name: version
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "version"
         datatype: Integer
       - name: customer_id
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "customer_id"
         datatype: Integer
     custom_extensions:
@@ -411,20 +411,20 @@ datasets:
       - name: line_id
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "line_id"
         datatype: String
       - name: order_order_id
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "order_order_id"
         datatype: String
         description: "order -> PurchaseOrder"
       - name: quantity
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "quantity"
         datatype: Integer
         custom_extensions:
@@ -433,7 +433,7 @@ datasets:
       - name: unit_cost
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "unit_cost"
         datatype: Decimal
         custom_extensions:
@@ -442,7 +442,7 @@ datasets:
       - name: sub_total
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "sub_total"
         datatype: Decimal
         custom_extensions:
@@ -451,7 +451,7 @@ datasets:
       - name: item_id
         expression:
           dialects:
-            - dialect: ANSI_SQL
+            - dialect: OSSIE_SQL_2026
               expression: "item_id"
         datatype: Integer
     custom_extensions:
@@ -487,7 +487,7 @@ metrics:
   - name: revenue
     expression:
       dialects:
-        - dialect: ANSI_SQL
+        - dialect: OSSIE_SQL_2026
           expression: "SUM(CASE WHEN PurchaseOrder.status <> 'CAN' THEN PurchaseOrder.total END)"
     description: "매출 (취소 제외, VAT 포함·할인 후 금액)"
     datatype: Decimal
@@ -499,7 +499,7 @@ metrics:
   - name: orderCount
     expression:
       dialects:
-        - dialect: ANSI_SQL
+        - dialect: OSSIE_SQL_2026
           expression: "COUNT(CASE WHEN PurchaseOrder.status <> 'CAN' THEN 1 END)"
     description: "주문 수 (취소 제외)"
     datatype: Integer
@@ -511,7 +511,7 @@ metrics:
   - name: averageOrder
     expression:
       dialects:
-        - dialect: ANSI_SQL
+        - dialect: OSSIE_SQL_2026
           expression: "(SUM(CASE WHEN PurchaseOrder.status <> 'CAN' THEN PurchaseOrder.total END)) / NULLIF((COUNT(CASE WHEN PurchaseOrder.status <> 'CAN' THEN 1 END)), 0)"
     description: "주문 1건 평균 금액"
     datatype: Decimal
@@ -523,7 +523,7 @@ metrics:
   - name: shippedOrders
     expression:
       dialects:
-        - dialect: ANSI_SQL
+        - dialect: OSSIE_SQL_2026
           expression: "COUNT(CASE WHEN PurchaseOrder.status = 'SHP' THEN 1 END)"
     description: "배송된 주문 수"
     datatype: Integer
@@ -533,7 +533,7 @@ metrics:
   - name: cancelledOrders
     expression:
       dialects:
-        - dialect: ANSI_SQL
+        - dialect: OSSIE_SQL_2026
           expression: "COUNT(CASE WHEN PurchaseOrder.status = 'CAN' THEN 1 END)"
     description: "취소된 주문 수"
     datatype: Integer
@@ -543,7 +543,7 @@ metrics:
   - name: customerCount
     expression:
       dialects:
-        - dialect: ANSI_SQL
+        - dialect: OSSIE_SQL_2026
           expression: "COUNT(CASE WHEN Customer.role = 'U' THEN 1 END)"
     description: "고객 수 (관리자 제외)"
     datatype: Integer
