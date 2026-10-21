@@ -100,9 +100,13 @@ public class DtoBaseRules implements CodeRules {
         if (desc == null) desc = f.name();
 
         // A relation DTO added for the response is set through its flattened
-        // id instead, so the request schema leaves it out.
-        String access = f.hasDsl("autoRelation")
-                ? ", accessMode = Schema.AccessMode.READ_ONLY" : "";
+        // id instead, so the request schema leaves it out. So does a field
+        // the server sets (@readonly / @noinput), in the clean output.
+        // springdoc already reads READ_ONLY off @JsonProperty; the schema
+        // annotation says it too, for a reader that looks at @Schema alone.
+        boolean readOnly = f.hasDsl("autoRelation")
+                || (!ctx(e).compatible() && f.hasDslAny("readonly", "noinput"));
+        String access = readOnly ? ", accessMode = Schema.AccessMode.READ_ONLY" : "";
 
         String line = String.format("@Schema(description = %s %s%s %s)",
                 RuleText.quote(desc), req, access, FieldDoc.exampleAttribute(e, f));
@@ -216,10 +220,33 @@ public class DtoBaseRules implements CodeRules {
         dateConstraint(e, f, "futureorpresent", "FutureOrPresent", "Date must be future or present");
     }
 
-    /** @pattern(regexp=..., message=...) becomes a four-line annotation. */
+    /**
+     * @pattern becomes @Pattern(regexp = "...", message = "...").
+     *
+     * The compatible output keeps what 2.x writes: a four-line annotation
+     * whose message attribute is spelled msg, written only when both the
+     * named regexp and message are given. The clean output reads the named
+     * or the positional form, and says what the TypeScript client says when
+     * no message is given.
+     */
     private void pattern(EntitySpec e, FieldSpec f) {
         if (!f.hasDsl("pattern")) return;
         if (f.hasDsl("dto:jakarta.validation.constraints.Pattern")) return;
+
+        if (!ctx(e).compatible()) {
+            // Jakarta's @Pattern checks text only; on a date, @pattern is the
+            // format it reads and writes (FieldDoc.formatPattern).
+            if (!f.isStringType()) return;
+            String regexp = f.patternRegexp();
+            if (regexp == null) return;
+            String message = f.patternMessage();
+            if (message == null) message = notInTheExpectedForm(f);
+            boolean kotlin = ctx(e).syntax() == Syntax.KOTLIN;
+            ctx(e).field(f).ensure(AnnoCode.of(VALIDATION, "Pattern")
+                    .val("regexp", kotlin ? kotlinLiteral(regexp) : regexp)
+                    .val("message", kotlin ? kotlinLiteral(message) : message));
+            return;
+        }
 
         String regexp = f.dslValueAny("pattern.regexp");
         if (regexp == null || regexp.isEmpty()) return;
@@ -230,6 +257,38 @@ public class DtoBaseRules implements CodeRules {
                 .qualified().compact().block(" ")
                 .val("regexp", regexp)
                 .val("msg", msg));
+    }
+
+    /**
+     * What a value that does not match is told when the DSL gives no message.
+     * The same sentence as the TypeScript client's validate(), so the form and
+     * the server say one thing.
+     */
+    public static String notInTheExpectedForm(FieldSpec f) {
+        String label = f.label();
+        if (label == null || label.trim().isEmpty()) label = f.name();
+        return String.format("%s is not in the expected form", label.trim().replace("\"", "'"));
+    }
+
+    /**
+     * Text for a Kotlin string literal: a dollar that would start a template -
+     * before a letter, an underscore, a backtick or a brace - is written \$.
+     * Any other dollar, such as the end anchor of a regex, and one already
+     * escaped, stay as they are.
+     */
+    static String kotlinLiteral(String text) {
+        StringBuilder sb = new StringBuilder(text.length() + 4);
+        int backslashes = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (ch == '$' && i + 1 < text.length() && backslashes % 2 == 0) {
+                char next = text.charAt(i + 1);
+                if (Character.isLetter(next) || next == '_' || next == '`' || next == '{') sb.append('\\');
+            }
+            backslashes = ch == '\\' ? backslashes + 1 : 0;
+            sb.append(ch);
+        }
+        return sb.toString();
     }
 
     /** @Size carries min and max together, separated by " , " as in 2.x. */

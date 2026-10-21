@@ -109,6 +109,7 @@ public final class RulesGenRunner {
         SpecFactory.valueObjectsInDto(false);
         SpecFactory.rootsSplitByDefault(false);
         SpecFactory.commandOnlyRoots(false);
+        SpecFactory.referenceRequiredByKey(false);
     }
 
     /**
@@ -543,6 +544,9 @@ public final class RulesGenRunner {
                     && shapes(io.elasticore.base.model.pub.rules.EntityClassNamer.class));
             SpecFactory.commandOnlyRoots(shaped
                     && shapes(io.elasticore.base.model.pub.rules.CommandOnlyRoots.class));
+            // A required reference is required through its key in the DTO;
+            // 2.x requires the nested object, which only the response fills.
+            SpecFactory.referenceRequiredByKey(shaped);
 
             List<EntitySpec> specs = new ArrayList<EntitySpec>();
             ModelComponentItems<Entity> entities = model.getEntityModels().getItems();

@@ -1,5 +1,6 @@
 package io.elasticore.base.model.pub.rules.lang.typescript;
 
+import io.elasticore.base.model.pub.rules.base.DtoBaseRules;
 import io.elasticore.base.model.pub.rules.base.RuleText;
 import io.elasticore.base.model.pub.rules.CodeRules;
 import io.elasticore.base.model.pub.rules.EntitySpec;
@@ -222,12 +223,13 @@ public class TypeScriptDtoFileRules implements CodeRules {
                     checks.add(String.format("else if (%s && !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(String(%s))) errors.%s = 'Email format invalid';",
                             v, v, name));
                 }
-                String regexp = f.dslValueAny("pattern.regexp");
-                if (regexp != null && !regexp.isEmpty()) {
-                    String msg = f.dslValueAny("pattern.message");
+                // Read as the DTO's @Pattern reads it, so the two check the same thing.
+                String regexp = f.hasDsl("pattern") ? f.patternRegexp() : null;
+                if (regexp != null) {
+                    String msg = f.patternMessage();
                     checks.add(String.format("else if (%s && !new RegExp(%s).test(String(%s))) errors.%s = %s;",
                             v, RuleText.quote("^(?:" + regexp + ")$"), v, name,
-                            RuleText.quote(msg == null ? label + " is not in the expected form" : msg)));
+                            RuleText.quote(msg == null ? DtoBaseRules.notInTheExpectedForm(f) : msg)));
                 }
             }
             String minDecl = f.dslValueAny("min", "minval", "minvalue");

@@ -153,6 +153,23 @@ public class DtoGapCoverageTest {
         assertTrue(out.contains(" msg=\"bad\""), out);
     }
 
+    /**
+     * The golden above is the compatible output, which stays as 2.x wrote it.
+     * The clean output writes Jakarta's attribute, message, on one line.
+     */
+    @Test
+    public void pattern_cleanMode_usesMessage() {
+        EntitySpec e = dto("Order")
+                .addField(loader.parse("code", "string(10) @pattern(regexp=abc,message=bad)"));
+
+        String out = new RuleEngine().register(new DtoBaseRules())
+                .templateSet(SourceCode.TemplateSet.V3)
+                .run(e, "dto").renderFieldBlock(1);
+
+        assertTrue(out.contains("@Pattern(regexp = \"abc\", message = \"bad\")"), out);
+        assertFalse(out.contains("msg="), out);
+    }
+
     // ---- json ----------------------------------------------------------
 
     @Test

@@ -114,6 +114,18 @@ public class AbstractModelLoader implements ConstantParam {
                     entityName, fieldNm, typeLength.trim(), explicitMax.trim(), typeLength.trim()));
         }
 
+        // @pattern('^\d{13}$'): the regex is the content of a string literal,
+        // where \d is not a backslash and d - Java rejects it, TypeScript reads
+        // a d. Said by the rule engine only, as above.
+        if (io.elasticore.base.model.entity.BaseFieldType.ruleEngineTypes()) {
+            String escape = loneEscape(f.getAnnotation("pattern"));
+            if (escape != null) {
+                ConsoleLog.storeLog("DSL_WARN",
+                    String.format("%s.%s: @pattern has %s, which a string literal does not read as a backslash. Write it doubled (\\%s) or use a class such as [0-9].",
+                        entityName, fieldNm, escape, escape));
+            }
+        }
+
         // Check for relationship annotations used with primitive types
         if (f.getTypeInfo() != null && f.getTypeInfo().isBaseType()) {
             String[] relationAnnotations = {"onetomany", "manytoone", "onetoone", "manytomany"};
@@ -129,6 +141,29 @@ public class AbstractModelLoader implements ConstantParam {
 
     protected Items<Field> parseField(Map<String, String> fieldInfo) {
         return parseField(fieldInfo, null);
+    }
+
+    /**
+     * The first single backslash in a @pattern regex that is not one of the
+     * escapes a regex needs in a string literal - a doubled backslash, a
+     * quote, or a unicode escape - e.g. "\d";
+     * null when there is none or no @pattern.
+     */
+    static String loneEscape(Annotation pattern) {
+        if (pattern == null) return null;
+        String text = pattern.getProperties() != null
+                ? pattern.getProperties().getProperty("regexp") : pattern.value;
+        if (text == null) return null;
+        for (int i = 0; i < text.length() - 1; i++) {
+            if (text.charAt(i) != '\\') continue;
+            char next = text.charAt(i + 1);
+            if (next == '\\' || next == '"' || next == '\'' || next == 'u') {
+                i++;
+                continue;
+            }
+            return "\\" + next;
+        }
+        return null;
     }
 
 

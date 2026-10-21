@@ -180,6 +180,98 @@ public class MapperSpecTest {
         assertTrue(out.contains("c.equal(r.get(\"otherField\"),otherField)"), out);
     }
 
+    // ---- emptiness: @search(isnull) ---------------------------------------
+
+    /** The clean (3.0) output, the only one that knows the isnull keyword. */
+    private String renderClean(EntitySpec e) {
+        return new RuleEngine().templateSet(SourceCode.TemplateSet.V3)
+                .register(new MapperSpecRules())
+                .register(new io.elasticore.base.model.pub.rules.base.MapperSpecShellRules())
+                .run(e, "mapper").renderBlock("spec");
+    }
+
+    /**
+     * The three-state property the search DTO declares: absent adds nothing,
+     * true asks for an empty column, false for a set one.
+     */
+    @Test
+    public void isnullCondition() {
+        EntitySpec e = new EntitySpec("Order").addField(loader.parse("f", "date @search(isnull)"));
+
+        String out = renderClean(e);
+        assertTrue(out.contains(
+                "        Boolean fEmpty = searchDTO.getFEmpty();\n"
+                + "        if(hasValue(fEmpty)){\n"
+                + "            if(fEmpty){\n"
+                + "                sp = sp.and((r,q,c) -> c.isNull(r.get(\"f\")));\n"
+                + "            }else{\n"
+                + "                sp = sp.and((r,q,c) -> c.isNotNull(r.get(\"f\")));\n"
+                + "            }\n"
+                + "        }\n"), out);
+        assertTrue(!out.contains("c.equal"), out);
+        assertTrue(!out.contains("searchDTO.getF()"), out);
+    }
+
+    /** Through a relation the check reads the related column. */
+    @Test
+    public void isnullCondition_throughRef() {
+        EntitySpec e = new EntitySpec("Shipment").addField(loader.parse("orderShippedDate",
+                "date @search(isnull) @ref(order.shippedDate)"));
+
+        String out = renderClean(e);
+        assertTrue(out.contains("Boolean orderShippedDateEmpty = searchDTO.getOrderShippedDateEmpty();"), out);
+        assertTrue(out.contains(
+                "sp = sp.and((r,q,c) -> c.isNull(r.get(\"order\").get(\"shippedDate\")));"), out);
+        assertTrue(out.contains(
+                "sp = sp.and((r,q,c) -> c.isNotNull(r.get(\"order\").get(\"shippedDate\")));"), out);
+    }
+
+    /** The alias names the property read, as the search DTO names it. */
+    @Test
+    public void isnullCondition_alias() {
+        EntitySpec e = new EntitySpec("Loan").addField(loader.parse("returnedDate",
+                "date @search(isnull,open)"));
+
+        String out = renderClean(e);
+        assertTrue(out.contains("Boolean openEmpty = searchDTO.getOpenEmpty();"), out);
+        assertTrue(out.contains("c.isNull(r.get(\"open\"))"), out);
+    }
+
+    /**
+     * Kotlin through the same seam: the guard does not smart-cast, so the
+     * value is asserted, and the lambda names the interface it becomes.
+     */
+    @Test
+    public void isnullCondition_kotlin() {
+        EntitySpec e = new EntitySpec("Order").addField(loader.parse("f", "date @search(isnull)"));
+
+        String out = new RuleEngine().templateSet(SourceCode.TemplateSet.KOTLIN)
+                .register(new MapperSpecRules())
+                .register(new io.elasticore.base.model.pub.rules.lang.kotlin.KotlinMapperSpecShellRules())
+                .run(e, "mapper").renderBlock("spec");
+        assertTrue(out.contains(
+                "        val fEmpty = searchDTO.fEmpty\n"
+                + "        if(hasValue(fEmpty)){\n"
+                + "            if(fEmpty!!){\n"
+                + "                sp = sp.and(Specification<Order> { r,q,c -> c.isNull(r.get<java.time.LocalDate>(\"f\")) })\n"
+                + "            }else{\n"
+                + "                sp = sp.and(Specification<Order> { r,q,c -> c.isNotNull(r.get<java.time.LocalDate>(\"f\")) })\n"
+                + "            }\n"
+                + "        }\n"), out);
+    }
+
+    /**
+     * The 2.x-compatible output does not know the keyword: it stays the
+     * equality on the field's own type that 2.x writes for it.
+     */
+    @Test
+    public void isnullCondition_compatibleOutputUnchanged() {
+        String out = oneField("date @search(isnull)");
+        assertTrue(out.contains("java.time.LocalDate f = searchDTO.getF();"), out);
+        assertTrue(out.contains("sp = sp.and((r,q,c) -> c.equal(r.get(\"f\"),f));"), out);
+        assertTrue(!out.contains("Empty"), out);
+    }
+
     /** Fields without a search annotation take no part. */
     @Test
     public void fieldWithoutSearchAnnotation_isSkipped() {

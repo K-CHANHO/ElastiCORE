@@ -81,6 +81,45 @@ public class SealedRootTest {
         assertFalse(dto.contains("totalAmount = "), dto);
     }
 
+    /** The mapper's reverse block, composed as RulesGenRunner composes it. */
+    private String reverse(EntitySpec e) {
+        return ServerSetFieldTest.mapper(e, "ddd-springboot", SourceCode.TemplateSet.V3).renderBlock("reverse");
+    }
+
+    /**
+     * A sealed field is written through the creation writer; a @behavior
+     * one is not written at all, and the DTO shows it read-only.
+     */
+    @Test
+    public void theMapperWritesASealedFieldAtCreationAndABehaviorFieldNever() {
+        String reverse = reverse(order());
+        assertTrue(reverse.contains("setVal(from.getOrderNo(), to.creation()::setOrderNo, isSkipNull);"), reverse);
+        assertFalse(reverse.contains("Status"), reverse);
+        assertTrue(declarationOf(render(order(), "dto"), "status")
+                .contains("@JsonProperty(access=JsonProperty.Access.READ_ONLY)"), render(order(), "dto"));
+    }
+
+    /**
+     * A @readonly field of a split root is still sealed - server code sets it
+     * through creation() while the root is new - but the mapper no longer
+     * routes a request's value there.
+     */
+    @Test
+    public void aReadonlyFieldStaysSealedButTheMapperLeavesIt() {
+        EntitySpec e = order().addField(loader.parse("returnedDate", "date @readonly"));
+        String entity = render(e, "entity");
+        assertTrue(declarationOf(entity, "returnedDate").contains("@Setter(AccessLevel.PROTECTED)"), entity);
+        assertTrue(entity.contains("public void setReturnedDate(java.time.LocalDate value) {"), entity);
+
+        String reverse = reverse(e);
+        assertFalse(reverse.contains("ReturnedDate"), reverse);
+        assertTrue(reverse.contains("setVal(from.getOrderNo(), to.creation()::setOrderNo, isSkipNull);"), reverse);
+
+        String dto = declarationOf(render(e, "dto"), "returnedDate");
+        assertTrue(dto.contains("@JsonProperty(access=JsonProperty.Access.READ_ONLY)"), dto);
+        assertTrue(dto.contains("accessMode = Schema.AccessMode.READ_ONLY"), dto);
+    }
+
     @Test
     public void anEditableRootIsNotSealed() {
         EntitySpec plain = new EntitySpec("Item")

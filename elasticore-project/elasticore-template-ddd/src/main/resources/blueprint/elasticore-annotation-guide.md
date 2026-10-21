@@ -215,6 +215,82 @@ email: string(100) @notnull
 createdDate: datetime @updatable(false)
 ```
 
+#### @readonly / @noinput - 서버가 정하는 필드
+응답에는 나가고 **요청으로는 받지 않는** 필드입니다. 가입일·등급·처리 번호처럼 서버 코드가 값을 정하는
+필드에 씁니다. `@noinput` 은 같은 뜻의 별칭입니다.
+
+```yaml
+Member:
+  meta: entity @root @editable @expose(20)
+  fields:
+    memberId: long @id @sequence
+    name: string(50)!
+    joinedAt: date @readonly          # 서비스의 beforeSave 가 채운다
+    grade: string(10)! @noinput       # 필수 컬럼이지만 요청은 보내지 않는다
+```
+
+| 생성물 | 2.x 호환 (`jpa-springboot`) | v3 번들 (`jpa-springboot-v3`, DDD·헥사고날, Kotlin) |
+|---|---|---|
+| DTO `@JsonProperty(access=READ_ONLY)` | 있음 | 있음 |
+| DTO `@Schema(... accessMode = READ_ONLY)` | 없음 | 있음 |
+| DTO `@NotNull` / `@NotBlank` (`!`, `@notblank`) | 남음 | **빠짐** - 요청이 보낼 수 없는 값이므로 |
+| 매퍼 엔티티 -> DTO (응답) | 씀 | 씀 |
+| 매퍼 DTO -> 엔티티 (`toEntity`, `mapping(dto, entity, ...)`, EntityManager 판 포함) | 씀 | **쓰지 않음** |
+| 엔티티 컬럼 (`nullable = false` 등) | 그대로 | 그대로 - 서버가 채워야 합니다 |
+
+v3 생성 결과 (Java, 위 `Member`):
+
+```java
+// MemberDTO.java
+@Schema(description = "grade" , requiredMode=Schema.RequiredMode.REQUIRED, accessMode = Schema.AccessMode.READ_ONLY )
+@Size(max=10)
+@JsonProperty(access=JsonProperty.Access.READ_ONLY)
+private String grade;
+
+// LibraryMapper.java - mapping(MemberDTO from, Member to, boolean isSkipNull, MappingContext c)
+setVal(from.getMemberId(), to::setMemberId, isSkipNull);
+setVal(from.getName(), to::setName, isSkipNull);
+// joinedAt, grade 는 없습니다. 반대 방향 mapping(Member from, MemberDTO to, ...) 에는 있습니다.
+```
+
+값은 서버 코드가 넣습니다. 확장 서비스의 `beforeSave` 는 생성·수정·일괄 수정·조건 수정 네 경로가 모두 지나갑니다.
+
+```java
+@Override
+protected void beforeSave(Member entity) {
+    if (entity.getJoinedAt() == null) entity.setJoinedAt(LocalDate.now());
+}
+```
+
+v3 에서 `string(10)! @readonly` 필드에 클라이언트가 값을 보낸 POST 는 200 이고, 응답에는 `beforeSave` 가
+넣은 값이 나갑니다. DTO 에 `@NotNull` 이 남아 있으면 같은 요청은 400 (`must not be null`) 입니다 - Jackson 이
+값을 버린 뒤에 검사하기 때문입니다.
+
+주의:
+- v3 에서는 **서버 코드가 DTO 에 넣은 값도 매퍼가 버립니다.** `dto.setGrade("A")` 다음 `service.save(dto)` 를
+  하던 코드는 값이 저장되지 않습니다. 엔티티에 넣으세요 (`beforeSave`, 루트의 메서드).
+- `@id` 에 붙은 `@readonly` (`@id @genid @readonly`) 는 JSON 입력만 막습니다. 매퍼는 식별자를 계속 씁니다.
+- 엔티티 필드에 붙이면 그 엔티티의 모든 DTO 에 적용됩니다. `dto.yml` 의 DTO 가 템플릿 필드를 다시 적으며
+  `@readonly` 를 붙이면 **그 DTO 의 매핑만** 이 필드를 쓰지 않습니다.
+- `@jpa:CreatedDate`·`@jpa:Version` 같은 영속성 필드는 `@readonly` 없이도 v3 매퍼가 쓰지 않습니다 (§2.8).
+- springdoc 은 `@JsonProperty(access=READ_ONLY)` 만으로도 OpenAPI 에 `readOnly: true` 를 냅니다. v3 의
+  `@Schema(accessMode = READ_ONLY)` 는 같은 사실을 `@Schema` 만 읽는 도구에도 적어 둡니다.
+
+DDD 번들에서 나뉜 루트(`XxxBase`)의 `@readonly` 필드는 여전히 잠긴 필드입니다: setter 는 `protected` 이고
+`creation()` 에 setter 가 있습니다. 서버 코드는 새 루트에 `entity.creation().setLoanDate(v)` 로 넣고, 그 뒤에는
+루트의 메서드로 바꿉니다. **만든 뒤에 바뀌는 서버 값**(반납일, 상태)은 `@behavior` 가 맞습니다 - 요청으로
+받지 않는 것은 같고, `creation()` 에도 없어 루트의 메서드만 바꿉니다 ([@behavior](#behavior--엔티티-행위-ddd-룰셋)).
+
+| | `@readonly` | `@behavior` (필드) |
+|---|---|---|
+| 적용되는 엔티티 | 모든 엔티티, v3 번들 | DDD 번들의 나뉜 루트만 (`@editable` 루트·멤버에서는 경고만) |
+| 요청 (JSON, 매퍼) | 받지 않음 | 받지 않음 |
+| 나뉜 루트의 `creation()` | 있음 - 새 루트에 서버 코드가 넣음 | 없음 |
+| 바꾸는 쪽 | 서버 코드 (`beforeSave`, 루트의 메서드) | 루트의 메서드 |
+
+`creation().setX(null)` 은 새 루트에서 아무 일도 하지 않습니다 (요청이 보내지 않은 값이 `@default` 를 덮지 않게
+하는 장치). 값을 지우는 길이 아니므로, 지우려면 루트의 메서드에서 `protected` setter 를 부릅니다.
+
 #### @min(value) / @max(value) / @min(value, '메시지')
 숫자 범위 검증. Bean Validation `@Min`/`@Max`(BigDecimal 은 `@DecimalMin`/`@DecimalMax`) 생성.
 두 번째 인자로 메시지를 줄 수 있습니다.
@@ -238,11 +314,50 @@ lines: List<SalesOrderLine> @OneToMany(mappedBy="order") @minsize(1, '수주에�
 DTO 를 `dto.yml` 에서 직접 선언하고 같은 필드를 다시 적으면 그 필드는 DSL 선언을 따르므로, 요청 단계(400)
 검사를 원하면 DTO 필드에도 적습니다. 저장 시점 검사(422)는 엔티티의 선언만으로 항상 걸립니다.
 
-#### @pattern(regexp, message)
-정규식 필드 검증. `@Pattern` 생성.
+#### @pattern('정규식', '메시지') / @pattern(regexp="...", message="...")
+문자열이 정규식과 **전체가** 맞아야 한다는 규칙. DTO 에 Bean Validation `@Pattern` 이 생기고(요청 검사, 400),
+TypeScript 클라이언트의 `validate...()` 도 같은 정규식과 메시지로 검사합니다.
+`@min` 처럼 값(정규식) 다음에 메시지를 적습니다. 이름을 붙인 형식도 같습니다.
 ```yaml
+isbn:  string(13)! @id @pattern('^[0-9]{13}$', 'ISBN must be 13 digits') -- ISBN, 13 digits
+code:  string(10) @pattern('^[A-Z]{3}[0-9]+$') -- Shelf code          # 메시지 생략
+range: string(13) @pattern(regexp="^[0-9]{10,13}$", message="10 to 13 digits")
 email: string @pattern(regexp="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", message="Invalid email")
 ```
+생성되는 DTO (v3 / Kotlin 번들):
+```java
+	@Schema(description = "ISBN, 13 digits" , requiredMode=Schema.RequiredMode.REQUIRED )
+	@NotNull
+	@Pattern(regexp = "^[0-9]{13}$", message = "ISBN must be 13 digits")
+	@Size(max=13)
+	private String isbn;
+
+	@Schema(description = "Shelf code"  )
+	@Pattern(regexp = "^[A-Z]{3}[0-9]+$", message = "Shelf code is not in the expected form")
+	@Size(max=10)
+	private String code;
+```
+TypeScript 클라이언트:
+```ts
+else if (value.isbn && !new RegExp("^(?:^[0-9]{13}$)$").test(String(value.isbn))) errors.isbn = "ISBN must be 13 digits";
+```
+- **메시지**는 생략할 수 있습니다. 그러면 서버와 클라이언트 모두 `"<라벨> is not in the expected form"` 이라고 합니다
+  (라벨은 `--` 주석, 없으면 필드 이름).
+- **백슬래시는 두 번** 씁니다. 정규식은 Java 문자열 리터럴의 내용으로 그대로 들어가기 때문입니다: `\\d`, `\\.`.
+  `[0-9]` 같은 문자 클래스가 더 쉽습니다. `\d` 처럼 하나만 쓰면 Java 는 컴파일하지 않고(`illegal escape character`)
+  TypeScript 는 `d` 로 읽으므로, 생성할 때 DSL 경고가 납니다:
+  `Book.digits: @pattern has \d, which a string literal does not read as a backslash. Write it doubled (\\d) or use a class such as [0-9].`
+- **Kotlin** 에서는 문자열 템플릿이 되는 `$`(영문자, `_`, `{` 앞의 `$`)를 `\$` 로 바꿔 씁니다. DSL 에는 Java 와 똑같이 적습니다.
+  `@pattern('^\\$USD[0-9]+$', 'write it as $USD100')` -> `@Pattern(regexp = "^\\\$USD[0-9]+$", message = "write it as \$USD100")`.
+  정규식 끝의 `$` 는 그대로입니다.
+- 정규식 안의 **쉼표**는 괜찮습니다(`{10,13}`). 메시지는 따옴표와 괄호 밖의 첫 쉼표 뒤입니다.
+  정규식에 `=` 가 들어가면 이름 붙인 형식을 쓰고, 그 값은 큰따옴표로 감쌉니다(작은따옴표 값은 공백에서 끊깁니다).
+- **문자열 필드에만** 붙습니다. 날짜 필드의 `@pattern(yyyyMMdd)` 는 지금처럼 날짜 형식(`@DateTimeFormat` / `@JsonFormat`)입니다.
+- **DTO 와 TS 클라이언트에만** 들어갑니다. 엔티티(`@Column` 만)와 검색 DTO 에는 없고, `@min` 과 달리 DDD 루트의
+  저장 시점 검사(422)도 아닙니다. 정규식은 Swagger `example` 로도 쓰지 않습니다(예시 값이 아니므로).
+- 2.x 호환 출력(`jpa-springboot`)은 바뀌지 않았습니다: 이름 붙인 형식에 메시지까지 있을 때만 여러 줄
+  `@jakarta.validation.constraints.Pattern( regexp="...", msg="..." )` 를 쓰는데, `msg` 는 Jakarta `@Pattern` 에 없는
+  속성이라 컴파일되지 않습니다. 이 수정은 v3 / Kotlin / TypeScript 번들의 출력입니다.
 
 ### 2.3 검색 어노테이션
 `@search(condition)` - Section 3에서 상세 설명.
@@ -446,13 +561,60 @@ private String batchBatchId;         // 저장/수정 입력용 (FK id)
 
 - **중첩 DTO 필드(`batch`)**: OpenAPI 스키마에 `accessMode = READ_ONLY`로 표시되어
   **Swagger의 저장/수정 request body에서 제외**됩니다 (조회 응답에는 포함).
-  문서(스펙) 수준의 표시이며 런타임 직렬화/역직렬화 동작은 변경되지 않으므로,
-  기존에 중첩 객체로 전송하던 클라이언트도 계속 동작합니다.
+  문서(스펙) 수준의 표시이며 런타임 직렬화/역직렬화 동작은 변경되지 않습니다. 요청에 중첩 객체를 보내도
+  오류는 나지 않지만, 매퍼는 저장/수정할 때 중첩 객체를 읽지 않습니다 — 관계는 FK id 필드로만 연결됩니다.
 - **FK id 필드(`batchBatchId`)**: 저장/수정 시 관계를 지정하는 입력 필드입니다
   (`필드명 + 참조엔티티 @id 필드명` 네이밍, 내부적으로 `em.getReference()`로 연결).
+  참조 엔티티의 키가 `id`이면 `batchId`가 됩니다.
 - 중첩 DTO 자체를 생성에서 제외하려면 `dto.yml`에 `@template`로 DTO를 직접 선언하세요
   (관계 필드는 자동 제외되며, 필요한 필드만 `@ref(관계필드.대상필드)`로 평탄화 선언 —
   blueprint `hr/model/dto.yml`의 `EmployeeDTO` 참고).
+
+##### 필수 관계 (`!`): 저장 요청은 FK id 필드를 보낸다
+> **Since: 3.0.261021** (v3 · Kotlin · TypeScript 생성. 2.x와 `jpa-springboot` 호환 출력은 그대로)
+
+관계에 `!`를 붙이면 컬럼이 NOT NULL이 되고(`@JoinColumn(nullable = false)`), 자동 생성 DTO에서는
+**FK id 필드가 필수**, 중첩 DTO는 선택입니다.
+
+```yaml
+Post:
+  meta: entity @root @expose(20) -- post
+  fields:
+    postId:    long @id @sequence
+Comment:
+  meta: entity @root @expose(20) -- comment
+  fields:
+    commentId: long @id @sequence
+    post:      Post! -- parent post
+```
+```java
+// 자동 생성 CommentDTO (v3, Kotlin도 같은 어노테이션)
+@Schema(description = "parent post" , accessMode = Schema.AccessMode.READ_ONLY )
+private PostDTO post;                // 응답용 - 요청에서는 선택
+
+@Schema(description = "postPostId" , requiredMode=Schema.RequiredMode.REQUIRED )
+@NotNull
+private Long postPostId;             // 저장 요청에 필수
+```
+```ts
+// TypeScript 클라이언트 CommentDTO.ts
+post?: PostDTO;
+postPostId: number;
+```
+
+- 저장 요청(`POST`, `@Valid @RequestBody`)은 `{"postPostId": 1, ...}`처럼 **FK id 필드를 보냅니다**.
+  `postPostId`가 없으면 `@Valid` 검증에서 거절됩니다. 중첩 `post`는 보내지 않아도 됩니다.
+- 2.x(`build`/`elcore`)와 `jpa-springboot` 호환 출력은 이전과 같습니다: 중첩 `post`에 `@NotNull`과
+  `requiredMode=REQUIRED`가 붙고 `postPostId`에는 붙지 않습니다. 이 출력에서는 검증을 통과하는 데 `post`가,
+  관계를 저장하는 데 `postPostId`가 필요하므로 요청은 둘 다 보내야 합니다.
+- **3.0.261021 이전 v3 출력에서 바뀐 점**: 이전에는 v3도 2.x처럼 중첩 `post`를 요구했습니다. 이제 `postPostId`만
+  보낸 요청이 통과하고, 중첩 `post`만 보내던 요청은 `@Valid` 검증에서 거절됩니다 (그 요청은 이전에도 관계를
+  연결하지 못했습니다 - 매퍼는 `postPostId`만 읽습니다).
+- 검색 DTO(`CommentSrchDTO`)의 `postPostId`는 검색 조건이라 필수가 아닙니다. 중첩 `post`는 검색 DTO에 없습니다.
+- 다른 애그리거트를 ID로 참조하는 DDD·헥사고날 번들에서는 FK id 필드가 엔티티의 ID 필드(`memberId`)이고,
+  같은 규칙으로 그 필드가 필수입니다 - `elasticore-rule-guide.md` "다른 애그리거트는 ID 로 참조".
+- `dto.yml`에 직접 선언한 DTO에는 적용되지 않습니다. 직접 선언한 DTO에서는 `postId: long! @ref(post.postId)`처럼
+  필드에 `!`를 씁니다.
 
 ### 2.6 JPA 컬럼 매핑
 
@@ -542,6 +704,14 @@ lastModifiedDate: datetime @jpa:org.springframework.data.annotation.LastModified
 lastModifiedBy: string(20) @jpa:org.springframework.data.annotation.LastModifiedBy
 ```
 
+v3 번들에서는 이 네 필드와 `@jpa:Version` 을 매퍼가 DTO 에서 엔티티로 쓰지 않고, DTO 의 `@NotNull` 도
+빠집니다 (`jpa-write-guard`). 응답에는 그대로 나갑니다. DTO 와 OpenAPI 에도 읽기 전용으로 적으려면
+`@readonly` 를 함께 붙입니다 (§2.2 `@readonly / @noinput`):
+
+```yaml
+createdBy: string(20) @jpa:org.springframework.data.annotation.CreatedBy @readonly
+```
+
 ### 2.9 기타
 
 ```yaml
@@ -561,7 +731,7 @@ coordinates: int[] @env:integerarray       # env.yml annotations 참조
 customName: string @search(like$comName)   # comName 필드에 like 검색
 ```
 
-### 3.2 구현된 연산자 전체 목록 (16개)
+### 3.2 구현된 연산자 전체 목록 (17개)
 
 | DSL 문법 | JPA Criteria | 대소문자 무시 | 설명 |
 |----------|-------------|:---:|------|
@@ -579,11 +749,11 @@ customName: string @search(like$comName)   # comName 필드에 like 검색
 | `<=` | `lessThanOrEqualTo` | No | 이하 |
 | `in` | `.in()` / `Join.in()` | No | 다중 값 포함 |
 | `between`, `~` | `between` | No | 범위 검색 |
+| `isnull` | `isNull` / `isNotNull` | No | 비어 있는지 검색. 검색 속성 `<필드>Empty: Boolean` (3.4.1, v3 번들 전용) |
 | `auto` | Runtime 결정 | No | String 전용, %포함시 like 아니면 eq |
 
 **미구현 주의:**
 - `!=`, `neq` - 코드에 구현 없음
-- `ISNULL`, `ISNOTNULL` - 미구현
 - `gt`, `gte`, `lt`, `lte` 키워드 - 미구현 (기호 `>`, `>=`, `<`, `<=`만 동작)
 
 ### 3.3 auto 조건 동작
@@ -620,6 +790,77 @@ registDate: localDate @search(between)
 # -> SearchDTO: registDateFrom, registDateTo 필드 생성
 # -> LocalDate이므로 To+1일 자동 적용
 ```
+
+### 3.4.1 isnull - 비어 있는지 검색
+
+"아직 반납하지 않은 대출", "아직 입고된 적 없는 상품"처럼 **값이 비어 있는지**로 찾을 때 씁니다.
+검색 DTO 에는 필드 값 대신 `<필드>Empty` 라는 `Boolean` 속성 하나가 생기고, 그 값이 조건을 정합니다.
+
+| 요청의 `<필드>Empty` | 조건 |
+|---|---|
+| 보내지 않음 또는 `null` | 조건 없음 (모두) |
+| `true` | `IS NULL` - 비어 있는 행만 |
+| `false` | `IS NOT NULL` - 값이 있는 행만 |
+
+```yaml
+entity:
+  Product:
+    meta: entity @expose(20)
+    fields:
+      lastRestocked: datetime @search(isnull) -- last restocked, empty until the first restock
+```
+
+생성되는 `ProductSrchDTO` (날짜 형식 어노테이션과 `example` 은 붙지 않습니다 - 보내는 값이 날짜가 아니므로):
+```java
+/*
+  last restocked, empty until the first restock
+*/
+@Schema(description = "last restocked, empty until the first restock Field is empty (true) or set (false). field:lastRestocked"  )
+private Boolean lastRestockedEmpty;
+```
+
+생성되는 Mapper `toSpec(ProductSrchDTO searchDTO, Specification<Product> sp)`:
+```java
+Boolean lastRestockedEmpty = searchDTO.getLastRestockedEmpty();
+if(hasValue(lastRestockedEmpty)){
+    if(lastRestockedEmpty){
+        sp = sp.and((r,q,c) -> c.isNull(r.get("lastRestocked")));
+    }else{
+        sp = sp.and((r,q,c) -> c.isNotNull(r.get("lastRestocked")));
+    }
+}
+```
+
+호출: `POST /api/v1/shop/product/search {"name":"kettle","lastRestockedEmpty":true}` -> 이름에 kettle 이 들어가고
+아직 입고된 적 없는 상품만. 다른 검색 조건과 AND 로 묶입니다.
+
+Kotlin 과 TypeScript 도 같은 규칙에서 나옵니다:
+```kotlin
+var endDateEmpty: Boolean? = null                    // ProjectSrchDTO.kt
+
+val endDateEmpty = searchDTO.endDateEmpty            // HrMapper.kt toSpec
+if(hasValue(endDateEmpty)){
+    if(endDateEmpty!!){
+        sp = sp.and(Specification<Project> { r,q,c -> c.isNull(r.get<java.time.LocalDate>("endDate")) })
+    }else{
+        sp = sp.and(Specification<Project> { r,q,c -> c.isNotNull(r.get<java.time.LocalDate>("endDate")) })
+    }
+}
+```
+```typescript
+endDateEmpty?: boolean;                              // ProjectSrchDTO.ts
+```
+
+- **필드 하나에 조건 하나.** `isnull` 을 적은 필드는 `between` 의 From/To 를 만들지 않습니다. 기간 검색도 필요하면
+  지금은 Service 에서 `Q`/`Op` 로 직접 조건을 더합니다 (dev-guide "Op 열거형").
+- `@expose` 의 타입별 자동 할당(3.3, 날짜 -> `between`)은 그대로입니다. `@search(isnull)` 을 적은 필드만 바뀝니다.
+- `@ref(order.shippedDate)` 와 함께 쓰면 관계 너머의 컬럼을 검사합니다: `c.isNull(r.get("order").get("shippedDate"))`.
+- 두 번째 값(쉼표 뒤)은 다른 조건과 같이 **엔티티 필드 이름**입니다: `@search(isnull,returnedDate)` ->
+  속성 `returnedDateEmpty`, 조건 `r.get("returnedDate")`.
+- `!` / `@notnull` 필드에는 의미가 없습니다 (`true` 는 늘 빈 결과). 경고는 아직 없습니다.
+- 3.0 규칙 엔진(`elcore3`)의 v3 번들(`jpa-springboot-v3`, `ddd-springboot`, `hexagonal-springboot`, Kotlin 판,
+  `ts-model`)에서 동작합니다. 2.x 생성기(`elcore`)와 2.x 호환 번들(`jpa-springboot`)은 `isnull` 을 모르는 값으로 보고
+  예전처럼 필드 타입 그대로의 같은 값 비교(`c.equal`)를 만듭니다 - 2.x 출력은 바뀌지 않습니다.
 
 ### 3.5 List 필드 + eq = Join 생성
 
@@ -667,6 +908,7 @@ entity:
       email: string @search(%__%)
       status: string @search(in)
       registDate: localDate @search(between)
+      closeDate: localDate @search(isnull)
       score: int @search(>=)
       drivers: List<RentDriver> @search(eq)
 ```
@@ -677,6 +919,7 @@ entity:
 - `email: String` (%__% 대소문자 무시)
 - `status: String` (in)
 - `registDateFrom: LocalDate`, `registDateTo: LocalDate` (between)
+- `closeDateEmpty: Boolean` (isnull - `true` 영업 중, `false` 폐업, 생략 모두. v3 번들 전용)
 - `score: Integer` (>=)
 - `driversItem: RentDriver` (Join eq)
 - `sortCode: String`, `pageNumber: int`, `pageSize: int` (자동 생성)
@@ -747,6 +990,7 @@ optionalField: string @jsoninclude             # @JsonInclude
 
 ```yaml
 email: string(100) @email                       # @Email
+isbn: string(13) @pattern('^[0-9]{13}$', 'ISBN must be 13 digits')   # @Pattern(regexp = ..., message = ...) - 2.2 참조
 birthDate: date @past                           # @Past
 eventDate: datetime @future                     # @Future
 orderDate: datetime @pastorpresent              # @PastOrPresent
@@ -755,6 +999,7 @@ address: AddressDTO                             # DTO 타입 -> @Valid 자동 �
 ```
 
 메시지 패턴: `"{FieldName} required"`, `"{FieldName} max {n}"`, `"Email format invalid"`, `"Date must be past"` 등 간단한 영어.
+`@pattern` 은 메시지를 직접 줄 수 있고, 생략하면 `"<라벨> is not in the expected form"` 입니다(TS 클라이언트와 같은 문장).
 
 ---
 
@@ -830,7 +1075,7 @@ fields:
 | `@jpa:LastModifiedDate` | ❌ | ❌ | ✅ | 자동 주입 필드 |
 | `@jpa:Version` | ❌ | ❌ | ✅ | 낙관적 잠금 |
 | `@formula(...)` | ❌ | ❌ | ✅ | 계산 필드 |
-| `@readonly` | ❌ | ❌ | ✅ | 읽기 전용 |
+| `@readonly` / `@noinput` | ❌ | ❌ | ✅ | 서버가 정하는 필드 (§2.2) |
 | `@writeonly` | ✅ | ✅ | ❌ | 쓰기 전용 |
 | 일반 필드 | ✅ | ✅ | ✅ | 기본값 |
 
@@ -1172,8 +1417,9 @@ Section 3.2의 구현된 연산자 외에는 **사용 불가**합니다. 다음 
 
 #### 미구현 연산자
 - `!=`, `neq` (부정 equal) - 미구현
-- `ISNULL`, `ISNOTNULL` - 미구현
 - `gt`, `gte`, `lt`, `lte` (키워드 형태) - 미구현
+
+비어 있는지(IS NULL / IS NOT NULL) 검색은 `@search(isnull)` 하나로 합니다 (3.4.1).
 
 #### 올바른 사용
 ```yaml
@@ -1334,6 +1580,10 @@ public class PricingDomainService extends PricingDomainServiceBase {
 |---|---|---|---|
 | 엔티티 meta | 없음 | 루트는 분리, `@editable` 이면 분리 안 함 | `XxxBase`(@MappedSuperclass, 재생성) + `Xxx`(@Entity, generate-once) |
 | 필드 | 없음 | 잠김(생성 때만 받음) | setter `protected`, 매퍼가 쓰지 않음, DTO `READ_ONLY` |
+
+필드 `@behavior` 는 **나뉜 루트에서만** 효과가 있습니다. `@editable` 루트나 멤버처럼 나뉘지 않는 엔티티에서는
+DSL 경고만 남기고 필드는 요청으로 그대로 쓸 수 있습니다. 어느 엔티티에서나 "요청으로 받지 않는 서버 값" 이
+필요하면 `@readonly` 를 씁니다 ([§2.2 @readonly / @noinput](#readonly--noinput---서버가-정하는-필드)).
 
 ## @editable — 요청으로 고치는 필드·루트 (DDD 룰셋)
 

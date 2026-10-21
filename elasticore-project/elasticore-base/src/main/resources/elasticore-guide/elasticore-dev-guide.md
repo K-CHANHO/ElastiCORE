@@ -247,6 +247,9 @@ Specification<VendorInfo> spec = Q.VendorInfo.vendorName(Op.ILIKE, "autosure");
 **DSL `@search` vs 런타임 `Op` 차이:**
 - `@search` -> MapperSrcPublisher가 빌드타임에 Specification 코드 생성 (기호: `>`, `>=`, `like` 등)
 - `Op` -> 런타임에 프로그래밍 방식으로 Specification 생성 (NEQ, IS_NULL, 대소문자 무시 `I*` 등 추가 연산 지원)
+- `IS_NULL` / `IS_NOT_NULL` 은 DSL 로도 됩니다: `@search(isnull)` 이 검색 DTO 에 `<필드>Empty: Boolean` 을 만들고
+  `true` 면 `isNull`, `false` 면 `isNotNull` 을 생성합니다 (v3 번들, annotation-guide 3.4.1). 그 필드 하나만
+  비어 있는지 보면 되는 검색이면 `Q`/`Op` 를 손으로 쓰지 않아도 됩니다.
 
 ---
 

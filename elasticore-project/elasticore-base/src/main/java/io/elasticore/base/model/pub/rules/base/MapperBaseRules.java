@@ -145,7 +145,9 @@ public class MapperBaseRules implements CodeRules {
             // A field the DTO dropped with "--" has nothing to write from.
             if (!dtoNames.contains(f.name())) continue;
             if (ServiceAccessRules.nestsGuarded(e, f)) continue;
-            // A field the persistence layer owns is read out, never written in.
+            // A field the persistence layer owns is read out, never written in;
+            // in the clean output so is one the server sets (@readonly), and
+            // one only a root's own methods change (WriteGuardRules, ddd-*).
             if (code.isSystemManaged(f.name())) continue;
             // So is a @formula column, computed by the database on read. In
             // every output, the 2.x-compatible one too (MapperSrcPublisher).

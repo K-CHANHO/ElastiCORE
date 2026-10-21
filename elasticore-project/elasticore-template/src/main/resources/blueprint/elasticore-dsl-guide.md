@@ -127,7 +127,7 @@ entity:
 | `@event(A, B)` | 루트에 일어날 수 있는 일. 이벤트 클래스 + 발생 메서드 생성 |
 | `@invariant(조건, '메시지')` | 루트가 항상 참으로 유지하는 것. 행이 쓰일 때 검사 |
 | `@factory(name)` | 유효한 애그리거트를 만드는 자리 (generate-once) |
-| `@behavior` | 필드에 붙이면 요청으로 보낼 수 없고 업무 메서드로만 바뀜. (루트는 적지 않아도 `XxxBase` + `Xxx` 로 분리됨) |
+| `@behavior` | 필드에 붙이면 요청으로 보낼 수 없고 업무 메서드로만 바뀜. (루트는 적지 않아도 `XxxBase` + `Xxx` 로 분리됨. 나뉘지 않는 `@editable` 루트·멤버에서는 경고만 - 거기서는 `@readonly`) |
 | `@specification(name, 조건)` | 이름을 가질 만한 도메인 규칙. `Predicate` 로 생성 |
 
 `@invariant` 와 `@specification` 의 조건 문법은 **필드·비교·리터럴**로 제한됩니다
@@ -144,8 +144,9 @@ YAML 이 다르게 읽기 때문입니다. 자세한 이유는 annotation guide 
 | `@GeneratedValue` | JPA 자동 생성값 |
 | `@length(n)` | 문자열 최대 길이 |
 | `@default(value)` | 기본값 |
-| `@search(like\|eq\|between\|in)` | 검색 조건 (annotation-guide 참조) |
+| `@search(like\|eq\|between\|in\|isnull)` | 검색 조건 (annotation-guide 참조). `isnull` 은 비어 있는지 검색 - 검색 속성 `<필드>Empty: Boolean` (v3 번들) |
 | `@updatable(false)` | 수정 불가 필드 |
+| `@readonly` / `@noinput` | 서버가 정하는 필드: 응답에는 나가고 요청으로는 받지 않음. v3 번들은 매퍼도 DTO -> 엔티티로 쓰지 않고 DTO 의 `@NotNull`·`@NotBlank` 를 뺌 (annotation-guide §2.2) |
 | `@ref(path)` | 다른 필드 참조 |
 | `@dtype(type)` | DTO 변환 타입 지정 |
 | `@cascade(ALL\|PERSIST\|MERGE\|REMOVE)` | 연관관계 cascade |
@@ -178,6 +179,12 @@ fields:
   comment: Comment @column(parent_comment_id)   # @JoinColumn(name="parent_comment_id")
   comment: Comment! @col(parent_comment_id)     # @JoinColumn(name="parent_comment_id", nullable=false)
 ```
+
+`!`가 붙은 관계는 자동 생성 DTO(`@expose`/`@service`)에서 **FK id 필드가 필수**입니다. 저장 요청은 이 필드를 보냅니다.
+이름은 `필드명 + 대상 @id` (`post: Post!`, 키 `postId` -> `postPostId`; 키가 `id`이면 `topic: Topic!` -> `topicId`).
+응답용 중첩 DTO(`post`)는 요청에서 선택입니다. v3 · Kotlin · TypeScript 생성 기준(3.0.261021부터)이고, 2.x와
+`jpa-springboot` 호환 출력은 이전처럼 중첩 DTO에 `@NotNull`이 붙습니다 -
+`elasticore-annotation-guide.md` "필수 관계 (`!`): 저장 요청은 FK id 필드를 보낸다".
 
 ### Entity 예시
 ```yaml
