@@ -163,7 +163,8 @@ public class OssieExportTest {
                         + OssieSemanticModelExporter.FILE_NAME);
         assertTrue(file.isFile(),
                 "the ddd sample has no exported semantic model - run elcore3 on it first");
-        return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        // A Windows checkout with core.autocrlf holds the committed file with CRLF.
+        return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8).replace("\r\n", "\n");
     }
 
     private Set<String> matches(String text, String pattern) {
