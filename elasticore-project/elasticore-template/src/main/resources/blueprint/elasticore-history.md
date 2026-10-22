@@ -1,4 +1,4 @@
-## 3.0.261021
+## 3.0.261022-rc1
 
 같은 요구사항(도서·회원·대출 API)을 에이전트가 ElastiCORE 로 만들게 하고 어디서 Java 를 손으로 쓰는지 보았다. 네 군데였다:
 서버가 정하는 값(반납일)을 클라이언트가 보내도 막을 수 없었고, "아직 반납하지 않은" 검색을 DSL 로 쓸 수 없었고,
@@ -410,7 +410,7 @@ ISBN 13자리 같은 정규식 검사는 `@pattern` 이 컴파일되지 않는 �
 - 관련 파일: `RulesGenRunner.java`(`warnIfEndpointsMissing`, `missingEndpoints`, `Endpoints`, `warnIfSignInLeft`),
   `SignInAndReferencesTest.java`, `elasticore-annotation-guide.md`
 
-#### 리뷰 - 문서: 3.0.261021 전의 응답
+#### 리뷰 - 문서: 3.0.261022-rc1 전의 응답
 - 규칙 가이드가 "전에는 생명주기 거절도 없는 참조도 422" 라고 했다. 없는 행을 id 로 참조한 저장은 외래 키 위반의 409
   "Conflicts with stored data" 였고 `@snapshot` 원본이 없을 때만 422 였다(위 `requireReferences` 항목). 그렇게 고쳤다
 - 관련 파일: `elasticore-rule-guide.md`
