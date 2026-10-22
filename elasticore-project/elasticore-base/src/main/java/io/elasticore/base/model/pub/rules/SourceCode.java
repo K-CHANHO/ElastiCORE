@@ -5,11 +5,13 @@ import java.util.Map;
 import io.elasticore.base.util.CodeTemplate;
 
 /**
- * The source artifact under construction for one entity.
- * Holds one {@link FieldCode} per model field, in model order.
+ * The file under construction: what the rules say about it, which the
+ * generator renders into its skeleton (.tmpl) and writes. Holds one
+ * {@link FieldCode} per model field, in model order, the class annotations,
+ * the imports and the values of the skeleton's slots.
  *
- * PROTOTYPE - renders only the field block; class skeleton stays
- * with the template (.tmpl) as in 2.x.
+ * Rules reach it through {@code Ctx.ctx(spec)}; a rule set's tests render it
+ * with {@link #render()} and check {@link #unfilledSlots()}.
  */
 public final class SourceCode {
 
@@ -414,6 +416,12 @@ public final class SourceCode {
 
     /** Appends a hand-written method before the closing brace of the class. */
     public SourceCode addMethod(String methodSource) {
+        // A project's entity rule also runs for the developer's class of a
+        // root split in two - for the class annotations. The method it adds
+        // is on the generated base class that one extends, so writing it
+        // again would only override it with a copy. A rule written for the
+        // behavior target itself still adds its method there.
+        if (Boolean.TRUE.equals(BORROWED_ENTITY_RULE.get())) return this;
         addedMethods.add(methodSource);
         return this;
     }
@@ -804,6 +812,9 @@ public final class SourceCode {
      * project rule need not know when the file shell drew the annotations.
      */
     static final ThreadLocal<Boolean> PROJECT_RULE = new ThreadLocal<Boolean>();
+
+    /** Set while a project's entity rule runs for the developer's class of a split root (RuleEngine). */
+    static final ThreadLocal<Boolean> BORROWED_ENTITY_RULE = new ThreadLocal<Boolean>();
 
     private java.util.Set<String> activeRules = java.util.Collections.emptySet();
 
