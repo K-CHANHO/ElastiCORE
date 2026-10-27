@@ -150,9 +150,9 @@ repositories {
 
 dependencies {
     // ElastiCORE 버전은 루트 build.gradle 의 id 'io.elasticore' version 과 같게
-    compileOnly 'io.elasticore:elasticore-base:3.0.261022-rc1'
+    compileOnly 'io.elasticore:elasticore-base:3.0.261027-rc2'
 
-    testImplementation 'io.elasticore:elasticore-base:3.0.261022-rc1'
+    testImplementation 'io.elasticore:elasticore-base:3.0.261027-rc2'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.2'
 }
@@ -500,7 +500,7 @@ DTO 필드에는 ElastiCORE가 `@Schema(description = ...)`를 이미 붙입니�
 
 검색 엔드포인트는 요청을 `@Valid` 로 받으므로 한 글자 검색(`{"name":"A"}`)은 400 입니다
 (`"code":"invalid"`, `fieldErrors` 에 `{"field":"name","code":"Size"}`). 이미 고친 컨트롤러라면
-`search(@Valid @RequestBody ...)` 의 `@Valid` 가 있는지 보세요 - 3.0.261023 전에 생성된 컨트롤러에는 없습니다.
+`search(@Valid @RequestBody ...)` 의 `@Valid` 가 있는지 보세요 - 3.0.261027-rc2 전에 생성된 컨트롤러에는 없습니다.
 
 ### SQL (`repository.yml`) — 조회 쿼리는 읽기 전용, `SELECT *`는 금지
 

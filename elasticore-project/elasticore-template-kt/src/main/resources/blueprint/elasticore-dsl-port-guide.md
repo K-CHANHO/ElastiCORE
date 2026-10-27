@@ -53,7 +53,7 @@ port:
 > **어느 방식인가.** 같은 DSL 로 두 가지 클라이언트가 나옵니다.
 > - **런타임 프록시** (기본, 2.1~2.6): 생성물은 `@ExternalService` 인터페이스이고 구현은 ElastiCORE 런타임의 프록시입니다.
 >   Spring Boot 애플리케이션에서는 런타임 라이브러리의 자동 구성이 빈으로 등록합니다 - `@EnableElastiCore` 는
->   3.0.261023 부터 필요 없습니다 (5장).
+>   3.0.261027-rc2 부터 필요 없습니다 (5장).
 > - **Spring HTTP 서비스 클라이언트** (`httpPort: spring`, Spring Boot 4, 2.7): Spring 이 구현하는 `@HttpExchange`
 >   인터페이스입니다. 규칙 엔진(`elcore3`)의 Spring Boot 4 프로젝트에서 권합니다.
 >
@@ -578,7 +578,7 @@ port:
 
 값 하나를 돌려주는 메서드는 결과 행의 첫 열을 그 타입으로 바꿉니다. 열 값이 NULL 이거나(`SUM` 이 빈 집합) 행이 없으면
 `null` 입니다. 파라미터가 값 하나(`long`·`string`·날짜·enum)이면 SQL 의 `:이름` 에 그 이름으로 묶이고, DTO 하나이면 그 getter 로
-묶입니다 (3.0.261023 부터 - 그 전에는 `long` 파라미터 하나, `long`·`decimal` 반환, `string` 반환이 동작하지 않았습니다). 이름으로
+묶입니다 (3.0.261027-rc2 부터 - 그 전에는 `long` 파라미터 하나, `long`·`decimal` 반환, `string` 반환이 동작하지 않았습니다). 이름으로
 묶으려면 컴파일된 클래스에 파라미터 이름이 남아 있어야 합니다(`-parameters`) - Spring Boot 의 Gradle·Maven 플러그인이 켭니다.
 `List<decimal>` 처럼 목록에도 `decimal` 을 쓸 수 있습니다.
 
@@ -926,7 +926,7 @@ dependencies {
 
 ### Application 클래스
 아무것도 더 적지 않습니다. 런타임 라이브러리(`elasticore-springboot3` / `-springboot4`)가 Spring Boot 자동 구성
-(`ElastiCoreAutoConfiguration`)을 가지고 있어서, 의존성에 있으면 기동할 때 다음을 등록합니다 (3.0.261023 부터):
+(`ElastiCoreAutoConfiguration`)을 가지고 있어서, 의존성에 있으면 기동할 때 다음을 등록합니다 (3.0.261027-rc2 부터):
 
 - 런타임 프록시 포트(2.1~2.6 의 HTTP, 3장의 DBMS) - `@SpringBootApplication` 클래스의 패키지와 그 아래에서 찾습니다.
   Spring Boot 가 엔티티와 리포지터리를 찾는 곳과 같습니다
