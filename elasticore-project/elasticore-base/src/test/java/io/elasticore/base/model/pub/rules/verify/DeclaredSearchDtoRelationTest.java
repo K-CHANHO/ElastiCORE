@@ -89,6 +89,11 @@ public class DeclaredSearchDtoRelationTest {
             assertTrue(dto.contains("private Company insurer;"), dto);
             assertTrue(dto.contains("private Branch branch;"), dto);
             assertTrue(dto.contains("private Company vendor;"), dto);
+            // Kept as a condition, not as a requirement: a search names what it
+            // filters by, and the v3 search endpoint validates its body - a
+            // required relation carried with its @NotNull would answer 400 to
+            // every search that leaves the insurer out.
+            assertFalse(dto.contains("@NotNull"), dto);
         }
     }
 
