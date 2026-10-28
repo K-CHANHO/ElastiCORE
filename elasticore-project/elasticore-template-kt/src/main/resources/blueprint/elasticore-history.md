@@ -1,3 +1,26 @@
+## 3.0.261028
+
+rc2 를 도메인 9개짜리 프로젝트에 `elcore3`·`-Pv3` 로 적용하고, 같은 모델로 2.x 출력과 비교하며 찾은 차이를 고쳤다.
+2.x 생성기와 `jpa-springboot` 번들의 출력은 그대로다.
+
+### Bug Fixes (엔티티 - DSL 이 클래스에 준 어노테이션)
+
+#### `-Pv3`·Kotlin 엔티티가 클래스의 `@jpa:` 어노테이션을 버리던 것 - soft-delete 필터가 사라졌다
+
+```yaml
+LifecycleEntity:
+  meta: entity @abstract @jpa:Where(clause = "delete_yn = 'N'")
+```
+
+- 엔티티 `meta` 에 적은 `@jpa:...`(그리고 env.yml `annotations` 의 `@entity:...` 매핑)는 클래스에 적은 그대로 붙는다.
+  호환 출력은 2.x 처럼 그렇게 썼지만 `-Pv3`·DDD·헥사고날과 Kotlin 엔티티에서는 경고 없이 빠졌다. 컴파일도 테스트도
+  통과하는데, `@Where` 가 빠진 soft-delete 엔티티는 지운 행을 모든 조회에 다시 돌려준다.
+- 이제 v3 와 Kotlin 엔티티도 규칙이 만든 클래스 어노테이션 뒤에 그 줄을 쓴다.
+- 그 줄은 2.x 엔티티 템플릿이 on-demand 로 import 하는 `jakarta.persistence`·`org.hibernate.annotations` 를 기대고 쓴
+  글자 그대로라, 어느 이름을 쓰는지 알 수 없다. 그래서 그런 줄이 있는 엔티티는 두 패키지를 `*` 로 import 한다. 그런 줄이
+  없는 엔티티의 출력은 그대로다.
+- Kotlin 은 필드의 `@jpa:` 처럼 줄을 그대로 쓴다. `X.class` 같은 Java 문법은 Kotlin 문법(`X::class`)으로 적어야 한다.
+
 ## 3.0.261027-rc2
 
 펫스토어에 팀 규칙 모듈(`elasticore { rules = [...] }`)을 붙여 rc1 로 생성·빌드·실행하며 규칙 가이드의 예제를 하나씩 다시

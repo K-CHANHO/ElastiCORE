@@ -1,5 +1,6 @@
 package io.elasticore.base.model.pub.rules.lang.kotlin;
 
+import io.elasticore.base.model.pub.rules.base.JpaEntityAnnotationRules;
 import io.elasticore.base.model.pub.rules.base.RuleText;
 import io.elasticore.base.model.pub.rules.CodeRules;
 import io.elasticore.base.model.pub.rules.EntitySpec;
@@ -66,7 +67,8 @@ public class KotlinEntityFileRules implements CodeRules {
          .var("className", e.getName())
          .var("classAnnotationList", c.renderClassAnnotations())
          .var("classDeclaration", classDeclaration(e))
-         .var("importList", RuleText.stripTrailing(c.renderImports()))
+         .var("importList", RuleText.stripTrailing(
+                 c.renderImports() + JpaEntityAnnotationRules.nativeLineImports(e, c.syntax())))
          .varLines("fieldList", RuleText.linesOf(RuleText.stripTrailing(c.renderFieldBlock())));
     }
 

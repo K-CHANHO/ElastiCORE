@@ -1,5 +1,6 @@
 package io.elasticore.base.model.pub.rules.lang.java;
 
+import io.elasticore.base.model.pub.rules.base.JpaEntityAnnotationRules;
 import io.elasticore.base.model.pub.rules.base.RuleText;
 import io.elasticore.base.model.pub.rules.AnnoCode;
 import io.elasticore.base.model.pub.rules.CodeRules;
@@ -65,7 +66,8 @@ public class JpaEntityFileRules implements CodeRules {
          .var("classAnnotationList", c.renderClassAnnotations())
          .var("classDeclaration", "%s class %s%s implements java.io.Serializable {",
                  modifier, e.getName(), extendsClause)
-         .var("importList", RuleText.stripTrailing(c.renderImports()))
+         .var("importList", RuleText.stripTrailing(
+                 c.renderImports() + JpaEntityAnnotationRules.nativeLineImports(e, c.syntax())))
          // The field slot sits inside the class body, so each line takes the
          // slot's indentation rather than carrying its own.
          .varLines("fieldList", RuleText.linesOf(RuleText.stripTrailing(c.renderFieldBlock())));
