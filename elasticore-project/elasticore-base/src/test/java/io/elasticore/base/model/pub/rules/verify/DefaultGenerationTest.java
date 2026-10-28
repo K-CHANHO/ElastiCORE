@@ -222,6 +222,39 @@ public class DefaultGenerationTest {
     }
 
     @Test
+    public void aMyBatisDomainUnderTheTwoXSwitchIsRefused() throws Exception {
+        // MyBatis code is 3.0 code: -Pv2 asks for 2.x's JPA code, and the
+        // refusal must not send the domain to the 2.x generator either.
+        File project = project(null, "mybatis");
+        System.setProperty("elasticore.base.path", project.getAbsolutePath());
+        System.setProperty("elasticore.rules.force", "true");
+        System.setProperty("elasticore.rules.v2", "true");
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        PrintStream out = System.out;
+        System.setOut(new PrintStream(bytes, true, "UTF-8"));
+        int code;
+        try {
+            code = RulesGenRunner.run(new String[0]);
+        } finally {
+            System.setOut(out);
+        }
+        String log = new String(bytes.toByteArray(), StandardCharsets.UTF_8);
+        assertEquals(1, code, log);
+        assertTrue(log.contains("is mode: mybatis, but the code 2.x generates"), log);
+        assertNull(find(project, "Note.java"), "code was written for a refused domain: " + log);
+    }
+
+    @Test
+    public void jpaBesideMongoStillWritesTheJpaCode() throws Exception {
+        // 2.x writes both for "jpa,mongo"; the rule engine writes the JPA half
+        // and says the rest is the 2.x generator's - as before the axis existed.
+        File project = project(null, "jpa,mongo");
+        String log = run(project);
+        assertTrue(log.contains("mode mongo"), log);
+        assertNotNull(find(project, "Note.java"), log);
+    }
+
+    @Test
     public void theMarkerIsReadAsTheGeneratorWroteIt() throws Exception {
         File project = project(null);
         List<String> roots = new ArrayList<String>();

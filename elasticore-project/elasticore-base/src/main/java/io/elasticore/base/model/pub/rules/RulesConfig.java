@@ -69,7 +69,104 @@ public final class RulesConfig {
     }
 
     /**
-     * The bundle two choices name, so that they cannot be named separately.
+     * Where the generated code keeps its data: the third choice beside the
+     * architecture and the language. A domain says it in env.yml as its mode
+     * (config.mode, "jpa" when unsaid) - the key 2.x already reads for jpa and
+     * mongo - so that one word, not two, names it.
+     *
+     * The rule engine writes JPA and MyBatis code. MongoDB is known so that a
+     * domain naming it is told it is the 2.x generator's, rather than refused
+     * as an unknown word.
+     */
+    public enum Persistence {
+        JPA, MYBATIS, MONGO;
+
+        /** Whether the rule engine writes code for it. */
+        public boolean generated() {
+            return this != MONGO;
+        }
+    }
+
+    /** The MyBatis bundle: layered Java, the JPA bundle's DTOs and API over MyBatis mappers. */
+    public static final String MYBATIS_BUNDLE = "mybatis-springboot";
+
+    /** Whether a domain whose env.yml mode is this one is generated as MyBatis code. */
+    public static boolean mybatis(String mode) {
+        return persistenceOfMode(mode) == Persistence.MYBATIS;
+    }
+
+    /**
+     * Why an architecture and language cannot be generated as MyBatis code, or
+     * null when they can. MyBatis code is layered Java: the domain model and
+     * the hexagon rest on JPA's change tracking and lifecycle callbacks, and
+     * the Kotlin service is the JPA one.
+     */
+    public static String mybatisRefusal(Architecture architecture, Language language) {
+        if (language == Language.TYPESCRIPT) return null;
+        if (language == Language.KOTLIN) {
+            return "MyBatis code is written in Java; language = 'kotlin' is generated for JPA only";
+        }
+        if (architecture == Architecture.DOMAIN_MODEL || architecture == Architecture.HEXAGONAL) {
+            return "MyBatis code is layered (architecture = 'layered'); architecture = '"
+                    + (architecture == Architecture.DOMAIN_MODEL ? "ddd" : "hexagonal")
+                    + "' is generated for JPA only";
+        }
+        return null;
+    }
+
+    /**
+     * The persistence the rule engine writes for a domain's mode, or null
+     * when the mode names none.
+     *
+     * The mode is a list - "jpa,uml" writes JPA code and a UML document; uml
+     * and dsl are documents. 2.x writes every persistence a mode names, so
+     * "jpa,mongo" is a project 2.x already serves; here the first in the
+     * order of the enum is the one written, JPA before the others, and the
+     * caller says what is left to the 2.x generator. Unsaid is JPA, as it
+     * always was.
+     */
+    public static Persistence persistenceOfMode(String mode) {
+        if (mode == null || mode.trim().isEmpty()) return Persistence.JPA;
+        Persistence found = null;
+        for (String part : mode.split(",")) {
+            Persistence p = persistenceNamed(part);
+            if (p != null && (found == null || p.ordinal() < found.ordinal())) found = p;
+        }
+        return found;
+    }
+
+    /** One word of a mode as a persistence, or null when it is not one. */
+    public static Persistence persistenceNamed(String name) {
+        if (name == null) return null;
+        String key = name.trim().toLowerCase();
+        if (key.equals("jpa")) return Persistence.JPA;
+        if (key.equals("mybatis")) return Persistence.MYBATIS;
+        if (key.equals("mongo") || key.equals("mongodb")) return Persistence.MONGO;
+        return null;
+    }
+
+    /**
+     * The bundle three choices name. A combination with no bundle is refused
+     * here as well as by the runner, so a caller cannot get a JPA bundle for
+     * a domain that asked for something else. The browser's model is the same
+     * whatever the server keeps its data in.
+     */
+    public static String bundleFor(Architecture architecture, Language language, Persistence persistence) {
+        if (persistence == null || persistence == Persistence.JPA || language == Language.TYPESCRIPT) {
+            return bundleFor(architecture, language);
+        }
+        if (persistence == Persistence.MYBATIS) {
+            String refusal = mybatisRefusal(architecture, language);
+            if (refusal != null) throw new IllegalArgumentException(refusal + ".");
+            return MYBATIS_BUNDLE;
+        }
+        throw new IllegalArgumentException("No rule bundle writes " + persistence.name().toLowerCase()
+                + " code; the 2.x generator does.");
+    }
+
+    /**
+     * The bundle two choices name, so that they cannot be named separately -
+     * for JPA, the persistence every bundle here writes.
      *
      * A bundle decides which rules run; a system property decides which tree
      * and which extension. They are two switches for one decision, and the
