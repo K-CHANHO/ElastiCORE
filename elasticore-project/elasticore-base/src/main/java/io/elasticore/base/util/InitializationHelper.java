@@ -407,6 +407,12 @@ public class InitializationHelper {
             content.append("      #rules: [").append(alternative).append("]")
                    .append("   # ").append(label(i)).append("\n");
         }
+        // Layered Java is the v3 bundle since 3.0.261028; the code 2.x
+        // generates is one line away for a project that keeps it.
+        if (!kotlin) {
+            content.append("      #rules: [").append(RulesConfig.DEFAULT_BUNDLE).append("]")
+                   .append("   # the code 2.x generates\n");
+        }
         content.append("\n");
 
         content.append("  namespace:\n");

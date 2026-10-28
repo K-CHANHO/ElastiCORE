@@ -283,11 +283,12 @@ processManager:                              config:
 
 ### 현재 상태
 
-- **3.0 은 정식 출시 전(pre-release)입니다.** 이력에 적은 버그 수정과 Spring Boot 4 에서 Jackson 3 에 맞춘 enum 을
-  빼면 2.x 가 만들던 코드는 그대로입니다: `elasticore` 블록에 `architecture`·`language`·`rules` 를 적지 않은 프로젝트는
-  2.x 생성기가 생성하고, 그 생성기가 만든 기준 프로젝트는 커밋된 그대로여야 하며, 규칙 엔진의 `jpa-springboot`
-  번들(레이어드 Java)은 그 출력과 비교됩니다 - 둘 다 풀 리퀘스트마다.
-- v3 번들의 출력은 정식 출시 전까지 바뀔 수 있습니다 - `jpa-springboot-v3`(레이어드, `-Pv3`), DDD, 헥사고날, Kotlin,
+- **3.0 은 정식 출시 전(pre-release)입니다.** 프로젝트는 2.x 의 코드를 유지한다고 하지 않는 한 3.0 코드를 받습니다.
+  유지하는 프로젝트(`elasticore { output = 'v2' }`)는 이력에 적은 버그 수정과 Spring Boot 4 에서 Jackson 3 에 맞춘
+  enum 을 빼면 2.x 가 만들던 코드 그대로입니다: 2.x 생성기가 생성하고, 그 생성기가 만든 기준 프로젝트는 커밋된
+  그대로여야 하며, 규칙 엔진의 `jpa-springboot` 번들(레이어드 Java)은 그 출력과 비교됩니다 - 둘 다 풀 리퀘스트마다.
+  2.x 가 생성한 코드를 가진 프로젝트가 아무것도 고르지 않으면 무엇이든 다시 쓰기 전에 멈춥니다.
+- v3 번들의 출력은 정식 출시 전까지 바뀔 수 있습니다 - `jpa-springboot-v3`(레이어드 Java, 기본값), DDD, 헥사고날, Kotlin,
   TypeScript. 바뀔 때마다 그 이유를
   [이력](../elasticore-project/elasticore-base/src/main/resources/elasticore-guide/elasticore-history.md)에 적습니다.
 - **3.0 은 첫 정식 릴리스부터 3년간 지원합니다**: 생성기, Gradle 플러그인, 두 런타임 라이브러리의 버그·보안 수정을

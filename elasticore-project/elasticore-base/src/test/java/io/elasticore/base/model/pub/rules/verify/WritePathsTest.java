@@ -72,8 +72,14 @@ public class WritePathsTest {
         runTs(java, "hexagonal");
         // -Pv3 given to the server's run only: the client learns it from what that run recorded.
         runTs(layered, null);
+        // A client of a server that keeps 2.x's code: output = 'v2'.
         compat = project("elcore-writes-compat");
-        runTs(compat, null);
+        System.setProperty("elasticore.rules.v2", "true");
+        try {
+            runTs(compat, null);
+        } finally {
+            System.clearProperty("elasticore.rules.v2");
+        }
     }
 
     private static File compat;

@@ -30,13 +30,17 @@ import java.util.Map;
  * Source generation through the 3.0 rule pipeline. Driven by the elcore3
  * gradle task, alongside - never replacing - the existing elcore task.
  *
- *   ./gradlew elcore3 [-Pdomain=content] [-Pv3] [-Pforce]
+ *   ./gradlew elcore3 [-Pdomain=content] [-Pv3|-Pv2] [-Pforce]
  *
- * Modes:
- *   default : compatibility mode - the 2.x templates, output verified
- *             byte-identical by elcoreRulesCheck
- *   -Pv3    : clean mode - the v3 templates (used-imports only,
- *             rule-emitted class annotations, per-entity method selection)
+ * Modes (layered Java; DDD, hexagonal and Kotlin are always v3):
+ *   default : v3 since 3.0.261028 - the v3 templates (used-imports only,
+ *             rule-emitted class annotations, per-entity method selection);
+ *             a project that chose nothing and holds code 2.x generated is
+ *             stopped instead (twoXGenerated)
+ *   -Pv3    : v3, chosen - also output = 'v3' in the elasticore block
+ *   -Pv2    : the 2.x templates, output verified byte-identical by
+ *             elcoreRulesCheck - also output = 'v2', or jpa-springboot named
+ *             in a domain's env.yml
  *
  * File safety mirrors 2.x writeSrcCode: a file carrying the generate-once
  * marker is never touched, and a file whose //ecd: hash shows developer
@@ -127,6 +131,74 @@ public final class RulesGenRunner {
             }
         }
         return null;
+    }
+
+    /**
+     * The first domain whose env.yml names the 2.x bundle, jpa-springboot -
+     * the initialization wizard wrote it for a layered Java domain before
+     * 3.0.261028 - as a line for the log, or null.
+     */
+    static String domainKeepingTwoX(List<ECoreModel> models) {
+        if (models == null) return null;
+        for (ECoreModel model : models) {
+            java.util.List<String> rules = RulesConfig.configuredList(model.getConfig("publisher.rules"));
+            if (rules == null) continue;
+            for (String rule : rules) {
+                if (RulesConfig.DEFAULT_BUNDLE.equals(rule.trim())) {
+                    return "domain '" + model.getInternalDomainName() + "' names " + RulesConfig.DEFAULT_BUNDLE;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * A source file a 2.x generator wrote, under any of the roots, or null.
+     *
+     * Every generated file starts with its hash line, which ends in the
+     * version of the generator that last changed it: "//ecd:...H..._V2.1".
+     * One from 1.x or 2.x is a project that has run before 3.0. A project
+     * that ran a 3.0 release candidate in the 2.x-compatible mode carries
+     * "_V3.0" like any other and is not seen here - its env.yml names
+     * jpa-springboot when the wizard wrote it (domainKeepingTwoX), and its
+     * last run is in build/elasticore/server.mode for the client.
+     */
+    static String twoXGenerated(java.util.Collection<String> roots) {
+        for (String root : roots) {
+            File sources = new File(root, "src/main/java");
+            if (!sources.isDirectory()) continue;
+            final String[] found = new String[1];
+            try {
+                java.nio.file.Files.walkFileTree(sources.toPath(), new java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
+                    @Override
+                    public java.nio.file.FileVisitResult visitFile(java.nio.file.Path file,
+                            java.nio.file.attribute.BasicFileAttributes attrs) {
+                        if (!file.toString().endsWith(".java")) return java.nio.file.FileVisitResult.CONTINUE;
+                        String first = firstLine(file.toFile());
+                        if (first != null && first.startsWith(String.valueOf((char) 0xFEFF))) first = first.substring(1);
+                        if (first != null && first.startsWith("//ecd:")
+                                && (first.contains("_V1.") || first.contains("_V2."))) {
+                            found[0] = sources.toPath().relativize(file).toString().replace('\\', '/');
+                            return java.nio.file.FileVisitResult.TERMINATE;
+                        }
+                        return java.nio.file.FileVisitResult.CONTINUE;
+                    }
+                });
+            } catch (IOException unreadable) {
+                // A tree that cannot be walked holds nothing this can name.
+            }
+            if (found[0] != null) return found[0];
+        }
+        return null;
+    }
+
+    private static String firstLine(File file) {
+        try (java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(
+                new java.io.FileInputStream(file), StandardCharsets.UTF_8))) {
+            return in.readLine();
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     /**
@@ -270,7 +342,17 @@ public final class RulesGenRunner {
         io.elasticore.base.model.pub.rules.SourceCode.resetWarnings();
         SpecFactory.applicationSignIns(-1, null);
 
-        boolean v3 = Boolean.getBoolean("elasticore.rules.v3");
+        // The generation the build chose: -Pv3 / output = 'v3', or -Pv2 /
+        // output = 'v2' for the code 2.x generates. Neither is the default -
+        // the 3.0 code since 3.0.261028 - decided once the model is read.
+        boolean v3Asked = Boolean.getBoolean("elasticore.rules.v3");
+        boolean v2Asked = Boolean.getBoolean("elasticore.rules.v2");
+        if (v3Asked && v2Asked) {
+            io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] both generations asked for (-Pv2 and -Pv3, or"
+                    + " output and the other switch) - choose one");
+            return 1;
+        }
+        boolean v3 = v3Asked;
         boolean force = Boolean.getBoolean("elasticore.rules.force");
         boolean kotlin = Boolean.getBoolean("elasticore.rules.kt");
         boolean typescript = Boolean.getBoolean("elasticore.rules.ts");
@@ -296,15 +378,22 @@ public final class RulesGenRunner {
                 || declaredArchitecture == RulesConfig.Architecture.HEXAGONAL) {
             v3 = true;
         }
+        // 2.x's code is layered Java: there is no 2.x domain model, hexagon
+        // or Kotlin to keep.
+        if (v2Asked && (v3 || kotlin)) {
+            io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] -Pv2 / output = 'v2' asks for the code 2.x generates,"
+                    + " which is layered Java - not " + (kotlin ? "Kotlin" : "architecture " + declaredArchitecture));
+            return 1;
+        }
         String domainFilter = System.getProperty("elasticore.domain");
 
         // A multi-module project keeps its blueprints per module, and names
         // those modules the same way the 2.x extractor is told about them.
         String modulePaths = System.getProperty("elasticore.modules");
 
-        System.out.println("[elcore3] mode      : "
-                + (typescript ? "typescript" : kotlin ? "kotlin"
-                        : v3 ? "v3 (clean)" : "compatible"));
+        if (typescript || kotlin) {
+            System.out.println("[elcore3] mode      : " + (typescript ? "typescript" : "kotlin"));
+        }
         System.out.println("[elcore3] project   : " + basePath);
 
         // The guides go beside the model here as well as in ModelExtractor.
@@ -345,14 +434,50 @@ public final class RulesGenRunner {
                 new ArrayList<io.elasticore.base.ECoreModelContext>(loader.contexts().values()));
         RulesConfig.settleSpringBoot(loader.contexts().values());
 
-        // And a domain that names a v3 bundle in its own env.yml gets v3 too,
-        // with no switch to remember: the rule names say what they need.
-        if (!v3 && !kotlin && !typescript) {
+        // The generation, where the build chose none. A domain that names a
+        // v3 bundle in its env.yml gets v3, one that names the 2.x bundle
+        // (jpa-springboot) keeps 2.x's code - the rule names say what they
+        // need. Otherwise the 3.0 code, the default since 3.0.261028; but not
+        // over a project that holds what 2.x generated: an upgrade that
+        // rewrote its sources, and changed how its search and its refusals
+        // behave, without the project asking, is stopped and the choice put
+        // to it instead.
+        String why = v2Asked ? "-Pv2 / output = 'v2'" : v3Asked ? "-Pv3 / output = 'v3'"
+                : v3 ? "architecture " + declaredArchitecture : null;
+        if (!v3 && !v2Asked && !kotlin) {
             String asking = domainAskingForV3(loader.allModels());
+            String keeping = asking == null ? domainKeepingTwoX(loader.allModels()) : null;
+            java.util.List<String> sourceRoots = new ArrayList<String>(loader.moduleRoots().values());
+            if (sourceRoots.isEmpty()) sourceRoots.add(basePath);
+            String twoX = asking == null && keeping == null ? twoXGenerated(sourceRoots) : null;
             if (asking != null) {
                 v3 = true;
-                System.out.println("[elcore3] mode      : v3 (clean) - " + asking);
+                why = asking;
+            } else if (keeping != null) {
+                why = keeping;
+            } else if (twoX != null) {
+                if (!typescript) {
+                    io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] This project holds code 2.x generated ("
+                            + twoX + "). Since 3.0.261028 the generator writes the 3.0 code unless told otherwise,"
+                            + " which would rewrite these sources and change how search, refusals and access behave."
+                            + " Choose in build.gradle: elasticore { output = 'v2' } keeps the 2.x code;"
+                            + " elasticore { output = 'v3' } moves to the 3.0 code - see elasticore-migration-guide.md."
+                            + " No source was written.");
+                    return 1;
+                }
+                // A client of that server: the server is 2.x's until the project moves.
+                why = "the server holds code 2.x generated";
+            } else if (typescript && "compatible".equals(readText(serverMode(
+                    sourceRoots.get(0))))) {
+                why = "the server's last run";
+            } else {
+                v3 = true;
+                why = "the default";
             }
+        }
+        if (!kotlin) {
+            System.out.println("[elcore3] mode      : " + (typescript ? "typescript, for a server in " : "")
+                    + (v3 ? "v3" : "2.x-compatible") + (why != null ? " - " + why : ""));
         }
 
         // The project's own rule sets, checked once before anything is
@@ -1515,16 +1640,13 @@ public final class RulesGenRunner {
     }
 
     private String defaultBundle(boolean typescript) {
+        // Layered Java follows the mode the run settled on: the 2.x bundle
+        // when the project keeps 2.x's code, the v3 one otherwise. A bundle
+        // and a mode that disagree - the 2.x bundle on the v3 skeletons, or
+        // the reverse - is the exact bug class bundleFor exists to eliminate.
+        if (!v3 && !kotlin && !typescript) return RulesConfig.DEFAULT_BUNDLE;
         RulesConfig.Architecture architecture = RulesConfig.declaredArchitecture();
         if (architecture != null) {
-            // -Pv3 still chooses the clean file set for a layered Java run.
-            // Dropping it here while the switch went on driving the v3
-            // skeletons was a bundle and a switch disagreeing - the exact bug
-            // class bundleFor exists to eliminate, reintroduced by its caller.
-            if (architecture == RulesConfig.Architecture.LAYERED && v3
-                    && !kotlin && !typescript) {
-                return RulesConfig.DEFAULT_BUNDLE_V3;
-            }
             return RulesConfig.bundleFor(architecture,
                     typescript ? RulesConfig.Language.TYPESCRIPT
                             : kotlin ? RulesConfig.Language.KOTLIN

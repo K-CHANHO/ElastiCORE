@@ -59,12 +59,13 @@ public class ElastiCorePluginTest {
 
         String reported = reportOf(run("reportElcore"));
 
-        // This is the promise the whole opt-in design rests on. A default of
-        // "layered" would read identically here and would not be the same
-        // thing: it would send a value down a channel that used to be silent,
-        // and every existing project would become one that is choosing.
+        // The plugin invents no declaration: the generator tells a build that
+        // said nothing from one that chose, and only then checks whether the
+        // project holds 2.x's code before writing the 3.0 code over it.
         assertTrue(!reported.contains("elasticore.architecture"), reported);
         assertTrue(!reported.contains("elasticore.language"), reported);
+        assertTrue(!reported.contains("elasticore.rules.v2"), reported);
+        assertTrue(!reported.contains("elasticore.rules.v3"), reported);
         assertTrue(reported.contains("elasticore.base.path"), reported);
     }
 
@@ -265,7 +266,7 @@ public class ElastiCorePluginTest {
     }
 
     @Test
-    @DisplayName("compilation waits for generation")
+    @DisplayName("compilation waits for generation - the rule engine, by default")
     public void compileDependsOnGeneration() throws IOException {
         writeSettings("single");
         writeBuild("plugins { id 'io.elasticore'; id 'java' }");
@@ -274,11 +275,59 @@ public class ElastiCorePluginTest {
 
         // Gradle is otherwise free to compile the previous tree, whose symptom
         // is a compile error in generated code that no longer matches the
-        // model and whose cause is invisible from there. ":elcore SKIPPED",
-        // not ":elcore" - the loose form is also satisfied by :elcore3, which
-        // an audit pointed out makes the assertion unable to say WHICH
-        // generator got wired.
+        // model and whose cause is invisible from there. Since 3.0.261028 a
+        // build that declares nothing is on the rule engine: ":elcore3
+        // SKIPPED", and not the 2.x generator - ":elcore SKIPPED" exactly,
+        // since the loose ":elcore" is also satisfied by :elcore3.
+        assertTrue(output.contains(":elcore3 SKIPPED"), output);
+        assertTrue(!output.contains(":elcore SKIPPED"), output);
+    }
+
+    @Test
+    @DisplayName("a build that keeps 2.x's code waits for the 2.x generator, and says so to elcore3")
+    public void outputV2KeepsTheTwoXGenerator() throws IOException {
+        writeSettings("single");
+        writeBuild("plugins { id 'io.elasticore'; id 'java' }",
+                "elasticore { output = 'v2' }",
+                REPORTER);
+
+        String output = run("compileJava", "--dry-run").getOutput();
         assertTrue(output.contains(":elcore SKIPPED"), output);
+        assertTrue(!output.contains(":elcore3 SKIPPED"), output);
+
+        // elcore3 run by hand on the same project writes the 2.x-compatible
+        // code too, rather than the default it would otherwise take.
+        String reported = reportOf(run("reportElcore"));
+        assertTrue(reported.contains("elasticore.rules.v2=true"), reported);
+        assertTrue(!reported.contains("elasticore.rules.v3"), reported);
+    }
+
+    @Test
+    @DisplayName("output = 'v3' is passed as the choice it is")
+    public void outputV3IsPassed() throws IOException {
+        writeSettings("single");
+        writeBuild("plugins { id 'io.elasticore' }",
+                "elasticore { output = 'v3' }",
+                REPORTER);
+
+        String reported = reportOf(run("reportElcore"));
+        assertTrue(reported.contains("elasticore.rules.v3=true"), reported);
+        assertTrue(!reported.contains("elasticore.rules.v2"), reported);
+    }
+
+    @Test
+    @DisplayName("2.x's code cannot be asked of a hexagon, and an unknown output is refused")
+    public void outputV2RefusesWhatOnlyTheRuleEngineReads() throws IOException {
+        writeSettings("single");
+        writeBuild("plugins { id 'io.elasticore'; id 'java' }",
+                "elasticore { output = 'v2'; architecture = 'hexagonal' }");
+        String refused = runAndFail("compileJava", "--dry-run").getOutput();
+        assertTrue(refused.contains("output = 'v2'"), refused);
+
+        writeBuild("plugins { id 'io.elasticore'; id 'java' }",
+                "elasticore { output = 'v4' }");
+        String unknown = runAndFail("compileJava", "--dry-run").getOutput();
+        assertTrue(unknown.contains("'v3' (the default) or 'v2'"), unknown);
     }
 
     @Test
@@ -375,6 +424,15 @@ public class ElastiCorePluginTest {
                 .withArguments(withStacktrace)
                 .forwardOutput()
                 .build();
+    }
+
+    private BuildResult runAndFail(String... arguments) {
+        return GradleRunner.create()
+                .withProjectDir(projectDir.toFile())
+                .withPluginClasspath()
+                .withArguments(arguments)
+                .forwardOutput()
+                .buildAndFail();
     }
 
     private void writeSettings(String name, String... modules) throws IOException {

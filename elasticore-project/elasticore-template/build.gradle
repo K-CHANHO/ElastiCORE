@@ -8,12 +8,16 @@ plugins {
 	id 'io.elasticore'
 }
 
-// No elasticore block, on purpose. This module is the golden tree: what it
-// generates must equal what 2.x generated, byte for byte, and declaring an
-// architecture would send a value down a channel that used to be silent.
-// Applying the plugin and saying nothing is the case every existing project
-// is in, so this module is also where that promise is checked.
-//
+// This module is the golden tree: what it generates must equal what 2.x
+// generated, byte for byte. Since 3.0.261028 a build that says nothing gets
+// the 3.0 code, so it says what every project keeping 2.x's code says:
+// output = 'v2' - the build then runs the 2.x generator, and elcore3 run here
+// by hand writes the 2.x-compatible code that elcoreRulesCheck compares.
+// Without it, the generator would find the 2.x code here and stop.
+elasticore {
+	output = 'v2'
+}
+
 // Inside this repository elasticore-base is the module next door rather than a
 // published artifact, so the configuration the plugin would resolve is filled
 // explicitly.
@@ -196,6 +200,9 @@ task elcoreTreeGenerate(type: JavaExec) {
 	classpath = project(':elasticore-project:elasticore-base').sourceSets.main.runtimeClasspath
 	mainClass = 'io.elasticore.base.model.pub.rules.verify.RulesGenRunner'
 	systemProperty 'elasticore.base.path', treeCheckRoot.absolutePath
+	// The 2.x-compatible code, which is what 2.x's tree is compared with -
+	// not the default, which is the 3.0 code since 3.0.261028.
+	systemProperty 'elasticore.rules.v2', 'true'
 	jvmArgs '-Dfile.encoding=UTF-8'
 	outputs.upToDateWhen { false }
 }

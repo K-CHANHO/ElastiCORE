@@ -127,8 +127,12 @@ public class InitializationTest {
 
         // The wizard asks once. Everything after that is somebody reading
         // their own env.yml, so the choice has to still be visible in it.
-        assertEquals(2, countOf(env, "      #rules: ["),
-                "the other two architectures are not offered in the generated file:" + nl() + env);
+        // The other two architectures, and since 3.0.261028, when layered Java
+        // became the v3 bundle, the code 2.x generates.
+        assertEquals(3, countOf(env, "      #rules: ["),
+                "the other two architectures and 2.x's code are not offered in the generated file:" + nl() + env);
+        assertTrue(env.contains("      rules: [jpa-springboot-v3]"), env);
+        assertTrue(env.contains("      #rules: [jpa-springboot]   # the code 2.x generates"), env);
         assertTrue(env.contains("elasticore-rule-guide.md"), "the file does not say where the bundles are explained");
     }
 

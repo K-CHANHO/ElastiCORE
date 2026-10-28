@@ -282,11 +282,12 @@ The declarations also produce `blueprint/context-map.md`, a Mermaid context map.
 
 ### Status
 
-- **3.0 is in pre-release.** What 2.x generated stays as it was, apart from the bug fixes the history lists and, on
-  Spring Boot 4, enums written for Jackson 3: a project whose `elasticore` block declares no `architecture`,
-  `language` or `rules` runs 2.x's generator, whose output for the reference project is held to the committed tree,
-  and the rule engine's `jpa-springboot` bundle (layered Java) is compared with it — both on every pull request.
-- The v3 bundles — `jpa-springboot-v3` (layered, `-Pv3`), DDD, hexagonal, Kotlin, TypeScript — may still change
+- **3.0 is in pre-release.** A project gets the 3.0 code unless it keeps 2.x's. What 2.x generated stays as it was
+  for a project that keeps it, apart from the bug fixes the history lists and, on Spring Boot 4, enums written for
+  Jackson 3: `elasticore { output = 'v2' }` runs 2.x's generator, whose output for the reference project is held to
+  the committed tree, and the rule engine's `jpa-springboot` bundle (layered Java) is compared with it — both on every
+  pull request. A project holding code 2.x generated that chose neither is stopped before anything is rewritten.
+- The v3 bundles — `jpa-springboot-v3` (layered Java, the default), DDD, hexagonal, Kotlin, TypeScript — may still change
   between pre-releases; each change is listed with its reason in the
   [history](../elasticore-project/elasticore-base/src/main/resources/elasticore-guide/elasticore-history.md) (in Korean).
 - **3.0 is supported for three years from its first stable release**: bug and security fixes to the generator, the

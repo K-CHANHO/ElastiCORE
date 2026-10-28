@@ -81,6 +81,16 @@ public class ModelNamedLikeAnAnnotationTest {
         assertNoSimpleComment(project);
     }
 
+    /** Layered Java is the v3 code since 3.0.261028; the 2.x-compatible code is asked for, and checked too. */
+    @Test
+    public void theRuleEngineWritesItInFullOnLayeredJavaKeeping2x() throws Exception {
+        Path project = project("layered-v2", BOARD, env3());
+        generate(project, RulesGenRunner.class.getName(), "-Delasticore.architecture=layered",
+                "-Delasticore.language=java", "-Delasticore.springBoot=4.0.8", "-Delasticore.rules.v2=true");
+        assertTrue(anyFileContains(project, "@org.hibernate.annotations.Comment(\"comment text\")"), tree(project));
+        assertNoSimpleComment(project);
+    }
+
     @Test
     public void theRuleEngineWritesItInFullOnHexagonal() throws Exception {
         Path project = project("hexagonal", BOARD, env3());

@@ -893,9 +893,9 @@ and does not override abstract method batchUpdate` 로 컴파일되지 않았음
 컨트롤러·유스케이스만 따릅니다. 2.x 호환 번들은 적힌 대로만 뺍니다. 프로젝트 규칙이 `ctx(e).excludeMethod("update")` 로
 직접 뺄 때도 v3 출력은 같이 데려갑니다(`batchUpdate` 가 없는 `update` 를 부르지 않음). TypeScript 클라이언트는 서버를
 따라, 서버가 2.x 호환 출력이면 적힌 것만 뺍니다(`@restExclude(update)` 여도 2.x 서버에 남는 `PUT /batch` 의 `batchUpdate` 는
-클라이언트에도 남음). 서버의 모드는 `elcore3ts` 자신의 설정(아키텍처·언어·`-Pv3`·v3 규칙)과, 서버를 마지막으로 만든
-`elcore3` 가 `build/elasticore/server.mode` 에 남긴 값으로 압니다 - `-Pv3` 를 `elcore3` 에만 준 레이어드 프로젝트도
-`elcore3` 를 먼저 돌렸으면 클라이언트가 v3 서버를 따릅니다.
+클라이언트에도 남음). 서버의 모드는 `elcore3ts` 자신의 설정(아키텍처·언어·`output`·`-Pv2`/`-Pv3`·도메인의 규칙)으로
+압니다. 아무것도 정하지 않았으면 서버도 기본값인 v3 로 봅니다 - 다만 2.x 가 생성한 소스가 있는 프로젝트이거나, 서버를
+마지막으로 만든 `elcore3` 가 `build/elasticore/server.mode` 에 2.x 호환이라고 남겼으면 2.x 서버를 따릅니다.
 
 - **버전 비교**는 DTO 의 `version` 속성을 이름으로 읽습니다(`VersionCheck`). DTO 에 버전이
   없거나 요청이 보내지 않으면 검사하지 않습니다.
@@ -1616,8 +1616,29 @@ elasticore {
 
 #### 기존 스위치
 
-`-Pdomain=shop`, `-Pmode=valid`, `-Pforce`, `-Pv3`, `-Pkt`, `-Pts` 모두 그대로
+`-Pdomain=shop`, `-Pmode=valid`, `-Pforce`, `-Pv3`, `-Pv2`, `-Pkt`, `-Pts` 모두 그대로
 전달됩니다. 플러그인을 도입한다고 명령어가 바뀌지 않습니다.
+
+#### 어느 세대의 코드인가 (`output`)
+
+3.0.261028 부터 플러그인은 아무것도 선언하지 않은 레이어드 Java 프로젝트에 **3.0 코드**(`jpa-springboot-v3`)를
+생성합니다. 2.x 생성기가 쓰던 코드를 유지하는 프로젝트는 한 줄로 정합니다:
+
+```gradle
+elasticore {
+    output = 'v2'      // 2.x 의 코드. 빌드는 2.x 생성기(elcore)를 부르고, elcore3 도 2.x 호환 코드를 씁니다
+}
+```
+
+| 설정 | 생성되는 코드 |
+|---|---|
+| 없음 | 3.0 코드. 단 2.x 가 생성한 소스(첫 줄 `//ecd:..._V1.x`/`_V2.x`)가 있으면 **아무 소스도 쓰지 않고 멈추고** 고르라고 알립니다 |
+| `output = 'v3'` / `-Pv3` | 3.0 코드 (2.x 소스가 있어도 - 옮기겠다는 선택) |
+| `output = 'v2'` / `-Pv2` | 2.x 코드. 레이어드 Java 만 됩니다 - 헥사고날·DDD·Kotlin·프로젝트 규칙과 함께 쓰면 빌드가 거절합니다 |
+| 도메인 `env.yml` 의 `publisher.rules: [jpa-springboot]` | 2.x 코드 (3.0.261028 전의 초기화 마법사가 레이어드 Java 에 적던 값) |
+
+`-Pv2`·`-Pv3` 는 그 한 번의 실행만 정합니다. 매번 적는 것을 잊으면 다른 코드가 생성되므로, 프로젝트의 선택은
+`output` 으로 적습니다. 3.0 코드로 옮길 때 달라지는 동작은 `elasticore-migration-guide.md` 에 있습니다.
 
 #### TypeScript 클라이언트 (`elcore3ts`, `typescriptClient`)
 
@@ -1822,8 +1843,9 @@ task elcore3(type: JavaExec) {
 ### 생성해보기 (이 저장소의 샘플 모듈에서)
 
 ```bash
-./gradlew elcore3                 # 호환 모드 (2.x와 동일한 출력)
-./gradlew elcore3 -Pv3            # 정리 모드
+./gradlew elcore3                 # 프로젝트의 설정대로 (아무것도 없으면 3.0 코드 - 정리 모드)
+./gradlew elcore3 -Pv3            # 정리 모드 (3.0 코드)
+./gradlew elcore3 -Pv2            # 호환 모드 (2.x와 동일한 출력)
 ./gradlew elcore3 -Pkt            # Kotlin (src/main/kotlin 에 .kt)
 ./gradlew elcore3 -Pts            # TypeScript (src/main/ts 에 .ts) - 플러그인에서는 elcore3ts, 빌드와 함께는 typescriptClient = true
 ./gradlew elcore3 -Pdomain=shop   # 도메인 한정
@@ -1835,8 +1857,8 @@ task elcore3(type: JavaExec) {
 > *어느 트리에 어떤 확장자로 쓸지*와 *어느 스켈레톤을 쓸지*는 `-Pkt`가 정합니다.
 > `publisher.rules: [jpa-springboot-kt]`만 적어서는 `.kt` 파일이 나오지 않습니다.
 
-> `elasticore-template`의 생성 소스는 **골든 파일**입니다.
-> `-Pv3`/`-Pforce`로 덮어썼다면 되돌리세요.
+> `elasticore-template`의 생성 소스는 **골든 파일**입니다. 이 모듈은 `output = 'v2'` 라
+> `elcore3` 도 호환 모드로 씁니다. `-Pv3`/`-Pforce`로 덮어썼다면 되돌리세요.
 
 ---
 
