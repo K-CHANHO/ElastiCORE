@@ -1,0 +1,27 @@
+# What the rest of the template did not declare, so that elcoreRulesCheck and
+# elcoreTreeCheck compare it with 2.x too. The checks see only what this
+# model uses: two of these were 2.x differences found only by generating a
+# real 9-domain project - a class annotation given as written (@jpa:Where),
+# and a required relation in a declared search DTO - and the rest are DSL
+# words no sample used.
+entity:
+  Ledger:
+    meta: entity @expose(20) @schema(acct) @jpa:Where(clause = "deleted = false") -- ledger, kept by soft delete
+    fields:
+      ledgerId: long @id @sequence
+      code: string(13)! @pattern('^[0-9]{13}$', 'code must be 13 digits') @search(eq)
+      memo: string @size(min=2, max=200) @search(like)
+      amount: long @notnull
+      postedAt: datetime @readonly
+      owner: Customer! @ManyToOne @search(eq)
+      partner: Customer @ManyToOne @search(eq)
+      deleted: boolean @default(false)
+
+dto:
+  # A declared search DTO over required and optional relations, and a
+  # property it carries without searching by it.
+  LedgerQuery:
+    meta: dto @searchable(entity=Ledger, pageSize=20)
+    fields:
+      memo: string @search(like)
+      note: string @searchBypass

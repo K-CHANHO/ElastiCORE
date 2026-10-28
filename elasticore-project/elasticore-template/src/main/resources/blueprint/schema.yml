@@ -243,6 +243,20 @@ entities:
       cardNo: string(20) @Column(name = "card_no", length = 20) @Id
       balance: java.math.BigDecimal @relation(mappedBy="balance_id") @foreignKey(balance_id) -- java.math.BigDecimal entity relationship
 
+  Ledger:
+    meta: entity @java(io.elasticore.blueprint.domain.shop.entity.Ledger) -- ledger, kept by soft delete
+    table: shop_ledger
+    java: io.elasticore.blueprint.domain.shop.entity.Ledger
+    fields:
+      ledgerId: Long @Column(name = "ledger_id") @Id @GeneratedValue
+      code: string(13) @Column(name = "code", length = 13)
+      memo: string @Column(name = "memo")
+      amount: Long @Column(name = "amount")
+      postedAt: Date @Column(name = "posted_at")
+      owner: Customer @relation(mappedBy="ledger_id") @foreignKey(owner_customer_id) -- Customer entity relationship
+      partner: Customer @relation(mappedBy="ledger_id") @foreignKey(partner_customer_id) -- Customer entity relationship
+      deleted: Boolean @Column(name = "deleted")
+
   Member:
     meta: entity @java(io.elasticore.blueprint.domain.jsonview_demo.entity.Member)
     table: member

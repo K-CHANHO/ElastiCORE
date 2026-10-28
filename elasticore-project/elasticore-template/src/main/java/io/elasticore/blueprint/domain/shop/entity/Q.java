@@ -1,4 +1,4 @@
-//ecd:-1442970158H20260926235721_V3.0
+//ecd:1070804630H20261028193834_V3.0
 package io.elasticore.blueprint.domain.shop.entity;
 
 
@@ -19,6 +19,61 @@ import io.elasticore.blueprint.domain.shop.enums.OrderStatus;
 
 public class Q {
 
+	public static $Ledger<Ledger> Ledger=new $Ledger<>();
+	public static class $Ledger<T> {
+	
+	    private FieldInfo p=null;
+	    public $Ledger() {}
+	    public $Ledger(FieldInfo p) {this.p=p;}
+	    public static JoinSpec<Ledger> joinSpec() {
+	    	return new JoinSpec<>(Ledger.class);
+	    }
+	    public static UpdateSpec<Ledger> updateSpec() {
+	    	return new UpdateSpec<>(Ledger.class);
+	    }
+	    public static DeleteSpec<Ledger> deleteSpec() {
+	    	return new DeleteSpec<>(Ledger.class);
+	    }
+	
+	    public final FieldInfo<T> getLedgerId() {return new FieldInfo(Ledger.class,"ledgerId",Long.class, null,p);}
+	    public final String ledgerId="ledgerId";
+	    public Specification<T> ledgerId(Op op,Object value) {return getLedgerId().where(op,value);}
+	    public Specification<T> ledgerId(Op op,Object value,boolean chkEmpty) {return getLedgerId().where(op,value,chkEmpty);}
+	
+	    public final FieldInfo<T> getCode() {return new FieldInfo(Ledger.class,"code",String.class, null,p);}
+	    public final String code="code";
+	    public Specification<T> code(Op op,Object value) {return getCode().where(op,value);}
+	    public Specification<T> code(Op op,Object value,boolean chkEmpty) {return getCode().where(op,value,chkEmpty);}
+	
+	    public final FieldInfo<T> getMemo() {return new FieldInfo(Ledger.class,"memo",String.class, null,p);}
+	    public final String memo="memo";
+	    public Specification<T> memo(Op op,Object value) {return getMemo().where(op,value);}
+	    public Specification<T> memo(Op op,Object value,boolean chkEmpty) {return getMemo().where(op,value,chkEmpty);}
+	
+	    public final FieldInfo<T> getAmount() {return new FieldInfo(Ledger.class,"amount",Long.class, null,p);}
+	    public final String amount="amount";
+	    public Specification<T> amount(Op op,Object value) {return getAmount().where(op,value);}
+	    public Specification<T> amount(Op op,Object value,boolean chkEmpty) {return getAmount().where(op,value,chkEmpty);}
+	
+	    public final FieldInfo<T> getPostedAt() {return new FieldInfo(Ledger.class,"postedAt",java.time.LocalDateTime.class, null,p);}
+	    public final String postedAt="postedAt";
+	    public Specification<T> postedAt(Op op,Object value) {return getPostedAt().where(op,value);}
+	    public Specification<T> postedAt(Op op,Object value,boolean chkEmpty) {return getPostedAt().where(op,value,chkEmpty);}
+	
+	    public final FieldInfo<T> getOwner() {return new FieldInfo(Ledger.class,"owner",Customer.class, null,p);}
+	    public final String owner="owner";
+	    public final $Customer<T> owner() {return new $Customer(getOwner());}
+	
+	    public final FieldInfo<T> getPartner() {return new FieldInfo(Ledger.class,"partner",Customer.class, null,p);}
+	    public final String partner="partner";
+	    public final $Customer<T> partner() {return new $Customer(getPartner());}
+	
+	    public final FieldInfo<T> getDeleted() {return new FieldInfo(Ledger.class,"deleted",Boolean.class, null,p);}
+	    public final String deleted="deleted";
+	    public Specification<T> deleted(Op op,Object value) {return getDeleted().where(op,value);}
+	    public Specification<T> deleted(Op op,Object value,boolean chkEmpty) {return getDeleted().where(op,value,chkEmpty);}
+	}
+	
 	public static $Address<Address> Address=new $Address<>();
 	public static class $Address<T> {
 	

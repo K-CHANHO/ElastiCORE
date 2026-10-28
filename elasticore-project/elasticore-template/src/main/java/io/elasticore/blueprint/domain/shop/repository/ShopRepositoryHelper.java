@@ -1,4 +1,4 @@
-//ecd:-619283792H20260926235721_V3.0
+//ecd:1677722446H20261028193835_V3.0
 package io.elasticore.blueprint.domain.shop.repository;
 
 import io.elasticore.base.util.ModelTransList;
@@ -48,6 +48,8 @@ public class ShopRepositoryHelper {
 
     private final EntityManager entityManager;
 
+    private final LedgerRepository ledger;
+    
     private final CategoryRepository category;
     
     private final ProductRepository product;
