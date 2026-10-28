@@ -49,11 +49,11 @@ jobs:
             exit 1
           fi
 
-      # Each sample's blueprint/ holds files the build writes - the guides, their
-      # index, the Ossie semantic model - committed so that a reader of the
+      # Each sample's blueprint/ holds files the build writes - the Ossie
+      # semantic model, the schema - committed so that a reader of the
       # repository sees them. The build has just written them again; a change
-      # that moved them without committing the result left a stale copy (the
-      # guide index once named line ranges a guide no longer had).
+      # that moved them without committing the result left a stale copy. The
+      # guides and their index are copies of elasticore-base's and are ignored.
       - name: Generated files - the build left every sample's blueprint as committed
         run: |
           changed=$(git status --porcelain --untracked-files=all -- 'elasticore-project/*/src/main/resources/blueprint')

@@ -66,6 +66,11 @@ coverage/
 *.iml
 .vscode/
 
+# The guides and their index the build copies into each sample's blueprint/.
+# The originals are elasticore-base/src/main/resources/elasticore-guide/; the
+# copies were committed too, and every change to a guide conflicted three times.
+elasticore-project/*/src/main/resources/blueprint/elasticore-*.md
+
 # Local databases and traces from running samples
 *.mv.db
 *.trace.db

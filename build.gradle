@@ -32,6 +32,46 @@ allprojects {
     }
 }
 
+// The history, assembled. A change records itself as a file of its own in
+// changes/ - see changes/README.md - rather than in elasticore-history.md,
+// which every pull request used to edit at the same lines, so every second
+// one conflicted. Run when cutting a release (RELEASING.md): the fragments
+// go into the section of this version - "## 3.0.261029" for
+// 3.0.261029-SNAPSHOT - in the order of their names, and are removed.
+tasks.register('assembleHistory') {
+    group = 'documentation'
+    description = 'Moves the change fragments in changes/ into elasticore-history.md'
+    doLast {
+        def history = file('elasticore-project/elasticore-base/src/main/resources/elasticore-guide/elasticore-history.md')
+        def fragments = (file('changes').listFiles() ?: [] as File[])
+                .findAll { it.isFile() && it.name.endsWith('.md') && it.name != 'README.md' }
+                .sort { it.name }
+        if (fragments.isEmpty()) {
+            println '[assembleHistory] no fragment in changes/ - nothing to do'
+            return
+        }
+        def heading = '## ' + version.toString().replace('-SNAPSHOT', '')
+        def text = history.getText('UTF-8').replace('\r\n', '\n')
+        def added = fragments.collect { it.getText('UTF-8').replace('\r\n', '\n').trim() }.join('\n\n')
+        def lines = text.split('\n', -1) as List
+        int at = lines.indexOf(heading)
+        if (at < 0) {
+            text = heading + '\n\n' + added + '\n\n' + text
+        } else {
+            int end = lines.size()
+            for (int i = at + 1; i < lines.size(); i++) {
+                if (lines[i].startsWith('## ')) { end = i; break }
+            }
+            def before = lines.subList(0, end).join('\n').replaceAll(/\n+$/, '')
+            def after = lines.subList(end, lines.size()).join('\n')
+            text = before + '\n\n' + added + '\n' + (after.isEmpty() ? '' : '\n' + after)
+        }
+        history.setText(text, 'UTF-8')
+        fragments.each { it.delete() }
+        println "[assembleHistory] ${fragments.size()} fragment(s) into '${heading}': ${fragments*.name.join(', ')}"
+    }
+}
+
 // Root-level elcore task delegates to elasticore-template
 tasks.register('elcore') {
     group = 'elasticore'

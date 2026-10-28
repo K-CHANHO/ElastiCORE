@@ -53,6 +53,13 @@ jobs:
           fi
           # The GitHub release is read by people who may not read Korean, as
           # the history is written: its notes are an English file of their own.
+          # A change records itself in changes/; the release puts it in the
+          # history (./gradlew assembleHistory). One left there is a change the
+          # released history does not mention.
+          left=$(find changes -maxdepth 1 -type f -name '*.md' ! -name README.md | sort)
+          if [ -n "$left" ]; then
+            echo "::error::changes/ still holds fragments - run ./gradlew assembleHistory in the release commit: $(echo $left)"; exit 1
+          fi
           if [ ! -s "docs/releases/$version.md" ]; then
             echo "::error::docs/releases/$version.md - the English release notes - is missing or empty"; exit 1
           fi

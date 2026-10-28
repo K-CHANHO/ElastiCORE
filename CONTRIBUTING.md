@@ -130,10 +130,11 @@ they recur.
   comment saying a required relation "searches only through its flattened id -
   which is what 2.x emits" was wrong and hid one of the four differences above.
 - **A file the build writes and the repository holds must be committed as
-  written.** The guides, their index and the Ossie model in each sample's
-  `blueprint/`, and the pet store's TypeScript client: CI regenerates them and
-  fails on any difference. A guide changed without the index regenerated once
-  left the index pointing at line ranges the guide no longer had.
+  written.** The Ossie model in each sample's `blueprint/` and the pet store's
+  TypeScript client: CI regenerates them and fails on any difference. The
+  guides and their index are not held at all - a guide changed without the
+  index regenerated once left the index pointing at line ranges the guide no
+  longer had, and the copies conflicted on every guide change.
 - **Generation and compilation can race.** `compileJava` may run before the
   generation task and compile a stale tree. If a sample fails in a way that
   makes no sense, run the generation task explicitly first.
@@ -145,9 +146,16 @@ they recur.
 - Include the `elcoreRulesCheck -Pstrict` summary line in the description.
 - Write comments in English. The guides are Korean prose with English code; the
   source is English throughout.
-- Record user-visible changes in
-  `elasticore-base/src/main/resources/elasticore-guide/elasticore-history.md`
-  under the current version, with the files involved.
+- Record user-visible changes as a fragment of their own, `changes/<topic>.md`
+  (`changes/README.md` has the form), with the files involved - not as an edit to
+  `elasticore-history.md`: every pull request editing the top of the history
+  conflicted with every other. A release moves the fragments into the history.
+- Branch from the latest `main`, and rebase on it before asking for review. A
+  pull request stacked on another one waits for it and conflicts with whatever
+  merges first; stack only what really depends on the one below.
+- Do not commit the guide copies in the samples' `blueprint/` (`elasticore-*.md`):
+  the build writes them from `elasticore-base/src/main/resources/elasticore-guide/`,
+  and `.gitignore` keeps them out.
 
 ## Reporting a bug
 
