@@ -203,67 +203,67 @@ elasticore-dsl-port-guide.md:1125-1154  ### HTTP Port - 인증 패턴  [@url, @a
 ## elasticore-dev-guide.md
 
 ```text
-elasticore-dev-guide.md:1-636  # ElastiCORE Developer Guide
+elasticore-dev-guide.md:1-661  # ElastiCORE Developer Guide
 elasticore-dev-guide.md:3-64  ## 1. 코드 생성 파이프라인  [@ElastiCore]
 elasticore-dev-guide.md:16-28  ### Validation 모드 (`-Pmode=valid`)
 elasticore-dev-guide.md:30-64  ### 멀티 모듈 통합 생성  [elasticore.modules]
 elasticore-dev-guide.md:66-98  ## 2. 생성 코드 구조
-elasticore-dev-guide.md:100-150  ## 3. 코드 수정 규칙
+elasticore-dev-guide.md:100-170  ## 3. 코드 수정 규칙
 elasticore-dev-guide.md:102-107  ### 재생성 관리 주석
 elasticore-dev-guide.md:109-117  ### 수정 가능/불가 파일
-elasticore-dev-guide.md:119-129  ### 사용자 코드 보존 블록
-elasticore-dev-guide.md:131-150  ### 저장 직전 훅 - `beforeSave` (v3)
-elasticore-dev-guide.md:152-184  ## 4. Q 클래스 구조
-elasticore-dev-guide.md:186-205  ## 5. FieldInfo 클래스  [resolvePath, rentDriver.driverName]
-elasticore-dev-guide.md:207-254  ## 6. Op 열거형  [EQ, equal, NEQ, notEqual, LIKE, like, @search(like), ILIKE, NOT_LIKE, notLike, STARTS_WITH, ENDS_WITH, NOT_ILIKE, ISTARTS_WITH, IENDS_WITH, IEQ, GT]
-elasticore-dev-guide.md:256-328  ## 7. JoinSpec 빌더
-elasticore-dev-guide.md:260-263  ### 생성
-elasticore-dev-guide.md:265-270  ### Join 메서드
-elasticore-dev-guide.md:272-277  ### Where 조건
-elasticore-dev-guide.md:279-287  ### 정렬
-elasticore-dev-guide.md:289-293  ### 프로젝션 (특정 필드만 조회)
-elasticore-dev-guide.md:295-301  ### 서브쿼리
-elasticore-dev-guide.md:303-308  ### Exists
-elasticore-dev-guide.md:310-314  ### Cross Join / Distinct
-elasticore-dev-guide.md:316-328  ### 실행 메서드
-elasticore-dev-guide.md:330-405  ## 8. UpdateSpec 빌더
-elasticore-dev-guide.md:334-337  ### 생성
-elasticore-dev-guide.md:339-378  ### SET 오퍼레이션
-elasticore-dev-guide.md:341-345  #### 리터럴 값 설정
-elasticore-dev-guide.md:347-350  #### NULL 설정
-elasticore-dev-guide.md:352-356  #### 필드 간 복사
-elasticore-dev-guide.md:358-363  #### Expression 기반 설정
-elasticore-dev-guide.md:365-369  #### 숫자 필드 증감
-elasticore-dev-guide.md:371-378  #### DTO 기반 일괄 설정
-elasticore-dev-guide.md:380-384  ### WHERE 조건
-elasticore-dev-guide.md:386-390  ### 전체 테이블 업데이트
-elasticore-dev-guide.md:392-398  ### 실행
-elasticore-dev-guide.md:400-405  ### 안전 장치  [execute, IllegalStateException, IllegalArgumentException, whereAll]
-elasticore-dev-guide.md:407-479  ## 9. DeleteSpec 빌더
-elasticore-dev-guide.md:411-414  ### 생성
-elasticore-dev-guide.md:416-420  ### WHERE 조건
-elasticore-dev-guide.md:422-426  ### 전체 테이블 삭제
-elasticore-dev-guide.md:428-434  ### 삭제 전 카운트 미리보기
-elasticore-dev-guide.md:436-441  ### 실행
-elasticore-dev-guide.md:443-479  ### 안전 장치  [execute, IllegalArgumentException, whereAll, count, Q.Entity]
-elasticore-dev-guide.md:481-557  ## 10. 실용 예제
-elasticore-dev-guide.md:483-488  ### 기본 조건 조합
-elasticore-dev-guide.md:490-497  ### JoinSpec + JOIN FETCH (N+1 prevention)
-elasticore-dev-guide.md:499-504  ### 중첩 엔티티 검색
-elasticore-dev-guide.md:506-513  ### 프로젝션 조회
-elasticore-dev-guide.md:515-523  ### 서브쿼리 활용
-elasticore-dev-guide.md:525-533  ### Bulk Update 예제
-elasticore-dev-guide.md:535-542  ### Increment 예제
-elasticore-dev-guide.md:544-557  ### 조건부 삭제 예제
-elasticore-dev-guide.md:559-578  ## 11. SearchDTO와 Specification 통합
-elasticore-dev-guide.md:561-571  ### 자동 변환 흐름
-elasticore-dev-guide.md:573-578  ### 구성 요소  [BugMapper.toSpec, @search, withJoinFetches, @fetchjoin, @expose(n), @searchable(pageSize=n)]
-elasticore-dev-guide.md:580-621  ## 12. 성능 최적화
-elasticore-dev-guide.md:582-606  ### N+1 쿼리 방지  [@fetchjoin, JoinSpec.fetchJoin, @expose]
-elasticore-dev-guide.md:608-610  ### distinct() 사용 시점  [JoinSpec.distinct, query.distinct]
-elasticore-dev-guide.md:612-615  ### 프로젝션 활용  [select, findAllAsMap, findAll]
-elasticore-dev-guide.md:617-621  ### 카운트 쿼리 최적화  [withJoinFetches]
-elasticore-dev-guide.md:623-636  ## 13. 디버깅 팁  [elcore3, elcore]
+elasticore-dev-guide.md:119-149  ### 사용자 코드 보존 블록  [package]
+elasticore-dev-guide.md:151-170  ### 저장 직전 훅 - `beforeSave` (v3)
+elasticore-dev-guide.md:172-204  ## 4. Q 클래스 구조
+elasticore-dev-guide.md:206-225  ## 5. FieldInfo 클래스  [resolvePath, rentDriver.driverName]
+elasticore-dev-guide.md:227-274  ## 6. Op 열거형  [EQ, equal, NEQ, notEqual, LIKE, like, @search(like), ILIKE, NOT_LIKE, notLike, STARTS_WITH, ENDS_WITH, NOT_ILIKE, ISTARTS_WITH, IENDS_WITH, IEQ, GT]
+elasticore-dev-guide.md:276-348  ## 7. JoinSpec 빌더
+elasticore-dev-guide.md:280-283  ### 생성
+elasticore-dev-guide.md:285-290  ### Join 메서드
+elasticore-dev-guide.md:292-297  ### Where 조건
+elasticore-dev-guide.md:299-307  ### 정렬
+elasticore-dev-guide.md:309-313  ### 프로젝션 (특정 필드만 조회)
+elasticore-dev-guide.md:315-321  ### 서브쿼리
+elasticore-dev-guide.md:323-328  ### Exists
+elasticore-dev-guide.md:330-334  ### Cross Join / Distinct
+elasticore-dev-guide.md:336-348  ### 실행 메서드
+elasticore-dev-guide.md:350-425  ## 8. UpdateSpec 빌더
+elasticore-dev-guide.md:354-357  ### 생성
+elasticore-dev-guide.md:359-398  ### SET 오퍼레이션
+elasticore-dev-guide.md:361-365  #### 리터럴 값 설정
+elasticore-dev-guide.md:367-370  #### NULL 설정
+elasticore-dev-guide.md:372-376  #### 필드 간 복사
+elasticore-dev-guide.md:378-383  #### Expression 기반 설정
+elasticore-dev-guide.md:385-389  #### 숫자 필드 증감
+elasticore-dev-guide.md:391-398  #### DTO 기반 일괄 설정
+elasticore-dev-guide.md:400-404  ### WHERE 조건
+elasticore-dev-guide.md:406-410  ### 전체 테이블 업데이트
+elasticore-dev-guide.md:412-418  ### 실행
+elasticore-dev-guide.md:420-425  ### 안전 장치  [execute, IllegalStateException, IllegalArgumentException, whereAll]
+elasticore-dev-guide.md:427-499  ## 9. DeleteSpec 빌더
+elasticore-dev-guide.md:431-434  ### 생성
+elasticore-dev-guide.md:436-440  ### WHERE 조건
+elasticore-dev-guide.md:442-446  ### 전체 테이블 삭제
+elasticore-dev-guide.md:448-454  ### 삭제 전 카운트 미리보기
+elasticore-dev-guide.md:456-461  ### 실행
+elasticore-dev-guide.md:463-499  ### 안전 장치  [execute, IllegalArgumentException, whereAll, count, Q.Entity]
+elasticore-dev-guide.md:501-577  ## 10. 실용 예제
+elasticore-dev-guide.md:503-508  ### 기본 조건 조합
+elasticore-dev-guide.md:510-517  ### JoinSpec + JOIN FETCH (N+1 prevention)
+elasticore-dev-guide.md:519-524  ### 중첩 엔티티 검색
+elasticore-dev-guide.md:526-533  ### 프로젝션 조회
+elasticore-dev-guide.md:535-543  ### 서브쿼리 활용
+elasticore-dev-guide.md:545-553  ### Bulk Update 예제
+elasticore-dev-guide.md:555-562  ### Increment 예제
+elasticore-dev-guide.md:564-577  ### 조건부 삭제 예제
+elasticore-dev-guide.md:579-599  ## 11. SearchDTO와 Specification 통합
+elasticore-dev-guide.md:581-591  ### 자동 변환 흐름
+elasticore-dev-guide.md:593-599  ### 구성 요소  [BugMapper.toSpec, @search, withJoinFetches, @fetchjoin, JoinSpec.fetchJoin, @expose(n), @searchable(pageSize=n)]
+elasticore-dev-guide.md:601-646  ## 12. 성능 최적화
+elasticore-dev-guide.md:603-631  ### N+1 쿼리 방지  [@fetchjoin, JoinSpec.fetchJoin, autoJoin, @expose]
+elasticore-dev-guide.md:633-635  ### distinct() 사용 시점  [JoinSpec.distinct, query.distinct]
+elasticore-dev-guide.md:637-640  ### 프로젝션 활용  [select, findAllAsMap, findAll]
+elasticore-dev-guide.md:642-646  ### 카운트 쿼리 최적화  [withJoinFetches, JoinSpec.fetchJoin]
+elasticore-dev-guide.md:648-661  ## 13. 디버깅 팁  [elcore3, elcore]
 ```
 
 ## elasticore-annotation-guide.md

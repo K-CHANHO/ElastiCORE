@@ -37,6 +37,20 @@ withJoinFetches(): each row loads it with a query of its own (N+1). Fetch it in 
   검증과 키 중복 거절, `delete(searchDTO)`·`updateBySpecification` 이 행마다 도는 것, 2.x 서비스 테스트의 mock
 - `like` 항목에 `lower(컬럼)` 비교와 인덱스를 적었다
 
+### Documentation (개발 가이드 - 보호 블록과 JOIN FETCH)
+
+#### 보호 블록은 여러 개 쓸 수 있고, import 는 헤더 블록에
+- 왜: 가이드는 "한 소스 파일 내 하나의 블록만 사용 가능" 이라고 했지만 두 생성기 모두 여러 블록을 지킨다. 반대로 적혀
+  있지 않던 것이 있었다 - import 줄이 든 블록은 `package` 아래로 가는 헤더 블록이 되고, 헤더 블록이 둘이면 재생성할 때
+  첫 번째가 사라진다. v3 코드는 생성 코드가 쓰는 것만 import 하므로, 2.x 코드의 `*` import 에 기대던 블록 코드는 헤더
+  블록이 있어야 컴파일된다
+- `elasticore-dev-guide.md` 의 "사용자 코드 보존 블록" 을 고쳤다: 여러 블록과 그 자리, 헤더 블록과 예제, 해시에서 빠지는
+  것. 2.2 jar 와 v3 로 같은 파일을 다시 생성해 확인했다
+
+#### `withJoinFetches()` 는 2.x 코드의 것
+- 11장·12장이 `withJoinFetches()`·`@fetchjoin`·`autoJoin` 을 버전 구분 없이 적었다. 2.x 코드(`output = 'v2'`)의 CoreService
+  에만 있다고 적고, v3 에서는 `JoinSpec.fetchJoin()` 으로 가져온다고 적었다
+
 ## 3.0.261028-rc3
 
 **플러그인의 기본값이 3.0 코드가 된다**: 아무것도 선언하지 않은 레이어드 Java 프로젝트는 `jpa-springboot-v3` 로

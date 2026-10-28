@@ -125,8 +125,28 @@ List<Entity> findByName(@Param("name") String name);
 
 // ------------------------------------------------------------!
 ```
-- `// !----` ~ `// ----!` 블록 사이의 코드는 재생성 시에도 보존됨
-- 한 소스 파일 내 하나의 블록만 사용 가능
+- `// !----` ~ `// ----!` 블록 사이의 코드는 재생성 시에도 보존됨. 블록은 해시에서 빠지므로 블록만 고친 파일은
+  "사용자가 수정한 파일" 이 되지 않고 계속 재생성됨
+- 블록은 여러 개 쓸 수 있음. 재생성하면 블록들은 모두 모여 파일 마지막 `}` 바로 앞으로 옮겨짐
+- `import` 로 시작하는 줄이 든 블록은 `package` 선언 아래로 옮겨짐 (헤더 블록). 블록 안 코드가 쓰는 import 는
+  여기에 적음 - v3 코드는 생성 코드가 쓰는 것만 import 하므로, 2.x 코드의 `*` import 에 기대던 블록 코드는
+  이 블록이 있어야 컴파일됨
+- 헤더 블록은 하나만, 다른 블록보다 위에 둠 - 그보다 위에 있던 블록은 함께 헤더로 옮겨지고, 헤더 블록이 둘이면
+  재생성할 때 **첫 번째가 사라짐** (2.x·3.0 생성기 모두). import 는 한 블록에 모아 적음
+
+```java
+package com.acme.order.repository;
+
+// !----------
+import java.util.Optional;
+// ------------!
+
+public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
+    // !----------
+    Optional<Order> findFirstByCustomerIdOrderByOrderedAtDesc(Long customerId);
+    // ------------!
+}
+```
 
 ### 저장 직전 훅 - `beforeSave` (v3)
 CoreService 는 요청이 엔티티를 쓴 뒤, 저장 직전에 훅을 부릅니다 - 생성·수정·일괄 수정·조건 수정
@@ -572,7 +592,8 @@ Page<RentCompany> page = repository.findAll(withJoins, pageable);
 
 ### 구성 요소
 - `BugMapper.toSpec()` -> SearchDTO의 `@search` 조건을 Specification으로 변환 (빌드타임 생성)
-- `withJoinFetches()` -> autoJoin 설정 또는 `@fetchjoin` 기반 JOIN FETCH 자동 적용
+- `withJoinFetches()` -> autoJoin 설정 또는 `@fetchjoin` 기반 JOIN FETCH 자동 적용 - 2.x 코드(`output = 'v2'`)의
+  CoreService 에만 있음. v3 번들의 CoreService 에는 없으므로 `JoinSpec.fetchJoin()` (7장)으로 직접 가져옴
 - 페이징: `@expose(n)` 또는 `@searchable(pageSize=n)` 설정값 사용
 
 ---
@@ -588,6 +609,10 @@ Page<RentCompany> page = repository.findAll(withJoins, pageable);
 | `@fetchjoin` | 특정 필드 | DSL entity fields |
 | `autoJoin: true` | 전체 엔티티 참조 | env.yml config.table |
 | `JoinSpec.fetchJoin()` | 런타임 선택적 | Java code |
+
+> `@fetchjoin`·`autoJoin` 은 2.x 코드(`output = 'v2'`)의 CoreService 가 씁니다. v3 번들(플러그인의 기본값, 헥사고날·DDD,
+> 모든 Kotlin 빌드)의 CoreService 는 쓰지 않고, 생성할 때 엔티티마다 DSL 경고를 냅니다. v3 에서는 목록에 필요한 연관을
+> `JoinSpec.fetchJoin()` 으로 가져옵니다.
 
 ```yaml
 # env.yml - global autoJoin
@@ -615,7 +640,7 @@ entity:
 - `findAll(em, DtoClass.class)` -> 생성자 기반 DTO 프로젝션
 
 ### 카운트 쿼리 최적화
-- 생성된 `withJoinFetches()`는 카운트 쿼리에서 자동으로 JOIN FETCH 제외
+- 생성된 `withJoinFetches()`(2.x 코드)와 `JoinSpec.fetchJoin()` 은 카운트 쿼리에서 자동으로 JOIN FETCH 제외
 - `Long.class.equals(query.getResultType())` 조건으로 카운트 쿼리 감지
 
 ---
