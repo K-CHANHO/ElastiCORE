@@ -30,38 +30,71 @@ import static io.elasticore.base.model.pub.rules.Ctx.ctx;
  * isListOutput/isPageOutput branches exist for entities that get a service
  * without either meta, which v3 never does.
  *
- * Not ported: the JOIN FETCH auto-optimization (withJoinFetches(), the
- * needJoinProcess/allRelationshipFetches machinery) and the custom
- * cb.construct(...) projection overloads (isCustomListOutput/
- * isCustomPageOutput). Both are query-shape optimizations layered on top of
- * the same public method surface - deferred rather than silently dropped,
- * which is why an entity that asks for the fetch is warned (below). An
- * extension service that called withJoinFetches() does not compile against
- * this one.
+ * The JOIN FETCH of 2.x (withJoinFetches(), for @fetchjoin and
+ * table.autoJoin) is written for an entity that asks for it (joinFetchVars).
+ * Not ported: the custom cb.construct(...) projection overloads
+ * (isCustomListOutput/isCustomPageOutput), a query-shape optimization layered
+ * on top of the same public method surface.
  */
 public class JpaServiceFileRules implements CodeRules {
 
     /**
-     * The relations 2.x's CoreService fetches with the root - @fetchjoin, or
-     * every relation to an entity under table.autoJoin - this one loads
-     * lazily, a query per row. Said where the mark was written rather than
-     * left for the first slow list to tell.
+     * The relations fetched with the root - @fetchjoin, or every relation to
+     * an entity under table.autoJoin - chosen by the rule 2.x's CoreService
+     * uses (JpaServiceCompatFileRules.fetchedRelations), and fetched where 2.x
+     * fetches them: the paged search, findBySearch.
+     *
+     * Until 3.0.261029-SNAPSHOT this service had no JOIN FETCH: each listed
+     * row loaded those relations with a query of its own (N+1), and an
+     * extension service calling withJoinFetches() did not compile. The method
+     * is written only for an entity that asks for a fetch, so every other
+     * service is unchanged.
      */
-    @Rule(value = "v3-service-fetch-join-warning", target = "service", order = 10)
-    void fetchJoinWarning(EntitySpec e) {
+    private void joinFetchVars(SourceCode c, EntitySpec e) {
+        c.slot("joinFetchMethod");
         List<FieldSpec> fetched = JpaServiceCompatFileRules.fetchedRelations(e);
-        if (fetched.isEmpty()) return;
+        if (fetched.isEmpty()) {
+            c.var("fetchSpec", "");
+            return;
+        }
+        c.var("fetchSpec", ".and(withJoinFetches())");
+        String joinType = "jakarta.persistence.criteria.JoinType.LEFT";
+        boolean kotlin = c.syntax() == Syntax.KOTLIN;
         StringBuilder names = new StringBuilder();
         for (FieldSpec f : fetched) {
             if (names.length() > 0) names.append(", ");
             names.append(f.name());
         }
-        io.elasticore.base.util.ConsoleLog.storeLog("DSL_WARN", String.format(
-                "[%s] %s: %s (%s) is not fetched with %s by the v3 CoreService, which has no"
-                        + " JOIN FETCH or withJoinFetches(): each row loads it with a query of its own (N+1)."
-                        + " Fetch it in a query of your own where a list needs it.",
-                e.domainClassName(), e.getName(), names,
-                JpaServiceCompatFileRules.autoJoin(e) ? "table.autoJoin" : "@fetchjoin", e.getName()));
+        c.varLine("joinFetchMethod", "")
+         .varLine("joinFetchMethod", "/**")
+         .varLine("joinFetchMethod", " * Fetches %s with each %s in one query, rather than a query per row;",
+                 names, e.getName())
+         .varLine("joinFetchMethod", " * not for the count query a page also runs.")
+         .varLine("joinFetchMethod", " */");
+        if (kotlin) {
+            c.varLine("joinFetchMethod", "protected fun withJoinFetches(): Specification<%s> = Specification { root, query, _ ->",
+                    e.getName())
+             .varLine("joinFetchMethod", "    if (query != null && query.resultType != Long::class.javaObjectType) {");
+            for (FieldSpec f : fetched) {
+                c.varLine("joinFetchMethod", "        root.fetch<%s, Any>(\"%s\", %s)", e.getName(), f.name(), joinType);
+            }
+            c.varLine("joinFetchMethod", "        query.distinct(true)")
+             .varLine("joinFetchMethod", "    }")
+             .varLine("joinFetchMethod", "    null")
+             .varLine("joinFetchMethod", "}");
+        } else {
+            c.varLine("joinFetchMethod", "protected Specification<%s> withJoinFetches() {", e.getName())
+             .varLine("joinFetchMethod", "    return (root, query, cb) -> {")
+             .varLine("joinFetchMethod", "        if (query != null && !Long.class.equals(query.getResultType())) {");
+            for (FieldSpec f : fetched) {
+                c.varLine("joinFetchMethod", "            root.fetch(\"%s\", %s);", f.name(), joinType);
+            }
+            c.varLine("joinFetchMethod", "            query.distinct(true);")
+             .varLine("joinFetchMethod", "        }")
+             .varLine("joinFetchMethod", "        return null;")
+             .varLine("joinFetchMethod", "    };")
+             .varLine("joinFetchMethod", "}");
+        }
     }
 
     @Rule(value = "v3-service-vars", target = "service", order = 10)
@@ -109,6 +142,7 @@ public class JpaServiceFileRules implements CodeRules {
 
         String pkFromDto = pkVars(c, e);
         dependencyVars(c, e);
+        joinFetchVars(c, e);
         writeGuardVars(c, e, isSkipNull, pkFromDto);
     }
 

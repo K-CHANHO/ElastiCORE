@@ -83,7 +83,7 @@ elasticore-dsl-guide.md:1173-1179  ### 10.5 권장사항 요약  [uuid, string, 
 elasticore-env-guide.md:1-926  # ElastiCORE 환경 설정 가이드 (env.yml)
 elasticore-env-guide.md:8-32  ## 1. 기본 구조  [domainName, framework, springboot3, mode, j2ee]
 elasticore-env-guide.md:34-108  ## 2. 생성 모드 상세
-elasticore-env-guide.md:36-70  ### 2.1 JPA 모드 (기본)  [prefix, @Table, tableSchema, @Table(schema="..."), @schema, autoJoin, findById, @fetchjoin]
+elasticore-env-guide.md:36-70  ### 2.1 JPA 모드 (기본)  [prefix, @Table, tableSchema, @Table(schema="..."), @schema, autoJoin, findBySearch, @fetchjoin]
 elasticore-env-guide.md:72-79  ### 2.2 Multi-Mode
 elasticore-env-guide.md:81-88  ### 2.3 MongoDB 모드
 elasticore-env-guide.md:90-97  ### 2.4 UML 모드
@@ -203,7 +203,7 @@ elasticore-dsl-port-guide.md:1125-1154  ### HTTP Port - 인증 패턴  [@url, @a
 ## elasticore-dev-guide.md
 
 ```text
-elasticore-dev-guide.md:1-661  # ElastiCORE Developer Guide
+elasticore-dev-guide.md:1-662  # ElastiCORE Developer Guide
 elasticore-dev-guide.md:3-64  ## 1. 코드 생성 파이프라인  [@ElastiCore]
 elasticore-dev-guide.md:16-28  ### Validation 모드 (`-Pmode=valid`)
 elasticore-dev-guide.md:30-64  ### 멀티 모듈 통합 생성  [elasticore.modules]
@@ -255,21 +255,21 @@ elasticore-dev-guide.md:535-543  ### 서브쿼리 활용
 elasticore-dev-guide.md:545-553  ### Bulk Update 예제
 elasticore-dev-guide.md:555-562  ### Increment 예제
 elasticore-dev-guide.md:564-577  ### 조건부 삭제 예제
-elasticore-dev-guide.md:579-599  ## 11. SearchDTO와 Specification 통합
+elasticore-dev-guide.md:579-600  ## 11. SearchDTO와 Specification 통합
 elasticore-dev-guide.md:581-591  ### 자동 변환 흐름
-elasticore-dev-guide.md:593-599  ### 구성 요소  [BugMapper.toSpec, @search, withJoinFetches, @fetchjoin, JoinSpec.fetchJoin, @expose(n), @searchable(pageSize=n)]
-elasticore-dev-guide.md:601-646  ## 12. 성능 최적화
-elasticore-dev-guide.md:603-631  ### N+1 쿼리 방지  [@fetchjoin, JoinSpec.fetchJoin, autoJoin, @expose]
-elasticore-dev-guide.md:633-635  ### distinct() 사용 시점  [JoinSpec.distinct, query.distinct]
-elasticore-dev-guide.md:637-640  ### 프로젝션 활용  [select, findAllAsMap, findAll]
-elasticore-dev-guide.md:642-646  ### 카운트 쿼리 최적화  [withJoinFetches, JoinSpec.fetchJoin]
-elasticore-dev-guide.md:648-661  ## 13. 디버깅 팁  [elcore3, elcore]
+elasticore-dev-guide.md:593-600  ### 구성 요소  [BugMapper.toSpec, @search, withJoinFetches, @fetchjoin, JoinSpec.fetchJoin, @expose(n), @searchable(pageSize=n)]
+elasticore-dev-guide.md:602-647  ## 12. 성능 최적화
+elasticore-dev-guide.md:604-632  ### N+1 쿼리 방지  [@fetchjoin, JoinSpec.fetchJoin, autoJoin, findBySearch, findAll, listBySearch, @expose]
+elasticore-dev-guide.md:634-636  ### distinct() 사용 시점  [JoinSpec.distinct, query.distinct]
+elasticore-dev-guide.md:638-641  ### 프로젝션 활용  [select, findAllAsMap, findAll]
+elasticore-dev-guide.md:643-647  ### 카운트 쿼리 최적화  [withJoinFetches, JoinSpec.fetchJoin]
+elasticore-dev-guide.md:649-662  ## 13. 디버깅 팁  [elcore3, elcore]
 ```
 
 ## elasticore-annotation-guide.md
 
 ```text
-elasticore-annotation-guide.md:1-2142  # ElastiCORE Annotation Guide
+elasticore-annotation-guide.md:1-2143  # ElastiCORE Annotation Guide
 elasticore-annotation-guide.md:5-192  ## 1. Entity Meta Annotations  [meta:]
 elasticore-annotation-guide.md:9-14  ### @expose
 elasticore-annotation-guide.md:16-21  ### @service  [@expose]
@@ -285,7 +285,7 @@ elasticore-annotation-guide.md:131-152  ### @schema(name)  [@Table(schema="name"
 elasticore-annotation-guide.md:154-159  ### @Index(name, columnList, unique)  / @idx  [@Table(indexes=...)]
 elasticore-annotation-guide.md:161-178  ### @rollup  [@id, @extend, @sequence, @formula, @DiscriminatorValue, @rollup(discriminator=ALB), @rollup(target=...), @rollup(Item)]
 elasticore-annotation-guide.md:180-192  ### @terms(용어, 동의어, …)  [metrics:, ai_context.synonyms, @root, @terms]
-elasticore-annotation-guide.md:194-807  ## 2. Field Annotations
+elasticore-annotation-guide.md:194-808  ## 2. Field Annotations
 elasticore-annotation-guide.md:196-222  ### 2.1 기본키
 elasticore-annotation-guide.md:198-202  #### @id  [@Id]
 elasticore-annotation-guide.md:204-209  #### @sequence  [@GeneratedValue, @id]
@@ -300,100 +300,100 @@ elasticore-annotation-guide.md:351-363  #### @min(value) / @max(value) / @min(va
 elasticore-annotation-guide.md:365-374  #### @minsize(n, '메시지') / @maxsize(n, '메시지') - 컬렉션 개수  [@Size(min=n, message=...), @NotNull, validate..., partial, @minsize]
 elasticore-annotation-guide.md:376-419  #### @pattern('정규식', '메시지') / @pattern(regexp="...", message="...")  [@Pattern, validate..., @min, @id, @pattern, @pattern(yyyyMMdd), @DateTimeFormat, @JsonFormat, @Column, example, msg, @jakarta]
 elasticore-annotation-guide.md:421-422  ### 2.3 검색 어노테이션  [@search(condition)]
-elasticore-annotation-guide.md:424-562  ### 2.4 참조 및 타입
+elasticore-annotation-guide.md:424-563  ### 2.4 참조 및 타입
 elasticore-annotation-guide.md:426-439  #### @ref(fieldPath)  [@ref, @access, @owner, @password, @access(admin), @ref(assignee.memberId)]
 elasticore-annotation-guide.md:441-523  #### @fk(Target) / @fk(Target.field) / @fk(Target.field, groupName)  [@ManyToOne, @Column, @fk, @foreignkey, @manytoone, @id, @genid, DSL_WARN, @JoinColumn]
 elasticore-annotation-guide.md:525-529  #### @dtype(ClassName)  [@dtype]
-elasticore-annotation-guide.md:531-536  #### @fetchjoin  [withJoinFetches]
-elasticore-annotation-guide.md:538-562  #### @formula(expression)  [@formula, toEntity, mapping, XxxFields, validateXxx, @abstract, @Formula, @Column, @Comment, string, Nm, Name, Code, Type, Status, Addr, Date, Time, Zip, Tel]
-elasticore-annotation-guide.md:564-702  ### 2.5 JPA 관계  [@ManyToOne, @OneToOne, @ManyToMany, @cascade, @relation, ALL, PERSIST, MERGE, REMOVE, @dtype, @OneToMany, @access, @owner, @password, @access(admin), @signin]
-elasticore-annotation-guide.md:608-622  #### FK 컬럼명 지정 (@column / @col)  [@JoinColumn(name=...), _id]
-elasticore-annotation-guide.md:624-702  #### 관계 필드의 자동 DTO 렌더링 (중첩 DTO + FK 필드)  [@expose, @service, @ManyToOne, @OneToOne, @id, @fetchjoin, batch, batchBatchId, em.getReference, id, batchId, @template, @ref(관계필드.대상필드), EmployeeDTO]
-elasticore-annotation-guide.md:704-774  ### 2.6 JPA 컬럼 매핑
-elasticore-annotation-guide.md:706-712  #### @Column / @col / @db  [name, length, unique, nullable]
-elasticore-annotation-guide.md:714-774  #### @columnDef('xxx') / @jdbcType('XXX')  [string, @Column, columnDefinition, @Column(columnDefinition="xxx"), @columnDef, @jdbcType, @JdbcTypeCode, json, jsonb, JSON, xml, SQLXML]
-elasticore-annotation-guide.md:776-781  ### 2.7 커스텀 함수  [@function]
-elasticore-annotation-guide.md:783-798  ### 2.8 Spring Data JPA 감사  [@jpa, @NotNull, @readonly, @noinput]
-elasticore-annotation-guide.md:800-807  ### 2.9 기타  [@notaudited, @env]
-elasticore-annotation-guide.md:809-1031  ## 3. Search Conditions - 완전 참조
-elasticore-annotation-guide.md:811-817  ### 3.1 개요  [@search(condition), @s(condition), @srch(condition), @filter(condition)]
-elasticore-annotation-guide.md:819-860  ### 3.2 구현된 연산자 전체 목록 (18개)  [eq, equal, like, gt, greaterThan, gte, ge, greaterThanOrEqualTo, lt, lessThan, lte, le, lessThanOrEqualTo, ne, neq, notEqual, in, Join.in, between, isnull]
-elasticore-annotation-guide.md:862-875  ### 3.3 auto 조건 동작  [@expose, @search, between, eq, setSpec]
-elasticore-annotation-guide.md:877-895  ### 3.4 between 특수 동작  [fieldNameFrom, fieldNameTo, greaterThanOrEqualTo, lessThan, lessThanOrEqualTo, @search]
-elasticore-annotation-guide.md:897-966  ### 3.4.1 isnull - 비어 있는지 검색  [Boolean, @expose, @search, ProductSrchDTO, example, between, Op, @search(isnull), @ref(order.shippedDate), @search(isnull,returnedDate), returnedDateEmpty]
-elasticore-annotation-guide.md:968-979  ### 3.5 List 필드 + eq = Join 생성  [@search(eq), fieldNameItem, root.join, equal]
-elasticore-annotation-guide.md:981-992  ### 3.6 in 연산자와 List 필드
-elasticore-annotation-guide.md:994-1000  ### 3.7 @ref와 검색 조건 조합  [@ref(parentEntity.childField), @search]
-elasticore-annotation-guide.md:1002-1031  ### 3.8 실용 예시  [@expose, @pageable, @audited, @id, @search, @length, sortCode, @sort]
-elasticore-annotation-guide.md:1033-1107  ## 4. DTO Annotations
-elasticore-annotation-guide.md:1035-1049  ### 4.1 @template(EntityName)  [@template, string, @Size(max=n)]
-elasticore-annotation-guide.md:1051-1058  ### 4.2 @searchable  [entity, pageSize, pageable, PageableObject, pageNumber, sortCode]
-elasticore-annotation-guide.md:1060-1075  ### 4.2.1 @sort - 기본 정렬  [sortCode, @root, @expose, @Builder, ShopFlowTest, elcore3, elcore]
-elasticore-annotation-guide.md:1077-1081  ### 4.3 @searchBypass
-elasticore-annotation-guide.md:1083-1090  ### 4.4 JSON 어노테이션  [@json, @jsonSerialize, @jsoninclude, @jsonproperty, @includejson]
-elasticore-annotation-guide.md:1092-1107  ### 4.5 Bean Validation  [@email, @pattern, @past, @future, @pastorpresent, @futureorpresent]
-elasticore-annotation-guide.md:1109-1263  ## 4.6 @jsonview - DTO 필드 가시성 제어 (JsonView)
-elasticore-annotation-guide.md:1113-1115  ### 개요  [@JsonView]
-elasticore-annotation-guide.md:1117-1136  ### DTO 메타 어노테이션: @jsonview  [@view, @jsonview(auto), @jsonview(false), @template, @expose]
-elasticore-annotation-guide.md:1138-1167  ### 필드 어노테이션: @view  [@id, create, @PostMapping, update, @PutMapping, read, @GetMapping, @jsonview]
-elasticore-annotation-guide.md:1169-1183  ### 자동 추론 규칙 (@jsonview(auto))  [@id, @genid, @sequence, @updatable(false), @jpa, @formula(...), @readonly, @noinput, @writeonly]
-elasticore-annotation-guide.md:1185-1197  ### env.yml 설정  [@jsonview, @view, auto]
-elasticore-annotation-guide.md:1199-1244  ### 생성 코드 예시  [@template, @jsonview, @id, @view]
-elasticore-annotation-guide.md:1246-1263  ### 주의사항  [@jsonview, @view, jsonview, Jackson2ObjectMapperBuilder, MapperFeature.DEFAULT_VIEW_INCLUSION, @JsonView, @readonly, @writeonly]
-elasticore-annotation-guide.md:1265-1281  ## 5. Enumeration Annotations
-elasticore-annotation-guide.md:1267-1281  ### @db(field) / @json(field)  [@db, @json]
-elasticore-annotation-guide.md:1283-1312  ## 6. Port Annotations
-elasticore-annotation-guide.md:1287-1298  ### HTTP Port  [@url, @auth, @get, @post, @put, @delete, @patch]
-elasticore-annotation-guide.md:1300-1312  ### DBMS Port  [@datasource, @query, @pageable, @native]
-elasticore-annotation-guide.md:1314-1348  ## 7. Best Practices
-elasticore-annotation-guide.md:1316-1320  ### 성능  [@fetchjoin, @cascade(ALL), @pageable, @expose]
-elasticore-annotation-guide.md:1322-1329  ### 검색 조건 선택  [eq, like, between, in, gte, lte, gt, lt, ne, auto]
-elasticore-annotation-guide.md:1331-1335  ### DTO template 활용  [@template(Entity), string, @Size(max=n), @size]
-elasticore-annotation-guide.md:1337-1340  ### 인덱스와 검색  [@search, @Index, like, between]
-elasticore-annotation-guide.md:1342-1348  ### 기본값 활용  [@table, @Column, @search, @expose, @pageable]
-elasticore-annotation-guide.md:1350-1578  ## 8. 주의사항 및 해결방법 (Known Limitations & Workarounds)
-elasticore-annotation-guide.md:1352-1391  ### 8.1 @min/@max 어노테이션 제약사항  [@Min, @Max, long]
-elasticore-annotation-guide.md:1356-1370  #### 문제 상황  [@min, @max]
-elasticore-annotation-guide.md:1372-1386  #### 올바른 사용법  [@min, @max]
-elasticore-annotation-guide.md:1388-1391  #### 해결방법
-elasticore-annotation-guide.md:1393-1416  ### 8.2 DSL 타입이 아닌 단어 주의 (Invalid Field Types)  [uuid, string, @genid, @id, json, String, clob, @Lob, build, elcore, text, blob, elcore3]
-elasticore-annotation-guide.md:1418-1474  ### 8.3 @ManyToOne @id 필드와 SQL 예약어 충돌  [field_name_id]
-elasticore-annotation-guide.md:1422-1423  #### 문제가 되는 예약어  [order, group, select, from, where, table, index, key, value, user, date, time, timestamp, status]
-elasticore-annotation-guide.md:1425-1437  #### 문제 상황  [@id]
-elasticore-annotation-guide.md:1439-1454  #### 해결방법 1: 비예약어 필드명 사용 (권장)  [@id]
-elasticore-annotation-guide.md:1456-1474  #### 해결방법 2: 생성 후 수동 수정  [@id]
-elasticore-annotation-guide.md:1476-1516  ### 8.4 @audited 엔티티와 연관관계  [@NotAudited]
-elasticore-annotation-guide.md:1480-1502  #### 자동 처리  [@NotAudited, @audited, @ManyToOne, @OneToMany, @ManyToMany, @id, @sequence]
-elasticore-annotation-guide.md:1504-1510  #### 수동 명시  [@notaudited]
-elasticore-annotation-guide.md:1512-1516  #### 검증 필요 사항  [@audited, @NotAudited]
-elasticore-annotation-guide.md:1518-1537  ### 8.5 비교 키워드와 같지 않음 (모드에 따라 다름)  [gt, gte, ge, lt, lte, le, ne, neq, notEqual, @search(isnull)]
-elasticore-annotation-guide.md:1539-1568  ### 8.6 between 검색과 LocalDate +1일 동작  [@search(between)]
-elasticore-annotation-guide.md:1565-1568  #### 주의사항
-elasticore-annotation-guide.md:1570-1578  ### 8.7 권장사항 요약  [@min, @max, uuid, @id, @genid, @NotAudited, @audited]
-elasticore-annotation-guide.md:1580-1628  ## @root / @aggregate — 애그리거트 경계 (DDD 룰셋)  [@aggregate(Order), Order, @OneToMany, @cascade, @aggregate(X)]
-elasticore-annotation-guide.md:1605-1618  ### 왜 추론만으로는 부족한가  [@cascade, @service, @root, @aggregate]
-elasticore-annotation-guide.md:1620-1628  ### 생성물에 미치는 영향  [RepositoryHelper, @embeddable]
-elasticore-annotation-guide.md:1630-1673  ## domainService — 도메인 서비스 (DDD 룰셋)  [uses, desc, DSL_WARN]
-elasticore-annotation-guide.md:1652-1673  ### 생성물  [uses, namespace.domainService]
-elasticore-annotation-guide.md:1675-1688  ## @behavior — 엔티티 행위 (DDD 룰셋)  [@editable, XxxBase, Xxx, @MappedSuperclass, @Entity, protected, READ_ONLY, @readonly, @noinput]
-elasticore-annotation-guide.md:1690-1747  ## @editable — 요청으로 고치는 필드·루트 (DDD 룰셋)  [@root, @expose, @behavior, @event, order.confirm, recalculate]
-elasticore-annotation-guide.md:1749-1806  ## @invariant — 불변식 (DDD 룰셋)  [@min, @minsize, @root, @expose]
-elasticore-annotation-guide.md:1776-1806  ### 생성물  [OrderInvariants, @EntityListeners, @genid, @PrePersist, OrderItemRemovalCheck, replaceItems, mappedBy]
-elasticore-annotation-guide.md:1808-1832  ## @factory — 팩토리 (DDD 룰셋)  [@root, @invariant]
-elasticore-annotation-guide.md:1818-1832  ### 생성물  [OrderFactory.place, @genid]
-elasticore-annotation-guide.md:1834-1876  ## @specification — 명세 (DDD 룰셋)  [@root]
-elasticore-annotation-guide.md:1848-1856  ### 생성물  [Predicate]
-elasticore-annotation-guide.md:1858-1876  ### TypeScript 에서  [Number, number]
-elasticore-annotation-guide.md:1878-1895  ## 조건 문법 (`@invariant`, `@specification` 공통)  [Integer, Long, Double, BigDecimal]
-elasticore-annotation-guide.md:1897-2038  ## @access / @owner — 누가 무엇을 할 수 있는가 (v3)  [@root, @expose, public, user, owner, admin, ADMIN, none, read, create, update, delete, ship, cancel, @search, @readonly, @noinput, runAsSystem, @access(admin)]
-elasticore-annotation-guide.md:2040-2056  ## @password / @login — 자격 증명 (v3)  [@unique, PasswordHasher, @writeonly, authenticate, @signin, @Index, me, signin, signout, @access, @owner]
-elasticore-annotation-guide.md:2058-2077  ## @snapshot / @compute — 파생 값 (DDD 룰셋)  [@min, @editable, reference.OrderLine.item, @formula, @formula("...")]
-elasticore-annotation-guide.md:2079-2142  ## @event — 도메인 이벤트 (DDD 룰셋)  [@root, @expose]
-elasticore-annotation-guide.md:2089-2108  ### 생성물  [OrderPlacedEvent, OrderCancelledEvent, occurredOn, order.raisePlaced, order.raiseCancelled, @DomainEvents, @AfterDomainEventPublication]
-elasticore-annotation-guide.md:2110-2122  ### 이벤트 내용 (payload)  [@root, @event, raiseShipped]
-elasticore-annotation-guide.md:2124-2128  ### 밖으로 내보내기 - Outbox  [OutboxPublisher]
-elasticore-annotation-guide.md:2130-2134  ### 언제 발생하는지는 생성하지 않습니다  [raiseCancelled]
-elasticore-annotation-guide.md:2136-2142  ### 제약  [namespace.event]
+elasticore-annotation-guide.md:531-537  #### @fetchjoin  [withJoinFetches, findBySearch]
+elasticore-annotation-guide.md:539-563  #### @formula(expression)  [@formula, toEntity, mapping, XxxFields, validateXxx, @abstract, @Formula, @Column, @Comment, string, Nm, Name, Code, Type, Status, Addr, Date, Time, Zip, Tel]
+elasticore-annotation-guide.md:565-703  ### 2.5 JPA 관계  [@ManyToOne, @OneToOne, @ManyToMany, @cascade, @relation, ALL, PERSIST, MERGE, REMOVE, @dtype, @OneToMany, @access, @owner, @password, @access(admin), @signin]
+elasticore-annotation-guide.md:609-623  #### FK 컬럼명 지정 (@column / @col)  [@JoinColumn(name=...), _id]
+elasticore-annotation-guide.md:625-703  #### 관계 필드의 자동 DTO 렌더링 (중첩 DTO + FK 필드)  [@expose, @service, @ManyToOne, @OneToOne, @id, @fetchjoin, batch, batchBatchId, em.getReference, id, batchId, @template, @ref(관계필드.대상필드), EmployeeDTO]
+elasticore-annotation-guide.md:705-775  ### 2.6 JPA 컬럼 매핑
+elasticore-annotation-guide.md:707-713  #### @Column / @col / @db  [name, length, unique, nullable]
+elasticore-annotation-guide.md:715-775  #### @columnDef('xxx') / @jdbcType('XXX')  [string, @Column, columnDefinition, @Column(columnDefinition="xxx"), @columnDef, @jdbcType, @JdbcTypeCode, json, jsonb, JSON, xml, SQLXML]
+elasticore-annotation-guide.md:777-782  ### 2.7 커스텀 함수  [@function]
+elasticore-annotation-guide.md:784-799  ### 2.8 Spring Data JPA 감사  [@jpa, @NotNull, @readonly, @noinput]
+elasticore-annotation-guide.md:801-808  ### 2.9 기타  [@notaudited, @env]
+elasticore-annotation-guide.md:810-1032  ## 3. Search Conditions - 완전 참조
+elasticore-annotation-guide.md:812-818  ### 3.1 개요  [@search(condition), @s(condition), @srch(condition), @filter(condition)]
+elasticore-annotation-guide.md:820-861  ### 3.2 구현된 연산자 전체 목록 (18개)  [eq, equal, like, gt, greaterThan, gte, ge, greaterThanOrEqualTo, lt, lessThan, lte, le, lessThanOrEqualTo, ne, neq, notEqual, in, Join.in, between, isnull]
+elasticore-annotation-guide.md:863-876  ### 3.3 auto 조건 동작  [@expose, @search, between, eq, setSpec]
+elasticore-annotation-guide.md:878-896  ### 3.4 between 특수 동작  [fieldNameFrom, fieldNameTo, greaterThanOrEqualTo, lessThan, lessThanOrEqualTo, @search]
+elasticore-annotation-guide.md:898-967  ### 3.4.1 isnull - 비어 있는지 검색  [Boolean, @expose, @search, ProductSrchDTO, example, between, Op, @search(isnull), @ref(order.shippedDate), @search(isnull,returnedDate), returnedDateEmpty]
+elasticore-annotation-guide.md:969-980  ### 3.5 List 필드 + eq = Join 생성  [@search(eq), fieldNameItem, root.join, equal]
+elasticore-annotation-guide.md:982-993  ### 3.6 in 연산자와 List 필드
+elasticore-annotation-guide.md:995-1001  ### 3.7 @ref와 검색 조건 조합  [@ref(parentEntity.childField), @search]
+elasticore-annotation-guide.md:1003-1032  ### 3.8 실용 예시  [@expose, @pageable, @audited, @id, @search, @length, sortCode, @sort]
+elasticore-annotation-guide.md:1034-1108  ## 4. DTO Annotations
+elasticore-annotation-guide.md:1036-1050  ### 4.1 @template(EntityName)  [@template, string, @Size(max=n)]
+elasticore-annotation-guide.md:1052-1059  ### 4.2 @searchable  [entity, pageSize, pageable, PageableObject, pageNumber, sortCode]
+elasticore-annotation-guide.md:1061-1076  ### 4.2.1 @sort - 기본 정렬  [sortCode, @root, @expose, @Builder, ShopFlowTest, elcore3, elcore]
+elasticore-annotation-guide.md:1078-1082  ### 4.3 @searchBypass
+elasticore-annotation-guide.md:1084-1091  ### 4.4 JSON 어노테이션  [@json, @jsonSerialize, @jsoninclude, @jsonproperty, @includejson]
+elasticore-annotation-guide.md:1093-1108  ### 4.5 Bean Validation  [@email, @pattern, @past, @future, @pastorpresent, @futureorpresent]
+elasticore-annotation-guide.md:1110-1264  ## 4.6 @jsonview - DTO 필드 가시성 제어 (JsonView)
+elasticore-annotation-guide.md:1114-1116  ### 개요  [@JsonView]
+elasticore-annotation-guide.md:1118-1137  ### DTO 메타 어노테이션: @jsonview  [@view, @jsonview(auto), @jsonview(false), @template, @expose]
+elasticore-annotation-guide.md:1139-1168  ### 필드 어노테이션: @view  [@id, create, @PostMapping, update, @PutMapping, read, @GetMapping, @jsonview]
+elasticore-annotation-guide.md:1170-1184  ### 자동 추론 규칙 (@jsonview(auto))  [@id, @genid, @sequence, @updatable(false), @jpa, @formula(...), @readonly, @noinput, @writeonly]
+elasticore-annotation-guide.md:1186-1198  ### env.yml 설정  [@jsonview, @view, auto]
+elasticore-annotation-guide.md:1200-1245  ### 생성 코드 예시  [@template, @jsonview, @id, @view]
+elasticore-annotation-guide.md:1247-1264  ### 주의사항  [@jsonview, @view, jsonview, Jackson2ObjectMapperBuilder, MapperFeature.DEFAULT_VIEW_INCLUSION, @JsonView, @readonly, @writeonly]
+elasticore-annotation-guide.md:1266-1282  ## 5. Enumeration Annotations
+elasticore-annotation-guide.md:1268-1282  ### @db(field) / @json(field)  [@db, @json]
+elasticore-annotation-guide.md:1284-1313  ## 6. Port Annotations
+elasticore-annotation-guide.md:1288-1299  ### HTTP Port  [@url, @auth, @get, @post, @put, @delete, @patch]
+elasticore-annotation-guide.md:1301-1313  ### DBMS Port  [@datasource, @query, @pageable, @native]
+elasticore-annotation-guide.md:1315-1349  ## 7. Best Practices
+elasticore-annotation-guide.md:1317-1321  ### 성능  [@fetchjoin, @cascade(ALL), @pageable, @expose]
+elasticore-annotation-guide.md:1323-1330  ### 검색 조건 선택  [eq, like, between, in, gte, lte, gt, lt, ne, auto]
+elasticore-annotation-guide.md:1332-1336  ### DTO template 활용  [@template(Entity), string, @Size(max=n), @size]
+elasticore-annotation-guide.md:1338-1341  ### 인덱스와 검색  [@search, @Index, like, between]
+elasticore-annotation-guide.md:1343-1349  ### 기본값 활용  [@table, @Column, @search, @expose, @pageable]
+elasticore-annotation-guide.md:1351-1579  ## 8. 주의사항 및 해결방법 (Known Limitations & Workarounds)
+elasticore-annotation-guide.md:1353-1392  ### 8.1 @min/@max 어노테이션 제약사항  [@Min, @Max, long]
+elasticore-annotation-guide.md:1357-1371  #### 문제 상황  [@min, @max]
+elasticore-annotation-guide.md:1373-1387  #### 올바른 사용법  [@min, @max]
+elasticore-annotation-guide.md:1389-1392  #### 해결방법
+elasticore-annotation-guide.md:1394-1417  ### 8.2 DSL 타입이 아닌 단어 주의 (Invalid Field Types)  [uuid, string, @genid, @id, json, String, clob, @Lob, build, elcore, text, blob, elcore3]
+elasticore-annotation-guide.md:1419-1475  ### 8.3 @ManyToOne @id 필드와 SQL 예약어 충돌  [field_name_id]
+elasticore-annotation-guide.md:1423-1424  #### 문제가 되는 예약어  [order, group, select, from, where, table, index, key, value, user, date, time, timestamp, status]
+elasticore-annotation-guide.md:1426-1438  #### 문제 상황  [@id]
+elasticore-annotation-guide.md:1440-1455  #### 해결방법 1: 비예약어 필드명 사용 (권장)  [@id]
+elasticore-annotation-guide.md:1457-1475  #### 해결방법 2: 생성 후 수동 수정  [@id]
+elasticore-annotation-guide.md:1477-1517  ### 8.4 @audited 엔티티와 연관관계  [@NotAudited]
+elasticore-annotation-guide.md:1481-1503  #### 자동 처리  [@NotAudited, @audited, @ManyToOne, @OneToMany, @ManyToMany, @id, @sequence]
+elasticore-annotation-guide.md:1505-1511  #### 수동 명시  [@notaudited]
+elasticore-annotation-guide.md:1513-1517  #### 검증 필요 사항  [@audited, @NotAudited]
+elasticore-annotation-guide.md:1519-1538  ### 8.5 비교 키워드와 같지 않음 (모드에 따라 다름)  [gt, gte, ge, lt, lte, le, ne, neq, notEqual, @search(isnull)]
+elasticore-annotation-guide.md:1540-1569  ### 8.6 between 검색과 LocalDate +1일 동작  [@search(between)]
+elasticore-annotation-guide.md:1566-1569  #### 주의사항
+elasticore-annotation-guide.md:1571-1579  ### 8.7 권장사항 요약  [@min, @max, uuid, @id, @genid, @NotAudited, @audited]
+elasticore-annotation-guide.md:1581-1629  ## @root / @aggregate — 애그리거트 경계 (DDD 룰셋)  [@aggregate(Order), Order, @OneToMany, @cascade, @aggregate(X)]
+elasticore-annotation-guide.md:1606-1619  ### 왜 추론만으로는 부족한가  [@cascade, @service, @root, @aggregate]
+elasticore-annotation-guide.md:1621-1629  ### 생성물에 미치는 영향  [RepositoryHelper, @embeddable]
+elasticore-annotation-guide.md:1631-1674  ## domainService — 도메인 서비스 (DDD 룰셋)  [uses, desc, DSL_WARN]
+elasticore-annotation-guide.md:1653-1674  ### 생성물  [uses, namespace.domainService]
+elasticore-annotation-guide.md:1676-1689  ## @behavior — 엔티티 행위 (DDD 룰셋)  [@editable, XxxBase, Xxx, @MappedSuperclass, @Entity, protected, READ_ONLY, @readonly, @noinput]
+elasticore-annotation-guide.md:1691-1748  ## @editable — 요청으로 고치는 필드·루트 (DDD 룰셋)  [@root, @expose, @behavior, @event, order.confirm, recalculate]
+elasticore-annotation-guide.md:1750-1807  ## @invariant — 불변식 (DDD 룰셋)  [@min, @minsize, @root, @expose]
+elasticore-annotation-guide.md:1777-1807  ### 생성물  [OrderInvariants, @EntityListeners, @genid, @PrePersist, OrderItemRemovalCheck, replaceItems, mappedBy]
+elasticore-annotation-guide.md:1809-1833  ## @factory — 팩토리 (DDD 룰셋)  [@root, @invariant]
+elasticore-annotation-guide.md:1819-1833  ### 생성물  [OrderFactory.place, @genid]
+elasticore-annotation-guide.md:1835-1877  ## @specification — 명세 (DDD 룰셋)  [@root]
+elasticore-annotation-guide.md:1849-1857  ### 생성물  [Predicate]
+elasticore-annotation-guide.md:1859-1877  ### TypeScript 에서  [Number, number]
+elasticore-annotation-guide.md:1879-1896  ## 조건 문법 (`@invariant`, `@specification` 공통)  [Integer, Long, Double, BigDecimal]
+elasticore-annotation-guide.md:1898-2039  ## @access / @owner — 누가 무엇을 할 수 있는가 (v3)  [@root, @expose, public, user, owner, admin, ADMIN, none, read, create, update, delete, ship, cancel, @search, @readonly, @noinput, runAsSystem, @access(admin)]
+elasticore-annotation-guide.md:2041-2057  ## @password / @login — 자격 증명 (v3)  [@unique, PasswordHasher, @writeonly, authenticate, @signin, @Index, me, signin, signout, @access, @owner]
+elasticore-annotation-guide.md:2059-2078  ## @snapshot / @compute — 파생 값 (DDD 룰셋)  [@min, @editable, reference.OrderLine.item, @formula, @formula("...")]
+elasticore-annotation-guide.md:2080-2143  ## @event — 도메인 이벤트 (DDD 룰셋)  [@root, @expose]
+elasticore-annotation-guide.md:2090-2109  ### 생성물  [OrderPlacedEvent, OrderCancelledEvent, occurredOn, order.raisePlaced, order.raiseCancelled, @DomainEvents, @AfterDomainEventPublication]
+elasticore-annotation-guide.md:2111-2123  ### 이벤트 내용 (payload)  [@root, @event, raiseShipped]
+elasticore-annotation-guide.md:2125-2129  ### 밖으로 내보내기 - Outbox  [OutboxPublisher]
+elasticore-annotation-guide.md:2131-2135  ### 언제 발생하는지는 생성하지 않습니다  [raiseCancelled]
+elasticore-annotation-guide.md:2137-2143  ### 제약  [namespace.event]
 ```
 
 ## elasticore-rule-guide.md
@@ -568,8 +568,8 @@ elasticore-migration-guide.md:76-82  ### 3. `DTOUtils.getMetaInfo(Class)` → `g
 elasticore-migration-guide.md:84-90  ### 4. 새 DSL 검증은 2.x 모델에 반응하지 않습니다  [DSL_WARN, domainService, uses:]
 elasticore-migration-guide.md:92-159  ## 3.0 기능을 쓰고 싶다면 (선택)
 elasticore-migration-guide.md:96-105  ### 무엇이 생기나
-elasticore-migration-guide.md:107-132  ### 켜는 법  [@ElastiCore, like, @search(like), @search(%_%), lower, pg_trgm, @fetchjoin, table.autoJoin, withJoinFetches]
-elasticore-migration-guide.md:134-152  ### 2.x 코드에서 옮길 때 손볼 것  [repository.getReferenceById, package, @fetchjoin, table.autoJoin, withJoinFetches, @writeonly, @nooutput, save, ConstraintViolationException]
+elasticore-migration-guide.md:107-132  ### 켜는 법  [@ElastiCore, like, @search(like), @search(%_%), lower, pg_trgm, @fetchjoin, table.autoJoin, withJoinFetches, findBySearch, findAll, listBySearch]
+elasticore-migration-guide.md:134-152  ### 2.x 코드에서 옮길 때 손볼 것  [repository.getReferenceById, package, @fetchjoin, table.autoJoin, withJoinFetches, JoinSpec.fetchJoin, @writeonly, @nooutput, save]
 elasticore-migration-guide.md:154-159  ### 되돌리는 법  [publisher.rules]
 elasticore-migration-guide.md:161-168  ## Spring Boot 4 / Spring AI 2.0으로 올리기 (3.0만)
 elasticore-migration-guide.md:170-187  ## 자주 나오는 질문  [publisher.rules, elasticore.modules]

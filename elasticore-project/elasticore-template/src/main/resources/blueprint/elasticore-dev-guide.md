@@ -592,8 +592,9 @@ Page<RentCompany> page = repository.findAll(withJoins, pageable);
 
 ### 구성 요소
 - `BugMapper.toSpec()` -> SearchDTO의 `@search` 조건을 Specification으로 변환 (빌드타임 생성)
-- `withJoinFetches()` -> autoJoin 설정 또는 `@fetchjoin` 기반 JOIN FETCH 자동 적용 - 2.x 코드(`output = 'v2'`)의
-  CoreService 에만 있음. v3 번들의 CoreService 에는 없으므로 `JoinSpec.fetchJoin()` (7장)으로 직접 가져옴
+- `withJoinFetches()` -> autoJoin 설정 또는 `@fetchjoin` 기반 JOIN FETCH 자동 적용. 2.x 코드는 모든 CoreService 에,
+  v3 번들(3.0.261029 부터)은 그런 연관이 있는 엔티티의 CoreService 에만 생성됨. 그 밖의 쿼리에서는 `JoinSpec.fetchJoin()`
+  (7장)으로 직접 가져옴
 - 페이징: `@expose(n)` 또는 `@searchable(pageSize=n)` 설정값 사용
 
 ---
@@ -610,9 +611,9 @@ Page<RentCompany> page = repository.findAll(withJoins, pageable);
 | `autoJoin: true` | 전체 엔티티 참조 | env.yml config.table |
 | `JoinSpec.fetchJoin()` | 런타임 선택적 | Java code |
 
-> `@fetchjoin`·`autoJoin` 은 2.x 코드(`output = 'v2'`)의 CoreService 가 씁니다. v3 번들(플러그인의 기본값, 헥사고날·DDD,
-> 모든 Kotlin 빌드)의 CoreService 는 쓰지 않고, 생성할 때 엔티티마다 DSL 경고를 냅니다. v3 에서는 목록에 필요한 연관을
-> `JoinSpec.fetchJoin()` 으로 가져옵니다.
+> `@fetchjoin`·`autoJoin` 은 CoreService 의 페이지 검색(`findBySearch`)이 씁니다 - 2.x 코드(`output = 'v2'`)와 v3
+> 번들(플러그인의 기본값, 헥사고날·DDD, 모든 Kotlin 빌드, 3.0.261029 부터) 모두. `findAll`·`listBySearch` 나 직접 쓴 쿼리에서
+> 필요한 연관은 `JoinSpec.fetchJoin()` 으로 가져옵니다.
 
 ```yaml
 # env.yml - global autoJoin
@@ -640,7 +641,7 @@ entity:
 - `findAll(em, DtoClass.class)` -> 생성자 기반 DTO 프로젝션
 
 ### 카운트 쿼리 최적화
-- 생성된 `withJoinFetches()`(2.x 코드)와 `JoinSpec.fetchJoin()` 은 카운트 쿼리에서 자동으로 JOIN FETCH 제외
+- 생성된 `withJoinFetches()` 와 `JoinSpec.fetchJoin()` 은 카운트 쿼리에서 자동으로 JOIN FETCH 제외
 - `Long.class.equals(query.getResultType())` 조건으로 카운트 쿼리 감지
 
 ---

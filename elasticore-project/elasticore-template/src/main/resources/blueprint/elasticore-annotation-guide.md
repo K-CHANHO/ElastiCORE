@@ -529,7 +529,8 @@ articles: List<Article> @dtype(List<ArticleDTO>)
 ```
 
 #### @fetchjoin
-N+1 방지를 위한 JOIN FETCH. Service의 `withJoinFetches()`에서 적용. count 쿼리에서 자동 제외.
+N+1 방지를 위한 JOIN FETCH. Service의 `withJoinFetches()`에서 적용 - 페이지 검색(`findBySearch`)이 씀. count 쿼리에서 자동 제외.
+2.x 코드와 v3 번들(3.0.261029 부터) 모두.
 ```yaml
 postMan: PostMan @fetchjoin
 category: Category @fetchjoin
