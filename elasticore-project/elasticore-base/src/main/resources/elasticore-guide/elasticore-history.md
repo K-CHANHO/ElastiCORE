@@ -54,6 +54,24 @@ Accident:
 - 이제 호환·`-Pv3`·Kotlin 모두 2.x 처럼 `이름 (라벨)` 로 쓴다. 라벨이 없는 엔티티는 이름만 쓰고, 바뀌지 않는다.
 - 확장 서비스는 처음 한 번 생성하는 파일이다. 손대지 않은 파일은 다음 생성 때 새 설명으로 다시 쓰이고, 손댄 파일은 그대로다.
 
+### Bug Fixes (TypeScript - 검색 DTO 의 연관)
+
+#### TypeScript 검색 DTO 가 생성되지 않는 엔티티 타입을 import 하던 것 - 클라이언트가 컴파일되지 않았다
+
+```yaml
+Sale:
+  fields:
+    insurer: Company @search(eq)
+SaleSrchDTO:
+  meta: dto @searchable(entity=Sale, pageable=true)
+```
+
+- Java 검색 DTO 의 연관은 엔티티 타입(`private Company insurer;`)이고, 검색은 그 키만 보낸다: `{"insurer": {"id": "C1"}}`.
+  TypeScript 검색 DTO 는 같은 타입으로 `insurer?: Company` 와 `import { Company } from './Company'` 를 썼는데,
+  `elcore3ts` 는 엔티티를 쓰지 않으므로 그 모듈이 없어 `tsc` 가 TS2307 로 멈췄다.
+- 이제 그 프로퍼티는 엔티티 키의 모양이다: `insurer?: { id: string }`. 키가 여럿이면 모두 담는다. 열거형과 DTO 는 전처럼
+  import 한다.
+
 ## 3.0.261027-rc2
 
 펫스토어에 팀 규칙 모듈(`elasticore { rules = [...] }`)을 붙여 rc1 로 생성·빌드·실행하며 규칙 가이드의 예제를 하나씩 다시

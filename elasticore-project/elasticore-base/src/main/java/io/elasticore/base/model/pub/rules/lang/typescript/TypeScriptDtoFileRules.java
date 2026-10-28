@@ -85,6 +85,10 @@ public class TypeScriptDtoFileRules implements CodeRules {
         // of them is. The DSL's "!" says what an entity must hold, not what a
         // search must ask; the Java search DTO declares none of them required.
         for (FieldSpec f : e.fields()) c.field(f).optional();
+        for (FieldSpec f : e.fields()) {
+            String shape = keyShape(f, c.syntax());
+            if (shape != null) c.field(f).type(shape);
+        }
         write(c, e, e.searchDtoClassName(), false);
 
         // Sorting and paging, as the Java search DTO carries them. Without
@@ -105,6 +109,43 @@ public class TypeScriptDtoFileRules implements CodeRules {
         paging.add("");
         paging.add("sortAscending?: boolean;");
         for (String line : paging) c.varLine("fieldList", line);
+    }
+
+    /**
+     * A relation a search compares by, as the server reads it: the Java
+     * search DTO holds the entity, and a search sends its key alone -
+     * {"insurer": {"id": "C1"}}. The browser has no entity interfaces, so the
+     * property is that key's shape rather than a type no file declares. Null
+     * for a field that names no entity with a key (an enum, a DTO, a value).
+     */
+    private static String keyShape(FieldSpec f, Syntax syntax) {
+        if (f.isBaseType() || f.isList()) return null;
+        io.elasticore.base.model.DataModelComponent named;
+        try {
+            io.elasticore.base.ECoreModelContext ctx =
+                    io.elasticore.base.model.core.BaseECoreModelContext.getContext();
+            named = ctx == null ? null : ctx.findModelComponent(f.typeName());
+        } catch (RuntimeException notInTheModel) {
+            return null;
+        }
+        if (!(named instanceof io.elasticore.base.model.entity.Entity)) return null;
+        io.elasticore.base.model.core.ListMap<String, io.elasticore.base.model.entity.Field> fields =
+                ((io.elasticore.base.model.entity.Entity) named).getAllFieldListMap();
+        if (fields == null) return null;
+        List<String> keys = new ArrayList<String>();
+        for (io.elasticore.base.model.entity.Field k : fields.getList()) {
+            if (k.hasAnnotation("id") || k.hasAnnotation("pk")) {
+                keys.add(String.format("%s: %s", syntax.escapeName(k.getName()),
+                        syntax.typeName(k.getTypeInfo().getDefaultTypeName())));
+            }
+        }
+        if (keys.isEmpty()) return null;
+        StringBuilder shape = new StringBuilder("{ ");
+        for (int i = 0; i < keys.size(); i++) {
+            if (i > 0) shape.append(", ");
+            shape.append(keys.get(i));
+        }
+        return shape.append(" }").toString();
     }
 
     /**
