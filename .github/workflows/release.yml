@@ -51,6 +51,11 @@ jobs:
           if ! grep -qxF "## $version" "$history"; then
             echo "::error::$history has no '## $version' section"; exit 1
           fi
+          # The GitHub release is read by people who may not read Korean, as
+          # the history is written: its notes are an English file of their own.
+          if [ ! -s "docs/releases/$version.md" ]; then
+            echo "::error::docs/releases/$version.md - the English release notes - is missing or empty"; exit 1
+          fi
           held=no
           for branch in $(git branch -r --format='%(refname:short)' | grep -E '^origin/(main|release/.+)$' || true); do
             if git merge-base --is-ancestor "$GITHUB_SHA" "$branch"; then held=yes; fi
@@ -231,7 +236,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Release notes from the history, and the release
+      - name: Release notes, and the release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.central.outputs.version }}
@@ -239,9 +244,11 @@ jobs:
         run: |
           set -euo pipefail
           notes="$RUNNER_TEMP/notes.md"
-          history=elasticore-project/elasticore-base/src/main/resources/elasticore-guide/elasticore-history.md
-          awk -v head="## $VERSION" '$0 == head {on = 1; next} on && /^## / {exit} on' "$history" > "$notes"
+          # English notes; the history, in Korean, keeps every detail and is linked.
+          cp "docs/releases/$VERSION.md" "$notes"
           {
+            echo
+            echo "Every change with its reason and the files it touched: [the history](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/elasticore-project/elasticore-base/src/main/resources/elasticore-guide/elasticore-history.md) (in Korean)."
             echo
             echo "Maven Central: \`io.elasticore:elasticore-base:$VERSION\`, \`io.elasticore.springboot3:elasticore-springboot3:$VERSION\`,"
             echo "\`io.elasticore.springboot4:elasticore-springboot4:$VERSION\`, plugin \`id 'io.elasticore' version '$VERSION'\`"
