@@ -44,7 +44,7 @@ public class JpaServiceFileRules implements CodeRules {
      * uses (JpaServiceCompatFileRules.fetchedRelations), and fetched where 2.x
      * fetches them: the paged search, findBySearch.
      *
-     * Until 3.0.261029-SNAPSHOT this service had no JOIN FETCH: each listed
+     * Until 3.0.261028-rc3 this service had no JOIN FETCH: each listed
      * row loaded those relations with a query of its own (N+1), and an
      * extension service calling withJoinFetches() did not compile. The method
      * is written only for an entity that asks for a fetch, so every other
