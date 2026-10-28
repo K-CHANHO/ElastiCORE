@@ -32,6 +32,42 @@
   `elasticore-annotation-guide.md`·`elasticore-env-guide.md`(`autoJoin` 은 `findById` 가 아니라 페이지 검색에서 - 2.x 도
   그렇다)
 
+### Documentation (마이그레이션 가이드 - 2.x 코드에서 옮길 때 손볼 것)
+
+#### v3 번들로 옮기면 컴파일·테스트에서 드러나는 차이를 한 표로
+- 왜: rc3 부터 v3 번들이 기본값인데, 가이드의 v3 항목은 `like` 하나였다. 도메인 9개짜리 프로젝트를 `-Pv3` 로 옮기자 본
+  코드 5곳과 테스트 138곳이 컴파일되지 않았고, 우회한 뒤에도 테스트 176개가 실패했다 - 가이드에 없는 차이들이었다
+- `elasticore-migration-guide.md` 에 "2.x 코드에서 옮길 때 손볼 것" 을 더했다: 키를 받는 엔티티 생성자, 보호 블록이
+  기대던 `*` import, `@fetchjoin` 대신 `JoinSpec.fetchJoin`, `@writeonly` 값의 복사, CoreService 의 `save`·`update`
+  검증과 키 중복 거절, `delete(searchDTO)`·`updateBySpecification` 이 행마다 도는 것, 2.x 서비스 테스트의 mock
+- `like` 항목에 `lower(컬럼)` 비교와 인덱스를 적었다
+
+### Documentation (개발 가이드 - 보호 블록과 JOIN FETCH)
+
+#### 보호 블록은 여러 개 쓸 수 있고, import 는 헤더 블록에
+- 왜: 가이드는 "한 소스 파일 내 하나의 블록만 사용 가능" 이라고 했지만 두 생성기 모두 여러 블록을 지킨다. 반대로 적혀
+  있지 않던 것이 있었다 - import 줄이 든 블록은 `package` 아래로 가는 헤더 블록이 되고, 헤더 블록이 둘이면 재생성할 때
+  첫 번째가 사라진다. v3 코드는 생성 코드가 쓰는 것만 import 하므로, 2.x 코드의 `*` import 에 기대던 블록 코드는 헤더
+  블록이 있어야 컴파일된다
+- `elasticore-dev-guide.md` 의 "사용자 코드 보존 블록" 을 고쳤다: 여러 블록과 그 자리, 헤더 블록과 예제, 해시에서 빠지는
+  것. 2.2 jar 와 v3 로 같은 파일을 다시 생성해 확인했다
+
+#### `withJoinFetches()` 가 어느 서비스에, 어느 검색에 있는지
+- 11장·12장이 `withJoinFetches()`·`@fetchjoin`·`autoJoin` 을 버전 구분 없이 적었다. 처음에는 2.x 코드(`output = 'v2'`)의
+  CoreService 에만 있다고 고쳤고, 같은 버전에서 v3 서비스도 가져오게 되어(위 "v3 서비스 - `@fetchjoin`") 둘 다의 페이지
+  검색(`findBySearch`)이 쓰고, v3 에서는 그런 연관이 있는 엔티티에만 생성된다고 적었다. 그 밖의 쿼리는 `JoinSpec.fetchJoin()`.
+  마이그레이션 가이드의 "손볼 것" 표의 `@fetchjoin` 줄도 같이 고쳤다
+
+### Documentation (어노테이션 가이드 - 엔티티의 `@readonly`·`@restExclude`)
+
+#### 메서드를 고르는 두 엔티티 어노테이션을 1장에
+- 왜: 엔티티의 `@readonly` 와 `@restExclude(...)` 는 컨트롤러·서비스·TypeScript 클라이언트·AI 도구가 가질 메서드를
+  정하는데, 어노테이션 가이드에는 둘 다 없었다 - `@readonly` 는 필드 어노테이션으로만, `@restExclude` 는 규칙 가이드·env
+  가이드·이 이력에만 있었다
+- `elasticore-annotation-guide.md` 1장에 둘을 더했다: 남는 메서드, `@restExclude` 가 받는 이름, 함께 빠지는 짝은 규칙
+  가이드로. 둘 다 3.0 규칙엔진만 읽는다고 적었다 - 2.2 jar 로 생성하면 두 엔티티 모두 엔드포인트 8개와 서비스 메서드를
+  전부 받는다
+
 ## 3.0.261028-rc3
 
 **플러그인의 기본값이 3.0 코드가 된다**: 아무것도 선언하지 않은 레이어드 Java 프로젝트는 `jpa-springboot-v3` 로

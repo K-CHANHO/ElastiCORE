@@ -20,6 +20,32 @@ InternalData:
   meta: entity @service(20)
 ```
 
+### @readonly (엔티티)
+> **Since: 3.0** (3.0 규칙엔진. 2.x 생성기는 읽지 않음)
+
+조회만 하는 엔티티. Controller 는 조회 엔드포인트(`read`·`search`·`schemaInfo`)만 생성하고 생성·수정·일괄 수정·삭제는
+제외. v3 Java Service, TypeScript 클라이언트, AI 확장 서비스의 도구도 조회만 남김. 필드의 `@readonly`(서버가 정하는
+필드, §2.2)와 다름.
+```yaml
+CommonCode:
+  meta: entity @expose @readonly
+```
+
+### @restExclude(메서드, ...)
+> **Since: 3.0** (3.0 규칙엔진. 2.x 생성기는 읽지 않음)
+
+지정한 메서드만 제외. 이름은 Service 메서드(`save`·`update`·`batchUpdate`·`delete`·`deleteById`·`updateBySpecification`)와
+Controller 엔드포인트(`create`·`read`·`search`·`update`·`batchUpdate`·`deleteBatch`·`deleteById`·`schemaInfo`). v3 출력에서는
+뺀 메서드를 부르는 메서드도 함께 빠짐(`update` 를 빼면 `batchUpdate` 도). 빠지는 짝과 2.x 호환 번들과의 차이는
+`elasticore-rule-guide.md` 의 `@restExclude` 설명 참고.
+```yaml
+Notice:
+  meta: entity @expose @restExclude(batchUpdate, deleteById)
+```
+
+> 엔티티의 `@readonly`·`@restExclude` 는 3.0 규칙엔진(`elcore3`)이 읽습니다. 2.x 생성기(`output = 'v2'` 의 `elcore`)는
+> 읽지 않고 모든 메서드를 생성합니다.
+
 ### @audited
 JPA Envers `@Audited` 어노테이션 추가. 데이터 변경 이력 추적용 (dependency 설정 필요).
 ```yaml
