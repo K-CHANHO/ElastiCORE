@@ -51,6 +51,16 @@ withJoinFetches(): each row loads it with a query of its own (N+1). Fetch it in 
 - 11장·12장이 `withJoinFetches()`·`@fetchjoin`·`autoJoin` 을 버전 구분 없이 적었다. 2.x 코드(`output = 'v2'`)의 CoreService
   에만 있다고 적고, v3 에서는 `JoinSpec.fetchJoin()` 으로 가져온다고 적었다
 
+### Documentation (어노테이션 가이드 - 엔티티의 `@readonly`·`@restExclude`)
+
+#### 메서드를 고르는 두 엔티티 어노테이션을 1장에
+- 왜: 엔티티의 `@readonly` 와 `@restExclude(...)` 는 컨트롤러·서비스·TypeScript 클라이언트·AI 도구가 가질 메서드를
+  정하는데, 어노테이션 가이드에는 둘 다 없었다 - `@readonly` 는 필드 어노테이션으로만, `@restExclude` 는 규칙 가이드·env
+  가이드·이 이력에만 있었다
+- `elasticore-annotation-guide.md` 1장에 둘을 더했다: 남는 메서드, `@restExclude` 가 받는 이름, 함께 빠지는 짝은 규칙
+  가이드로. 둘 다 3.0 규칙엔진만 읽는다고 적었다 - 2.2 jar 로 생성하면 두 엔티티 모두 엔드포인트 8개와 서비스 메서드를
+  전부 받는다
+
 ## 3.0.261028-rc3
 
 **플러그인의 기본값이 3.0 코드가 된다**: 아무것도 선언하지 않은 레이어드 Java 프로젝트는 `jpa-springboot-v3` 로
