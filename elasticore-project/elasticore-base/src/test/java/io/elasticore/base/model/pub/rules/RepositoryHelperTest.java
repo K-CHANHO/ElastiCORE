@@ -81,6 +81,8 @@ public class RepositoryHelperTest {
                 .pkg("repository", base + ".repository")
                 .pkg("entity", base + ".entity")
                 .pkg("dto", base + ".dto")
+                // model/coverage.yml is read before model/entity.yml: name order.
+                .entity(keyed("Ledger"))
                 .entity(new EntitySpec("Address").meta("embeddable", null)
                         .addField(loader.parse("city", "string(50)")))
                 .entity(keyed("Category"))

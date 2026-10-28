@@ -49,6 +49,13 @@ public class ControllerBaseRules implements CodeRules {
         if (dtoName == null) dtoName = String.format("%sDTO", e.getName());
         String searchResultDto = e.searchResultDtoName();
         if (searchResultDto == null) searchResultDto = dtoName;
+        // And the search DTO 2.x chose for that pair: the one declared
+        // @searchable of the entity (LedgerQuery), not the one the loader
+        // derives from its @search fields (LedgerSrchDTO). The service took
+        // it already; the controller searched with the other, and only a
+        // template model declaring both showed it.
+        String searchDtoName = e.config(io.elasticore.base.model.pub.rules.verify.RulesGenRunner.COMPAT_SERVICE_SRCH_DTO);
+        if (searchDtoName == null) searchDtoName = e.searchDtoClassName();
 
         c.var("packageName", e.pkg("control"))
          .var("dtoPackageName", e.pkg("dto"))
@@ -65,7 +72,7 @@ public class ControllerBaseRules implements CodeRules {
          .var("apiPath", e.apiPath())
          .var("dtoClassName", dtoName)
          .var("keyDtoClassName", "%sKeyDTO", e.getName())
-         .var("searchDTOClassName", e.searchDtoClassName())
+         .var("searchDTOClassName", searchDtoName)
          .var("searchResultDTOClassName", searchResultDto)
          .var("searchReturnType", searchReturnType);
 

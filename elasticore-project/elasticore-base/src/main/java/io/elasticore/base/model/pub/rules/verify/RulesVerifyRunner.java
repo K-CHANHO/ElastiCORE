@@ -208,6 +208,15 @@ public final class RulesVerifyRunner {
             SpecFactory.registerEnums(spec, m);
         }
 
+        // The DTOs 2.x chose for the service pair, as the runner records them
+        // (RulesGenRunner, compatibility mode): without them this check judged
+        // a controller the generator does not write.
+        String[] dtoPair = RulesGenRunner.compatDtoPair(entity, model);
+        if (dtoPair != null) {
+            spec.config(RulesGenRunner.COMPAT_SERVICE_DTO, dtoPair[0]);
+            spec.config(RulesGenRunner.COMPAT_SERVICE_SRCH_DTO, dtoPair[1]);
+        }
+
         boolean exposed = entity.getMetaInfo().hasMetaAnnotation("expose");
         boolean serviced = exposed || entity.getMetaInfo().hasMetaAnnotation("service");
         boolean hasPk = spec.pkField() != null;

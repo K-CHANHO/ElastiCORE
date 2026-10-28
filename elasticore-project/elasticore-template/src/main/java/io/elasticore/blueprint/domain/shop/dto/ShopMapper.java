@@ -1,4 +1,4 @@
-//ecd:-1479987379H20260926235721_V3.0
+//ecd:392570855H20261028193835_V3.0
 package io.elasticore.blueprint.domain.shop.dto;
 
 import org.springframework.dao.PermissionDeniedDataAccessException;
@@ -53,6 +53,81 @@ public class ShopMapper {
         }
     }
 
+    
+    public static void mapping(Ledger from, LedgerDTO to, boolean isSkipNull){
+        mapping(from,to,isSkipNull,(MappingContext) null);
+    }
+    public static void mapping(Ledger from, LedgerDTO to, boolean isSkipNull, MappingContext c){
+        if(c!=null && !c.checkEnable()) return;
+        checkPermission(from, to);
+        if(from ==null || to ==null) return;
+        if(c==null || c.fd("owner").checkEnable())
+        setVal(from.getOwner(), to::setOwner, isSkipNull, e->toDTO(e,c));
+        if(c==null || c.fd("partner").checkEnable())
+        setVal(from.getPartner(), to::setPartner, isSkipNull, e->toDTO(e,c));
+        if(hasValue(from.getOwner()))
+            to.setOwnerCustomerId(from.getOwner().getCustomerId());
+        if(hasValue(from.getPartner()))
+            to.setPartnerCustomerId(from.getPartner().getCustomerId());
+        if(c==null || c.fd("ledgerId").checkEnable())
+        setVal(from.getLedgerId(), to::setLedgerId, isSkipNull);
+        if(c==null || c.fd("code").checkEnable())
+        setVal(from.getCode(), to::setCode, isSkipNull);
+        if(c==null || c.fd("memo").checkEnable())
+        setVal(from.getMemo(), to::setMemo, isSkipNull);
+        if(c==null || c.fd("amount").checkEnable())
+        setVal(from.getAmount(), to::setAmount, isSkipNull);
+        if(c==null || c.fd("postedAt").checkEnable())
+        setVal(from.getPostedAt(), to::setPostedAt, isSkipNull);
+        if(c==null || c.fd("deleted").checkEnable())
+        setVal(from.getDeleted(), to::setDeleted, isSkipNull);
+    }
+    
+    
+    public static void mapping(Ledger from, LedgerDTO to){
+        mapping(from,to,false);
+    }
+    public static void mapping(Ledger from, LedgerDTO to, MappingContext c){
+        mapping(from,to,false,c);
+    }
+    
+    
+    public static LedgerDTO toDTO(Ledger from){
+        return toDTO(from,MappingContext.withGuard(2,null));
+    }
+    public static LedgerDTO toDTO(Ledger from,MappingContext c1){
+        MappingContext c=c1!=null?c1.getChild():null;
+        if(c!=null && !c.checkEnable()) return null;
+        if(from==null) return null;
+        LedgerDTO to = new LedgerDTO();
+        mapping(from,to,c);
+        return to;
+    }
+    
+    
+    public static List<LedgerDTO> toLedgerDTOList(List<Ledger> fromList){
+        return toLedgerDTOList(fromList,(MappingContext) null);
+    }
+    public static List<LedgerDTO> toLedgerDTOList(List<Ledger> fromList, MappingContext c){
+        if(c!=null && !c.checkEnable(1)) return null;
+        if(fromList==null) return null;
+        return fromList.stream().map(e->ShopMapper.toDTO(e,c)).collect(Collectors.toList());
+    }
+    
+    
+    public static List<LedgerDTO> toLedgerDTOList(List<Ledger> fromList, BiFunction<Ledger, LedgerDTO, LedgerDTO> modifier){
+        if(fromList==null) return null;
+        return fromList.stream()
+            .map(from -> {
+                LedgerDTO to = toDTO(from);
+                return modifier.apply(from, to);
+            }
+            )
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+        
+    }
+    
     
     public static void mapping(Category from, CategoryDTO to, boolean isSkipNull){
         mapping(from,to,isSkipNull,(MappingContext) null);
@@ -747,6 +822,162 @@ public class ShopMapper {
         return fromList.stream()
             .map(from -> {
                 GiftCardDTO to = toDTO(from);
+                return modifier.apply(from, to);
+            }
+            )
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+        
+    }
+    
+    
+    public static void mapping(LedgerDTO from, Ledger to, boolean isSkipNull){
+        mapping(from,to,isSkipNull,(MappingContext) null);
+    }
+    public static void mapping(LedgerDTO from, Ledger to, boolean isSkipNull, MappingContext c){
+        if(c!=null && !c.checkEnable()) return;
+        checkPermission(from, to);
+        if(from ==null || to ==null) return;
+        if(c==null || c.fd("ledgerId").checkEnable())
+        setVal(from.getLedgerId(), to::setLedgerId, isSkipNull);
+        if(c==null || c.fd("code").checkEnable())
+        setVal(from.getCode(), to::setCode, isSkipNull);
+        if(c==null || c.fd("memo").checkEnable())
+        setVal(from.getMemo(), to::setMemo, isSkipNull);
+        if(c==null || c.fd("amount").checkEnable())
+        setVal(from.getAmount(), to::setAmount, isSkipNull);
+        if(c==null || c.fd("postedAt").checkEnable())
+        setVal(from.getPostedAt(), to::setPostedAt, isSkipNull);
+        if(c==null || c.fd("deleted").checkEnable())
+        setVal(from.getDeleted(), to::setDeleted, isSkipNull);
+        
+        
+        if(hasValue(from.getOwnerCustomerId())){
+            Customer t = new Customer();
+            t.setCustomerId(from.getOwnerCustomerId());
+            to.setOwner(t);
+        }
+        
+        
+        if(hasValue(from.getPartnerCustomerId())){
+            Customer t = new Customer();
+            t.setCustomerId(from.getPartnerCustomerId());
+            to.setPartner(t);
+        }
+    }
+    
+    
+    public static void mapping(LedgerDTO from, Ledger to){
+        mapping(from,to,false);
+    }
+    public static void mapping(LedgerDTO from, Ledger to, MappingContext c){
+        mapping(from,to,false,c);
+    }
+    
+    
+    public static void mapping(LedgerDTO from, Ledger to, EntityManager em){
+        mapping(from,to,false,null,em);
+    }
+    public static void mapping(LedgerDTO from, Ledger to, boolean isSkipNull, EntityManager em){
+        mapping(from,to,isSkipNull,null,em);
+    }
+    public static void mapping(LedgerDTO from, Ledger to, MappingContext c, EntityManager em){
+        mapping(from,to,false,c,em);
+    }
+    public static void mapping(LedgerDTO from, Ledger to, boolean isSkipNull, MappingContext c, EntityManager em){
+        if(c!=null && !c.checkEnable()) return;
+        checkPermission(from, to);
+        if(from ==null || to ==null) return;
+        if(c==null || c.fd("ledgerId").checkEnable())
+        setVal(from.getLedgerId(), to::setLedgerId, isSkipNull);
+        if(c==null || c.fd("code").checkEnable())
+        setVal(from.getCode(), to::setCode, isSkipNull);
+        if(c==null || c.fd("memo").checkEnable())
+        setVal(from.getMemo(), to::setMemo, isSkipNull);
+        if(c==null || c.fd("amount").checkEnable())
+        setVal(from.getAmount(), to::setAmount, isSkipNull);
+        if(c==null || c.fd("postedAt").checkEnable())
+        setVal(from.getPostedAt(), to::setPostedAt, isSkipNull);
+        if(c==null || c.fd("deleted").checkEnable())
+        setVal(from.getDeleted(), to::setDeleted, isSkipNull);
+        
+        
+        if(hasValue(from.getOwnerCustomerId())){
+            if(em != null){
+                to.setOwner(em.getReference(Customer.class, from.getOwnerCustomerId()));
+            }
+            else{
+                Customer t = new Customer();
+                t.setCustomerId(from.getOwnerCustomerId());
+                to.setOwner(t);
+            }
+        }
+        
+        
+        if(hasValue(from.getPartnerCustomerId())){
+            if(em != null){
+                to.setPartner(em.getReference(Customer.class, from.getPartnerCustomerId()));
+            }
+            else{
+                Customer t = new Customer();
+                t.setCustomerId(from.getPartnerCustomerId());
+                to.setPartner(t);
+            }
+        }
+    }
+    
+    
+    public static Ledger toEntity(LedgerDTO from){
+        return toEntity(from,MappingContext.withGuard(2,null));
+    }
+    public static Ledger toEntity(LedgerDTO from,MappingContext c1){
+        MappingContext c=c1!=null?c1.getChild():null;
+        if(c!=null && !c.checkEnable()) return null;
+        if(from==null) return null;
+        Ledger to = new Ledger();
+        mapping(from,to,c);
+        return to;
+    }
+    
+    
+    public static Ledger toEntity(LedgerDTO from, EntityManager em){
+        return toEntity(from,MappingContext.withGuard(2,null),em);
+    }
+    public static Ledger toEntity(LedgerDTO from, MappingContext c1, EntityManager em){
+        MappingContext c=c1!=null?c1.getChild():null;
+        if(c!=null && !c.checkEnable()) return null;
+        if(from==null) return null;
+        Ledger to = new Ledger();
+        mapping(from,to,c,em);
+        return to;
+    }
+    
+    
+    public static List<Ledger> toLedgerList(List<LedgerDTO> fromList){
+        return toLedgerList(fromList,(MappingContext) null);
+    }
+    public static List<Ledger> toLedgerList(List<LedgerDTO> fromList, MappingContext c){
+        if(c!=null && !c.checkEnable(1)) return null;
+        if(fromList==null) return null;
+        return fromList.stream().map(e->ShopMapper.toEntity(e,c)).collect(Collectors.toList());
+    }
+    
+    
+    public static List<Ledger> toLedgerList(List<LedgerDTO> fromList, EntityManager em){
+        return toLedgerList(fromList,(MappingContext) null,em);
+    }
+    public static List<Ledger> toLedgerList(List<LedgerDTO> fromList, MappingContext c, EntityManager em){
+        if(c!=null && !c.checkEnable(1)) return null;
+        if(fromList==null) return null;
+        return fromList.stream().map(e->ShopMapper.toEntity(e,c,em)).collect(Collectors.toList());
+    }
+    
+    
+    public static List<Ledger> toLedgerList(List<LedgerDTO> fromList, BiFunction<LedgerDTO, Ledger, Ledger> modifier){
+        if(fromList==null) return null;
+        return fromList.stream()
+            .map(from -> {
+                Ledger to = toEntity(from);
                 return modifier.apply(from, to);
             }
             )
@@ -2021,6 +2252,83 @@ public class ShopMapper {
             .filter(Objects::nonNull)
             .collect(Collectors.toList());
         
+    }
+    
+    
+    public static Specification<Ledger> toSpec(LedgerQuery searchDTO){
+        Specification<Ledger> b = (r, q, c) -> c.conjunction();
+        return toSpec(searchDTO, b);
+    }
+    
+    
+    public static Specification<Ledger> toSpec(LedgerQuery searchDTO, Specification<Ledger> sp){
+        String memo = searchDTO.getMemo();
+        if(hasValue(memo)){
+            sp = sp.and((r,q,c) -> c.like(r.get("memo"),"%" +trim(memo)+ "%"));
+        }
+        String code = searchDTO.getCode();
+        if(hasValue(code)){
+            sp = sp.and((r,q,c) -> c.equal(r.get("code"),code));
+        }
+        Customer owner = searchDTO.getOwner();
+        if(hasValue(owner)){
+            sp = sp.and((r,q,c) -> c.equal(r.get("owner"),owner));
+        }
+        Customer partner = searchDTO.getPartner();
+        if(hasValue(partner)){
+            sp = sp.and((r,q,c) -> c.equal(r.get("partner"),partner));
+        }
+        return sp;
+    }
+    
+    
+    public static Specification<Ledger> toSpec(LedgerSrchDTO searchDTO){
+        Specification<Ledger> b = (r, q, c) -> c.conjunction();
+        return toSpec(searchDTO, b);
+    }
+    
+    
+    public static Specification<Ledger> toSpec(LedgerSrchDTO searchDTO, Specification<Ledger> sp){
+        Long ownerCustomerId = searchDTO.getOwnerCustomerId();
+        if(hasValue(ownerCustomerId)){
+            sp = sp.and((r,q,c) -> c.equal(r.get("owner").get("customerId"),ownerCustomerId));
+        }
+        Long partnerCustomerId = searchDTO.getPartnerCustomerId();
+        if(hasValue(partnerCustomerId)){
+            sp = sp.and((r,q,c) -> c.equal(r.get("partner").get("customerId"),partnerCustomerId));
+        }
+        Long ledgerId = searchDTO.getLedgerId();
+        if(hasValue(ledgerId)){
+            sp = sp.and((r,q,c) -> c.equal(r.get("ledgerId"),ledgerId));
+        }
+        String code = searchDTO.getCode();
+        if(hasValue(code)){
+            sp = sp.and((r,q,c) -> c.equal(r.get("code"),code));
+        }
+        String memo = searchDTO.getMemo();
+        if(hasValue(memo)){
+            sp = sp.and((r,q,c) -> c.like(r.get("memo"),"%" +trim(memo)+ "%"));
+        }
+        Long amount = searchDTO.getAmount();
+        if(hasValue(amount)){
+            sp = sp.and((r,q,c) -> c.equal(r.get("amount"),amount));
+        }
+        java.time.LocalDateTime postedAtFrom = searchDTO.getPostedAtFrom();
+        java.time.LocalDateTime postedAtTo = searchDTO.getPostedAtTo();
+        if(hasValue(postedAtFrom) && hasValue(postedAtTo)){
+            sp = sp.and((r,q,c) -> c.between(r.get("postedAt"),postedAtFrom,postedAtTo));
+        }
+        else if(hasValue(postedAtFrom)){
+            sp = sp.and((r,q,c) -> c.greaterThanOrEqualTo(r.get("postedAt"),postedAtFrom));
+        }
+        else if(hasValue(postedAtTo)){
+            sp = sp.and((r,q,c) -> c.lessThanOrEqualTo(r.get("postedAt"),postedAtTo));
+        }
+        Boolean deleted = searchDTO.getDeleted();
+        if(hasValue(deleted)){
+            sp = sp.and((r,q,c) -> c.equal(r.get("deleted"),deleted));
+        }
+        return sp;
     }
     
     

@@ -56,8 +56,8 @@ Compared with JHipster, Context Mapper, Sculptor, Spring Modulith, Amplication, 
 - **Same DSL, same code** — and the generator is rules your team can extend.
 
 Your business rules outlive the language and the framework: the same DSL generates Java or Kotlin, for Boot 3 or
-Boot 4, and survived a complete rewrite of the generator (2.x → 3.0): of the 229 files 2.x generates for the
-reference project, 224 are identical, one differs only in import order, and four differ by a 2.x bug fix the
+Boot 4, and survived a complete rewrite of the generator (2.x → 3.0): of the 238 files 2.x generates for the
+reference project, 233 are identical, one differs only in import order, and four differ by a 2.x bug fix the
 history lists.
 
 ---
@@ -143,10 +143,10 @@ shows the result of every step for someone writing their first rule.
 - **Spring Boot 3 → 4**: raise the Boot plugin's version and the generated code follows — including the places that
   would otherwise change a response without an error, such as Jackson 3's enum serialization. Boot 3 and Boot 4
   sample projects are both generated, compiled and tested.
-- **2.x → 3.0**: change nothing and you get **the same code** as 2.x — compared on every pull request over the 229
-  files 2.x generates for the reference project — apart from bug fixes the
+- **2.x → 3.0**: keep 2.x's code with `elasticore { output = 'v2' }` and you get **the same code** as 2.x — compared
+  on every pull request over the 238 files 2.x generates for the reference project — apart from bug fixes the
   [history](../elasticore-project/elasticore-base/src/main/resources/elasticore-guide/elasticore-history.md) lists.
-  New capabilities switch on only when you use them.
+  A project holding 2.x's code that chose nothing is stopped rather than rewritten.
 - **Your edits are kept**: regenerated files and generate-once files (service extensions, controllers, …) are kept
   apart, and a file you edited is recognised by its content hash and never overwritten.
 
@@ -267,7 +267,7 @@ The declarations also produce `blueprint/context-map.md`, a Mermaid context map.
 - **More than 1,400 automated tests** across the modules run on every build. The sample projects are generated, compiled and run.
 - **Checked on every change**: on each pull request CI builds every module, which regenerates the reference project
   with 2.x's generator and must leave it exactly as committed. Then it compares the rule engine's output with 2.x's —
-  per artifact (`150 MATCH / 0 DIFF / 2 ACCEPTED`, an entity by its fields) and over all 229 files 2.x generates for
+  per artifact (`157 MATCH / 0 DIFF / 2 ACCEPTED`, an entity by its fields) and over all 238 files 2.x generates for
   the reference project (`0 differ / 0 missing / 0 extra`: the four files a 2.x bug fix changes are accepted by name,
   one more differs only in import order). These two comparisons leave out each file's first line (its content hash
   and time), the wording of the generated-once marker, line endings and trailing blanks.
