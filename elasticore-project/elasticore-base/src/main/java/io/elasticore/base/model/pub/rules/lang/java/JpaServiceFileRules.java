@@ -34,10 +34,35 @@ import static io.elasticore.base.model.pub.rules.Ctx.ctx;
  * needJoinProcess/allRelationshipFetches machinery) and the custom
  * cb.construct(...) projection overloads (isCustomListOutput/
  * isCustomPageOutput). Both are query-shape optimizations layered on top of
- * the same public method surface, not API a caller depends on - deferred
- * rather than silently dropped.
+ * the same public method surface - deferred rather than silently dropped,
+ * which is why an entity that asks for the fetch is warned (below). An
+ * extension service that called withJoinFetches() does not compile against
+ * this one.
  */
 public class JpaServiceFileRules implements CodeRules {
+
+    /**
+     * The relations 2.x's CoreService fetches with the root - @fetchjoin, or
+     * every relation to an entity under table.autoJoin - this one loads
+     * lazily, a query per row. Said where the mark was written rather than
+     * left for the first slow list to tell.
+     */
+    @Rule(value = "v3-service-fetch-join-warning", target = "service", order = 10)
+    void fetchJoinWarning(EntitySpec e) {
+        List<FieldSpec> fetched = JpaServiceCompatFileRules.fetchedRelations(e);
+        if (fetched.isEmpty()) return;
+        StringBuilder names = new StringBuilder();
+        for (FieldSpec f : fetched) {
+            if (names.length() > 0) names.append(", ");
+            names.append(f.name());
+        }
+        io.elasticore.base.util.ConsoleLog.storeLog("DSL_WARN", String.format(
+                "[%s] %s: %s (%s) is not fetched with %s by the v3 CoreService, which has no"
+                        + " JOIN FETCH or withJoinFetches(): each row loads it with a query of its own (N+1)."
+                        + " Fetch it in a query of your own where a list needs it.",
+                e.domainClassName(), e.getName(), names,
+                JpaServiceCompatFileRules.autoJoin(e) ? "table.autoJoin" : "@fetchjoin", e.getName()));
+    }
 
     @Rule(value = "v3-service-vars", target = "service", order = 10)
     void vars(EntitySpec e) {

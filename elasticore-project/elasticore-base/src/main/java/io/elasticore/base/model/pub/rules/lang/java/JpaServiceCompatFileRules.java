@@ -142,14 +142,24 @@ public class JpaServiceCompatFileRules implements CodeRules {
          .var("pkDtoDefine", define.toString());
     }
 
+    private void joinFetchVars(SourceCode c, EntitySpec e) {
+        List<String> fetches = new ArrayList<String>();
+        for (FieldSpec f : fetchedRelations(e)) {
+            fetches.add(String.format("root.fetch(%s, JoinType.LEFT);", RuleText.quote(f.name())));
+        }
+        c.var("needJoinProcess", String.valueOf(!fetches.isEmpty()))
+         .var("allRelationshipFetches", String.join("\n                ", fetches));
+    }
+
     /**
      * The relations fetched with the root: the entity's own fields whose
      * type is an entity of the domain, when table.autoJoin is on or the
-     * field is marked @fetchjoin.
+     * field is marked @fetchjoin. The v3 service, which fetches none of
+     * them, names the same ones in its warning.
      */
-    private void joinFetchVars(SourceCode c, EntitySpec e) {
-        boolean autoJoin = "true".equals(e.config("table.autoJoin"));
-        List<String> fetches = new ArrayList<String>();
+    static List<FieldSpec> fetchedRelations(EntitySpec e) {
+        boolean autoJoin = autoJoin(e);
+        List<FieldSpec> fetched = new ArrayList<FieldSpec>();
         for (FieldSpec f : e.fields()) {
             Field raw = f.raw();
             String itemType = raw != null ? raw.getTypeInfo().getCoreItemType() : f.coreItemType();
@@ -157,12 +167,13 @@ public class JpaServiceCompatFileRules implements CodeRules {
             boolean fetchJoin = raw != null
                     ? raw.hasAnnotation(EntityAnnotation.FETCH_JOIN)
                     : f.hasDsl("fetchjoin");
-            if (autoJoin || fetchJoin) {
-                fetches.add(String.format("root.fetch(%s, JoinType.LEFT);", RuleText.quote(f.name())));
-            }
+            if (autoJoin || fetchJoin) fetched.add(f);
         }
-        c.var("needJoinProcess", String.valueOf(!fetches.isEmpty()))
-         .var("allRelationshipFetches", String.join("\n                ", fetches));
+        return fetched;
+    }
+
+    static boolean autoJoin(EntitySpec e) {
+        return "true".equals(e.config("table.autoJoin"));
     }
 
     private static boolean isKey(FieldSpec f) {
