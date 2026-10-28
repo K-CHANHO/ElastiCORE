@@ -73,6 +73,12 @@ public class FetchJoinWarningTest {
     }
 
     @Test
+    public void theHexagonalRunWarnsToo() throws Exception {
+        // Hexagonal and DDD are v3 bundles: the same CoreService, the same missing fetch.
+        assertTrue(run("elcore-fetchjoin-hex", "java", true, "hexagonal").contains(WARNING));
+    }
+
+    @Test
     public void theCompatibleRunFetchesItAndSaysNothing() throws Exception {
         String out = run("elcore-fetchjoin-compat", "java", false);
         assertFalse(out.contains("is not fetched with"), out);
@@ -80,6 +86,10 @@ public class FetchJoinWarningTest {
 
     /** Generates the model and returns what the run printed. */
     private static String run(String name, String language, boolean v3) throws Exception {
+        return run(name, language, v3, "layered");
+    }
+
+    private static String run(String name, String language, boolean v3, String architecture) throws Exception {
         File project = Files.createTempDirectory(name).toFile();
         projects.add(project);
         File dir = new File(project, "src/main/resources/blueprint/shop");
@@ -102,7 +112,7 @@ public class FetchJoinWarningTest {
         try {
             for (String k : keys) System.clearProperty(k);
             System.setProperty("elasticore.base.path", project.getAbsolutePath());
-            System.setProperty("elasticore.architecture", "layered");
+            System.setProperty("elasticore.architecture", architecture);
             System.setProperty("elasticore.language", language);
             System.setProperty("elasticore.rules.force", "true");
             System.setProperty(v3 ? "elasticore.rules.v3" : "elasticore.rules.v2", "true");
