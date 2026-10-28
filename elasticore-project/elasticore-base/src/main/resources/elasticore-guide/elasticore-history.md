@@ -10,22 +10,27 @@
   바꿨다
 - 관련 파일: `.github/workflows/release.yml`, `RELEASING.md`, `docs/releases/*.md`
 
-### Improvements (v3 서비스 - 쓰지 않는 `@fetchjoin` 을 알린다)
+### Bug Fixes (v3 서비스 - `@fetchjoin`)
 
-#### v3·Kotlin CoreService 가 `@fetchjoin`·`table.autoJoin` 을 말없이 무시하던 것 - 이제 DSL 경고
-
-```
-[Shop] Purchase: customer (@fetchjoin) is not fetched with Purchase by the v3 CoreService, which has no JOIN FETCH or
-withJoinFetches(): each row loads it with a query of its own (N+1). Fetch it in a query of your own where a list needs it.
-```
-
-- 2.x 코드(`output = 'v2'`)의 CoreService 는 `@fetchjoin` 연관(그리고 `table.autoJoin` 이면 엔티티 연관 전부)을 루트와
-  함께 가져온다(`withJoinFetches()`). v3 번들(플러그인의 기본값, 헥사고날·DDD, `-Pv3`, 모든 Kotlin 빌드)의 CoreService 에는
-  그 기능이 없어 연관을 행마다 따로 읽는데(N+1), 컴파일도 테스트도 통과하고 아무 말도 없었다. 확장 서비스에서
-  `withJoinFetches()` 를 부르던 코드는 컴파일되지 않는다. rc3 부터는 새 레이어드 Java 프로젝트와 `output = 'v3'` 로
-  옮긴 프로젝트도 이 서비스를 받는다.
-- 이제 그런 엔티티마다 경고를 낸다. 대상 연관은 2.x 코드가 가져오는 것과 같은 기준으로 고른다. 생성 결과는 그대로다.
-- 마이그레이션 가이드의 v3 항목에 같은 내용을 적었다.
+#### v3·Kotlin CoreService 가 `@fetchjoin`·`table.autoJoin` 연관을 페이지 검색에서 루트와 함께 가져온다
+- 왜: 2.x 코드(`output = 'v2'`)의 CoreService 는 `@fetchjoin` 연관(그리고 `table.autoJoin` 이면 엔티티 연관 전부)을
+  페이지 검색(`findBySearch`)에서 루트와 함께 가져온다(`withJoinFetches()`). v3 번들(플러그인의 기본값, 헥사고날·DDD,
+  `-Pv3`, 모든 Kotlin 빌드)의 CoreService 에는 그 기능이 없어 연관을 행마다 따로 읽었고(N+1), 컴파일도 테스트도 통과하고
+  아무 말도 없었다. 확장 서비스에서 `withJoinFetches()` 를 부르던 코드는 컴파일되지 않았다. rc3 부터는 새 레이어드 Java
+  프로젝트와 `output = 'v3'` 로 옮긴 프로젝트도 이 서비스를 받는다. 9개 도메인 프로젝트에서 `@fetchjoin` 연관 7개가
+  N+1 이 되고 `withJoinFetches()` 호출 2곳이 컴파일되지 않았다
+- 먼저 그런 엔티티마다 DSL 경고를 내게 했고(https://github.com/xsko/ElastiCORE/pull/31), 같은 버전에서 실제 JOIN FETCH 로
+  바꿨다 - 그 경고는 없어졌다
+- 이제 v3 Java·Kotlin CoreService 에 `withJoinFetches()` 가 생성되고(LEFT JOIN FETCH, count 쿼리 제외, `distinct`),
+  `findBySearch` 가 그것을 더한다 - 2.x 와 같은 자리다. 대상 연관은 2.x 코드와 같은 기준
+  (`JpaServiceCompatFileRules.fetchedRelations`)으로 고른다. 그런 연관이 없는 엔티티의 서비스는 그대로다
+- 확인: `elasticore-template-ddd` 의 `JoinFetchTest` - 고객이 다른 주문 5건을 페이지 검색하면, 고객을 따로 읽는 select 가
+  수정 전 5번, 수정 후 0번(Hibernate 통계의 fetch count). `FetchJoinTest`(생성된 Java·Kotlin·헥사고날 서비스, 표시 없는
+  연관은 그대로, 2.x 호환 서비스도 그대로, 경고 없음). DDD·Kotlin 샘플은 그 서비스로 컴파일·테스트한다
+- 관련 파일: `JpaServiceFileRules.java`(`joinFetchVars`), `JpaServiceCompatFileRules.java`(`fetchedRelations`),
+  `v3/service.tmpl`, `kt/service.tmpl`, `FetchJoinTest.java`, `JoinFetchTest.java`, `elasticore-migration-guide.md`,
+  `elasticore-annotation-guide.md`·`elasticore-env-guide.md`(`autoJoin` 은 `findById` 가 아니라 페이지 검색에서 - 2.x 도
+  그렇다)
 
 ## 3.0.261028-rc3
 
