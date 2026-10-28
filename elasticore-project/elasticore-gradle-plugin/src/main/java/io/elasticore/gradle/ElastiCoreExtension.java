@@ -14,7 +14,7 @@ import org.gradle.api.provider.Property;
  * </pre>
  *
  * <strong>Declaring nothing generates the 3.0 code</strong> - the layered
- * Java of the rule engine's v3 bundle - since 3.0.261028. A project that keeps
+ * Java of the rule engine's v3 bundle - since 3.0.261028-rc3. A project that keeps
  * the code 2.x generated says so: {@code output = 'v2'}. One that has 2.x's
  * code and says neither is stopped by the generator with that choice to make,
  * rather than having its sources rewritten by an upgrade (RulesGenRunner).

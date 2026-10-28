@@ -535,7 +535,7 @@ dependencies { elasticore project(':acme-rules') }
 
 | 언어 | 스위치 |
 |---|---|
-| Java (정리 모드 - 3.0.261028 부터 기본) | 없음, 또는 `elasticore.rules.v3` (선택했다고 밝힐 때) |
+| Java (정리 모드 - 3.0.261028-rc3 부터 기본) | 없음, 또는 `elasticore.rules.v3` (선택했다고 밝힐 때) |
 | Java (호환 - 2.x 의 코드) | `elasticore.rules.v2` (플러그인에서는 `output = 'v2'`) |
 | Kotlin | `elasticore.rules.kt` |
 | TypeScript | `elasticore.rules.ts` |

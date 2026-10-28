@@ -392,7 +392,7 @@ public class InitializationHelper {
             // Naming a bundle and saying nothing else would be the worst of
             // the three states: the file would look configured, the build
             // would ignore it, and nothing would report a problem. Every
-            // architecture since 3.0.261028, when layered Java became a v3
+            // architecture since 3.0.261028-rc3, when layered Java became a v3
             // bundle that the 2.x generator does not read either.
             content.append("    #\n");
             content.append("    # These rules are applied by the rule engine, which is a separate\n");
@@ -409,7 +409,7 @@ public class InitializationHelper {
             content.append("      #rules: [").append(alternative).append("]")
                    .append("   # ").append(label(i)).append("\n");
         }
-        // Layered Java is the v3 bundle since 3.0.261028; the code 2.x
+        // Layered Java is the v3 bundle since 3.0.261028-rc3; the code 2.x
         // generates is one line away for a project that keeps it.
         if (!kotlin) {
             content.append("      #rules: [").append(RulesConfig.DEFAULT_BUNDLE).append("]")
@@ -568,7 +568,7 @@ public class InitializationHelper {
         System.out.println();
         System.out.println("Next Steps:");
         System.out.println("1. Edit " + BLUEPRINT_DIR + "/" + domainName + "/model/model.yml");
-        // Every architecture, layered too: since 3.0.261028 a layered Java
+        // Every architecture, layered too: since 3.0.261028-rc3 a layered Java
         // domain names jpa-springboot-v3, which only the rule engine reads.
         // Telling it to run the 2.x generator wrote 2.x's code under an
         // env.yml that said otherwise.

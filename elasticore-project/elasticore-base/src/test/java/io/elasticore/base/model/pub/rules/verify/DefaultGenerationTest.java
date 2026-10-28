@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The generation a layered Java project gets since 3.0.261028: the 3.0 code
+ * The generation a layered Java project gets since 3.0.261028-rc3: the 3.0 code
  * unless it asks for 2.x's - and never 3.0's code written over a project that
  * holds what 2.x generated and asked for nothing.
  *
@@ -71,7 +71,7 @@ public class DefaultGenerationTest {
 
     @Test
     public void aDomainNamingThe2xBundleKeepsIt() throws Exception {
-        // What the initialization wizard wrote for layered Java before 3.0.261028.
+        // What the initialization wizard wrote for layered Java before 3.0.261028-rc3.
         File project = project("jpa-springboot");
         String log = run(project);
         assertTrue(log.contains("2.x-compatible - domain 'dgshop' names jpa-springboot"), log);
@@ -139,7 +139,7 @@ public class DefaultGenerationTest {
 
     @Test
     public void v2IsNotAV3BundleADomainNames() throws Exception {
-        // What the wizard writes for layered Java since 3.0.261028, then output = 'v2'.
+        // What the wizard writes for layered Java since 3.0.261028-rc3, then output = 'v2'.
         File project = project("jpa-springboot-v3");
         System.setProperty("elasticore.base.path", project.getAbsolutePath());
         System.setProperty("elasticore.rules.v2", "true");
