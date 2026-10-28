@@ -555,19 +555,19 @@ elasticore-ddd-customize-guide.md:1131-1271  ## 부록 A. `AcmeDddRules.java` �
 ## elasticore-migration-guide.md
 
 ```text
-elasticore-migration-guide.md:1-158  # ElastiCORE 2.x → 3.0 마이그레이션 가이드
-elasticore-migration-guide.md:3-53  ## 요약: 고칠 것이 없습니다  [elcore, @ElastiCore]
-elasticore-migration-guide.md:18-39  ### Gradle 플러그인(`id 'io.elasticore'`)으로 옮긴다면: `output = 'v2'`  [@access, @owner, like, gt, gte]
-elasticore-migration-guide.md:41-53  ### 근거  [_V2.2]
-elasticore-migration-guide.md:55-88  ## 그래도 달라지는 것 (전부 버그 수정)
-elasticore-migration-guide.md:57-65  ### 1. `schema.yml` 의 위치와 인코딩
-elasticore-migration-guide.md:67-72  ### 2. 생성 코드가 모델을 가진 모듈에 놓입니다
-elasticore-migration-guide.md:74-80  ### 3. `DTOUtils.getMetaInfo(Class)` → `getMetaInfo(Class<T>)`
-elasticore-migration-guide.md:82-88  ### 4. 새 DSL 검증은 2.x 모델에 반응하지 않습니다  [DSL_WARN, domainService, uses:]
-elasticore-migration-guide.md:90-130  ## 3.0 기능을 쓰고 싶다면 (선택)
-elasticore-migration-guide.md:94-103  ### 무엇이 생기나
-elasticore-migration-guide.md:105-123  ### 켜는 법  [@ElastiCore, like, @search(like), @search(%_%)]
-elasticore-migration-guide.md:125-130  ### 되돌리는 법  [publisher.rules]
-elasticore-migration-guide.md:132-139  ## Spring Boot 4 / Spring AI 2.0으로 올리기 (3.0만)
-elasticore-migration-guide.md:141-158  ## 자주 나오는 질문  [publisher.rules, elasticore.modules]
+elasticore-migration-guide.md:1-165  # ElastiCORE 2.x → 3.0 마이그레이션 가이드
+elasticore-migration-guide.md:3-54  ## 요약: 고칠 것이 없습니다  [elcore, @ElastiCore]
+elasticore-migration-guide.md:18-40  ### Gradle 플러그인(`id 'io.elasticore'`)으로 옮긴다면: `output = 'v2'`  [@access, @owner, like, gt, gte, @fetchjoin]
+elasticore-migration-guide.md:42-54  ### 근거  [_V2.2]
+elasticore-migration-guide.md:56-89  ## 그래도 달라지는 것 (전부 버그 수정)
+elasticore-migration-guide.md:58-66  ### 1. `schema.yml` 의 위치와 인코딩
+elasticore-migration-guide.md:68-73  ### 2. 생성 코드가 모델을 가진 모듈에 놓입니다
+elasticore-migration-guide.md:75-81  ### 3. `DTOUtils.getMetaInfo(Class)` → `getMetaInfo(Class<T>)`
+elasticore-migration-guide.md:83-89  ### 4. 새 DSL 검증은 2.x 모델에 반응하지 않습니다  [DSL_WARN, domainService, uses:]
+elasticore-migration-guide.md:91-137  ## 3.0 기능을 쓰고 싶다면 (선택)
+elasticore-migration-guide.md:95-104  ### 무엇이 생기나
+elasticore-migration-guide.md:106-130  ### 켜는 법  [@ElastiCore, like, @search(like), @search(%_%), @fetchjoin, table.autoJoin, withJoinFetches]
+elasticore-migration-guide.md:132-137  ### 되돌리는 법  [publisher.rules]
+elasticore-migration-guide.md:139-146  ## Spring Boot 4 / Spring AI 2.0으로 올리기 (3.0만)
+elasticore-migration-guide.md:148-165  ## 자주 나오는 질문  [publisher.rules, elasticore.modules]
 ```

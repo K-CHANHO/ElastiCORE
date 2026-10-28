@@ -36,7 +36,8 @@ elasticore {
 3.0 코드로 옮기면 달라지는 동작은 아래 "3.0 기능을 쓰고 싶다면" 과 `elasticore-history.md` 에 있습니다.
 레이어드 Java 의 v3 번들(`jpa-springboot-v3`)은 2.x 번들에 없는 규칙을 더 씁니다 - `@access`·`@owner` 접근 검사
 (`jpa-service-access`), 오류 코드가 있는 거절 응답(`spring-api-errors`), 서버가 정하는 필드의 쓰기 보호
-(`jpa-write-guard`). 검색에서는 `like` 가 대소문자를 무시하고 `gt`·`gte` 같은 키워드가 기호와 같아집니다.
+(`jpa-write-guard`). 검색에서는 `like` 가 대소문자를 무시하고 `gt`·`gte` 같은 키워드가 기호와 같아집니다. `@fetchjoin` 연관은 루트와 함께
+가져오지 않습니다.
 
 ### 근거
 
@@ -121,6 +122,12 @@ elasticore:
 **검색의 `like` 가 대소문자를 무시합니다.** v3 번들(2.x 코드를 유지하는 레이어드 Java 제외 - 플러그인의 기본값,
 헥사고날·DDD, `-Pv3`, 모든 Kotlin 빌드)에서 문자열 필드의 `@search(like)` 는 `%__%` 처럼 대소문자를 무시하는 포함 검색입니다. 2.x 처럼
 구분하려면 `@search(%_%)` 로 바꿉니다.
+
+**`@fetchjoin`·`table.autoJoin` 은 v3 번들의 서비스가 쓰지 않습니다.** 2.x 코드(`output = 'v2'`)의 CoreService 는
+그 연관을 루트와 함께 가져옵니다(JOIN FETCH, `withJoinFetches()`). v3 번들(플러그인의 기본값, 헥사고날·DDD, `-Pv3`,
+모든 Kotlin 빌드)의 CoreService 에는 그 기능도 `withJoinFetches()` 메서드도 없어서, 연관을 행마다 따로 읽고(N+1) 확장
+서비스에서 `withJoinFetches()` 를 부르던 코드는 컴파일되지 않습니다. 생성할 때 엔티티마다 DSL 경고로 알려 줍니다. 목록에
+필요한 연관은 직접 쓴 쿼리에서 가져오십시오.
 
 ### 되돌리는 법
 
