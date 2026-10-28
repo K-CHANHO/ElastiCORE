@@ -24,12 +24,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * A relation marked @fetchjoin (or every relation, under table.autoJoin) is
  * fetched with the root in the paged search - by 2.x's CoreService
- * (output = 'v2') and, since 3.0.261029, by the v3 one: the default, every
+ * (output = 'v2') and, since 3.0.261029-rc4, by the v3 one: the default, every
  * hexagonal, DDD and Kotlin build.
  *
  * Until then the v3 service had no JOIN FETCH, so the relation loaded a query
  * per row, and an extension service calling withJoinFetches() did not
- * compile; 3.0.261029 first warned of it. The method is written only for an
+ * compile; a build before this release warned of it. The method is written only for an
  * entity that asks for a fetch. That the fetch takes the per-row selects
  * away is shown on a running application: elasticore-template-ddd's
  * JoinFetchTest.
@@ -103,7 +103,7 @@ public class FetchJoinTest {
 
     @Test
     public void theRunNoLongerWarns() throws Exception {
-        // 3.0.261029 warned that the v3 service did not fetch; it does now.
+        // A build before this release warned that the v3 service did not fetch; it does now.
         File project = run("elcore-fetchjoin-quiet", "java", true, "layered");
         assertFalse(lastOutput.contains("is not fetched with"), lastOutput);
         assertTrue(project.isDirectory());

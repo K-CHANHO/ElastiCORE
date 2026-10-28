@@ -449,7 +449,7 @@ public final class RulesGenRunner {
         // 2.x generator writes for it: jpa code, mongo code, uml and dsl
         // documents. The rule engine writes JPA code only, and read no mode at
         // all: a MongoDB domain got JPA entities and repositories without a
-        // word - since 3.0.261029 the default for a build that says nothing.
+        // word - since 3.0.261028-rc3 the default for a build that says nothing.
         // A domain whose modes leave out jpa is refused; documents beside it
         // are said to be the 2.x generator's.
         for (ECoreModel model : loader.allModels()) {
