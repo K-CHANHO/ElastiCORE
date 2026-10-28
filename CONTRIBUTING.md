@@ -150,6 +150,10 @@ they recur.
   (`changes/README.md` has the form), with the files involved - not as an edit to
   `elasticore-history.md`: every pull request editing the top of the history
   conflicted with every other. A release moves the fragments into the history.
+  The CI job **Change record** checks it on every pull request: it fails one that
+  edits the history, that changes what ElastiCORE ships (`src/main`) without a
+  fragment, or that commits a guide copy, and warns when the branch is more than
+  ten commits behind `main`. Its message says what to do.
 - Branch from the latest `main`, and rebase on it before asking for review. A
   pull request stacked on another one waits for it and conflicts with whatever
   merges first; stack only what really depends on the one below.
