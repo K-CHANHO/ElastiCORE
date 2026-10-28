@@ -29,6 +29,9 @@ The same ones CI runs:
 ```bash
 ./gradlew build
 git status --short -- elasticore-project/elasticore-template/src/main/java     # must print nothing
+git status --short -- 'elasticore-project/*/src/main/resources/blueprint'      # must print nothing
+./gradlew :elasticore-project:elasticore-template-kt:elcore3tsVerify -Pstrict  # needs Node.js
+./gradlew :elasticore-project:elasticore-sample-petstore:webBuild              # needs Node.js
 ./gradlew :elasticore-project:elasticore-template:elcoreRulesCheck -Pstrict
 ./gradlew :elasticore-project:elasticore-template:elcoreTreeCheck
 ```
@@ -108,6 +111,25 @@ they recur.
 - **The golden comparison checks content, not paths.** It will not notice a
   file written to the wrong directory. If your change affects *where* something
   lands, that needs its own test.
+- **The compatibility checks only see what the template's model uses.** `0 DIFF`
+  and `0 differ` say nothing about a DSL word or a combination the template
+  never declares. Four 2.x differences were found only by generating a real
+  9-domain project: a `@jpa:` class annotation dropped by v3 and Kotlin
+  entities, a required relation dropped from a declared search DTO, the AI tool
+  wording of `supportAI`, and a TypeScript search DTO importing an entity file
+  that is never written. When you touch a feature, check that the template
+  declares it; if it does not, add it there, so the checks compare it from then
+  on.
+- **"2.x does X" is a claim to run, not to remember.** A comment, a history
+  entry or a guide that says what 2.x generates is checked by generating it with
+  2.x - the template does that - and is not written from reading the code. A
+  comment saying a required relation "searches only through its flattened id -
+  which is what 2.x emits" was wrong and hid one of the four differences above.
+- **A file the build writes and the repository holds must be committed as
+  written.** The guides, their index and the Ossie model in each sample's
+  `blueprint/`, and the pet store's TypeScript client: CI regenerates them and
+  fails on any difference. A guide changed without the index regenerated once
+  left the index pointing at line ranges the guide no longer had.
 - **Generation and compilation can race.** `compileJava` may run before the
   generation task and compile a stale tree. If a sample fails in a way that
   makes no sense, run the generation task explicitly first.

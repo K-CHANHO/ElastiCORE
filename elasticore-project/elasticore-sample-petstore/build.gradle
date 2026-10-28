@@ -93,8 +93,9 @@ test {
 
 // The browser side: the client generated into src/main/ts and the pages in
 // web/ that use it, bundled into static/app.js. Not part of check - it needs
-// Node.js - but the CI job that has Node runs it, and the type check in it is
-// what proves the generated client matches the pages.
+// Node.js - but CI runs it after the build (ci.yml, "TypeScript - the
+// generated clients compile"), and the type check in it is what proves the
+// generated client matches the pages.
 def npm = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
 def webInstall = tasks.register('webInstall', Exec) {
 	group = 'build'

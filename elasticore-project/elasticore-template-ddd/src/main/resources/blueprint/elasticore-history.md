@@ -2,7 +2,9 @@
 
 rc2 를 도메인 9개짜리 프로젝트에 `elcore3`·`-Pv3` 로 적용하고, 같은 모델로 2.x 출력과 비교하며 찾은 차이를 고쳤다.
 2.x 생성기의 출력은 그대로다. `jpa-springboot` 번들은 2.x 와 달랐던 두 곳(선언한 검색 DTO 의 필수 연관, AI 도구 설명)이 2.x 와
-같아졌다.
+같아졌다. 네 차이 모두 호환성 검사가 비교하는 템플릿 모델 밖이었으므로, CI 가 보지 않던 것을 더 찾아 막았다(생성된
+TypeScript 의 컴파일, 빌드가 쓰는 `blueprint/` 파일). Ossie 시맨틱 모델의 식은 Apache Ossie 가 새로 정한 형태로
+내보낸다 - `ossie-export` 를 켠 프로젝트의 `semantic_model.yml` 만 바뀐다.
 
 ### Bug Fixes (엔티티 - DSL 이 클래스에 준 어노테이션)
 
@@ -71,6 +73,51 @@ SaleSrchDTO:
   `elcore3ts` 는 엔티티를 쓰지 않으므로 그 모듈이 없어 `tsc` 가 TS2307 로 멈췄다.
 - 이제 그 프로퍼티는 엔티티 키의 모양이다: `insurer?: { id: string }`. 키가 여럿이면 모두 담는다. 열거형과 DTO 는 전처럼
   import 한다.
+
+### Changes (Ossie 내보내기 - 식의 형태)
+
+#### 이식 가능한 식은 최상위 `sql` 로 쓴다. 서브쿼리 `@formula` 만 `dialects` 의 `ANSI_SQL`
+- 왜: Ossie core spec 에 apache/ossie #617 이 머지되어(2026-10-26) `expression` 이 최상위 `sql` 을 갖는다.
+  `sql` 은 이식 가능한 형태로 `OSSIE_SQL_2026` 으로 쓰고, `sql` 과 `dialects` 중 하나 이상이 있어야 하며(각각 단독 가능),
+  둘 다 있으면 `sql` 이 우선한다. dialect 이름은 자유 문자열이 되었다. 같은 전환을 다루는 이슈가 apache/ossie #639 다
+- 전: 모든 식이 `dialects` 목록 항목 하나 - 이식 가능한 식은 `dialect: OSSIE_SQL_2026`, 서브쿼리는 `dialect: ANSI_SQL`
+- 후: 이식 가능한 식(컬럼 이름, 그 언어 안의 `@formula`, `metrics:` 의 지표)은 `expression: { sql: "..." }`. 서브쿼리
+  `@formula` 는 전과 같은 `ANSI_SQL` 항목 하나이고 최상위 `sql` 은 없다(있으면 그것이 우선하므로). 어느 쪽인지는 전처럼
+  `OssieSql.portable()` 이 가르고, 식의 본문은 한 글자도 바뀌지 않는다
+- 쓰이지 않게 된 `OssieSql.dialect()` 와 `PORTABLE` 상수는 지웠다(패키지 안에서만 쓰던 것). 두 형태는
+  `OssieSemanticModelExporter.expression()` 한 곳에서 쓰며 필드와 지표가 함께 쓴다
+- 확인: 다시 생성한 `semantic_model.yml` - `elasticore-sample-petstore` 557 → 435줄(식 61개), `elasticore-template-ddd`
+  865 → 635줄(식 115개). 두 파일 모두 `OSSIE_SQL_2026`·`ANSI_SQL`·`dialects` 0건, 최상위 `sql` 이 식 수와 같고, 식 본문을
+  전후로 순서대로 대조해 176개 모두 같았으며 식 밖의 줄도 모두 같았다. Ossie 저장소의 `validation/validate.py`
+  (apache/ossie main, 2026-10-27)로 두 파일과, 서브쿼리 `@formula` 를 `ANSI_SQL` 항목으로 둔 형태를 검증해 모두 통과
+- 테스트: `OssieExportTest`(ddd 샘플의 모든 필드가 최상위 `sql`, `dialects`·`OSSIE_SQL_2026` 없음),
+  `OssieFormulaDialectTest`(서브쿼리 `@formula` 는 `ANSI_SQL` 항목만 - 최상위 `sql` 없음, 산술 `@formula` 와 컬럼은 `sql`),
+  `OssieSqlTest`(분류만), 펫스토어 `MetricsTest`(지표의 `sql` 을 실제 DB 에서 실행해 엔티티로 센 값과 비교)
+- 관련 파일: `OssieSemanticModelExporter.java`, `OssieSql.java`, `OssieExportTest.java`, `OssieFormulaDialectTest.java`,
+  `OssieSqlTest.java`, `MetricsTest.java`, `elasticore-rule-guide.md`(식의 형태 단락과 대응표), `dsl-guide.html`(펫스토어
+  안내 페이지의 예, `guide/build_guide.py` 로 다시 생성)
+
+### Build (CI 가 보지 않던 것)
+
+#### 생성된 TypeScript 를 CI 가 컴파일하고, 빌드가 쓴 `blueprint/` 파일이 커밋된 것과 같은지 본다
+- 왜: 9개 도메인의 실제 프로젝트에 v3 를 적용해 2.x 와 다른 곳 네 군데가 나왔다(각각의 수정은 따로).
+  호환성 검사(`elcoreRulesCheck`, `elcoreTreeCheck`)는 템플릿 모델이 쓰는 것만 비교하므로 넷 모두 그 밖이었다. 같은 종류의
+  빈틈 두 개를 더 찾았다
+  - 펫스토어 `build.gradle` 은 "Node 가 있는 CI 작업이 `webBuild`(생성된 클라이언트와 화면의 `tsc`)를 돌린다" 고 적었지만
+    그런 단계는 없었다. 생성된 TypeScript 를 CI 가 컴파일하는 것은 Kotlin 샘플의 `elcore3tsVerify` 뿐이었고, 그마저 Node 가
+    없으면 건너뛰었다
+  - 3.0.261028 의 Ossie 변경이 규칙 가이드를 고친 뒤 세 템플릿의 `elasticore-guide-index.md` 를 다시 만들지 않아, 색인이
+    규칙 가이드를 `1-1909` 줄로, 그 뒤 절들도 옮겨지기 전의 줄 범위로 가리켰다. 빌드는 다시 만들지만 아무도 비교하지 않았다
+- `ci.yml` 에 두 단계를 더했다: 빌드 뒤 모든 샘플의 `src/main/resources/blueprint` 가 커밋된 것과 같아야 하고(가이드,
+  색인, Ossie 모델), `elcore3tsVerify -Pstrict`(Node 가 없으면 실패)와 펫스토어 `webBuild` 가 통과하고 펫스토어의 생성
+  클라이언트(`src/main/ts`)가 커밋된 것과 같아야 한다. 세 템플릿의 색인을 다시 만들어 커밋했다
+- `CONTRIBUTING.md` 에 세 가지를 적었다: 호환성 검사는 템플릿 모델이 선언한 것만 본다(건드린 기능이 거기 없으면 더한다),
+  "2.x 는 이렇게 생성한다" 는 2.x 로 생성해 본 뒤에만 쓴다(그렇지 않은 주석 하나가 네 차이 중 하나를 가렸다), 빌드가 쓰는
+  파일은 다시 만든 그대로 커밋한다. PR 템플릿의 체크리스트에도 같은 세 줄을 넣었다
+- 확인: 로컬에서 `elcore3tsVerify -Pstrict` 와 `webBuild` 통과(`tsc --noEmit`), 템플릿 셋을 다시 생성했을 때 바뀐 것은
+  세 색인뿐
+- 관련 파일: `.github/workflows/ci.yml`, `.github/PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`,
+  `elasticore-sample-petstore/build.gradle`, 세 템플릿의 `blueprint/elasticore-guide-index.md`
 
 ## 3.0.261027-rc2
 

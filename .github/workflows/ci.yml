@@ -49,6 +49,37 @@ jobs:
             exit 1
           fi
 
+      # Each sample's blueprint/ holds files the build writes - the guides, their
+      # index, the Ossie semantic model - committed so that a reader of the
+      # repository sees them. The build has just written them again; a change
+      # that moved them without committing the result left a stale copy (the
+      # guide index once named line ranges a guide no longer had).
+      - name: Generated files - the build left every sample's blueprint as committed
+        run: |
+          changed=$(git status --porcelain --untracked-files=all -- 'elasticore-project/*/src/main/resources/blueprint')
+          if [ -n "$changed" ]; then
+            printf '%s\n' "$changed"
+            files=$(printf '%s\n' "$changed" | head -20 | sed 's/%/%25/g' | awk 'BEGIN {ORS = "%0A"} {print}')
+            echo "::error title=Generated file not committed::Regenerate and commit:%0A${files}"
+            exit 1
+          fi
+
+      # The generated TypeScript, compiled by tsc: the Kotlin sample's model and
+      # the pet store's client with the pages that use it. Node is on the runner;
+      # the compilers are pinned by each package-lock.json. -Pstrict turns an
+      # absent toolchain into a failure instead of a skipped check.
+      - name: TypeScript - the generated clients compile
+        run: |
+          set -o pipefail
+          ./gradlew :elasticore-project:elasticore-template-kt:elcore3tsVerify -Pstrict --console=plain 2>&1 | tee -a build.log
+          ./gradlew :elasticore-project:elasticore-sample-petstore:webBuild --console=plain 2>&1 | tee -a build.log
+          changed=$(git status --porcelain --untracked-files=all -- elasticore-project/elasticore-sample-petstore/src/main/ts)
+          if [ -n "$changed" ]; then
+            printf '%s\n' "$changed"
+            echo "::error title=TypeScript client not committed::elcore3ts wrote the pet store's client differently - regenerate and commit it"
+            exit 1
+          fi
+
       - name: Compatibility - rule engine output equals the 2.x output
         run: ./gradlew :elasticore-project:elasticore-template:elcoreRulesCheck -Pstrict --console=plain
 
