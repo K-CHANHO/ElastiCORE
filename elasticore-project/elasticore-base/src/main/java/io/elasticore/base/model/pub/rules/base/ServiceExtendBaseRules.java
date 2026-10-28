@@ -32,14 +32,20 @@ public class ServiceExtendBaseRules implements CodeRules {
         if (searchDtoName == null) searchDtoName = e.searchDtoClassName();
         if (searchResultDto == null) searchResultDto = dtoName;
 
+        // The tools' wording names the entity and puts its label beside it,
+        // as 2.x does: "Accident (car accident)". The name is what a request
+        // in the model's words is matched against; the label alone lost it.
         String label = e.metaValue("label");
+        String descName = (label == null || label.isEmpty())
+                ? e.getName()
+                : String.format("%s (%s)", e.getName(), label);
 
         c.var("packageName", e.pkg("service"))
          .var("entityPackageName", e.pkg("entity"))
          .var("dtoPackageName", e.pkg("dto"))
          .var("repositoryPackageName", e.pkg("repository"))
          .var("entityClassName", e.getName())
-         .var("entityDescName", (label == null || label.isEmpty()) ? e.getName() : label)
+         .var("entityDescName", descName)
          .var("domainName", e.domainClassName())
          .var("dtoClassName", dtoName)
          .var("keyDtoClassName", "%sKeyDTO", e.getName())
