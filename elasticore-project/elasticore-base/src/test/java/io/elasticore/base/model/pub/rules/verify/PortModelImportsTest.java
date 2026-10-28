@@ -142,7 +142,7 @@ public class PortModelImportsTest {
         domain(project, "sales", new String[]{"model.yml", SALES});
 
         String[] keys = {"elasticore.base.path", "elasticore.architecture", "elasticore.language",
-                "elasticore.rules.force", "elasticore.rules.v3", "elasticore.rules.ts"};
+                "elasticore.rules.force", "elasticore.rules.v3", "elasticore.rules.v2", "elasticore.rules.ts"};
         String[] saved = new String[keys.length];
         for (int i = 0; i < keys.length; i++) saved[i] = System.getProperty(keys[i]);
         try {
@@ -151,7 +151,7 @@ public class PortModelImportsTest {
             System.setProperty("elasticore.architecture", "layered");
             System.setProperty("elasticore.language", "java");
             System.setProperty("elasticore.rules.force", "true");
-            if (clean) System.setProperty("elasticore.rules.v3", "true");
+            System.setProperty(clean ? "elasticore.rules.v3" : "elasticore.rules.v2", "true");
             assertEquals(0, RulesGenRunner.run(new String[0]), "the run failed: " + project);
         } finally {
             for (int i = 0; i < keys.length; i++) {

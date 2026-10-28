@@ -260,7 +260,7 @@ Member:
     grade: string(10)! @noinput       # 필수 컬럼이지만 요청은 보내지 않는다
 ```
 
-| 생성물 | 2.x 호환 (`jpa-springboot`) | v3 번들 (`jpa-springboot-v3`, DDD·헥사고날, Kotlin) |
+| 생성물 | 2.x 호환 (`jpa-springboot`, `output = 'v2'`) | v3 번들 (`jpa-springboot-v3` - 레이어드 Java 의 기본값, DDD·헥사고날, Kotlin) |
 |---|---|---|
 | DTO `@JsonProperty(access=READ_ONLY)` | 있음 | 있음 |
 | DTO `@Schema(... accessMode = READ_ONLY)` | 없음 | 있음 |
@@ -795,7 +795,7 @@ customName: string @search(like,comName)   # comName 필드에 like 검색
 | DSL 문법 | JPA Criteria | 대소문자 무시 | 설명 |
 |----------|-------------|:---:|------|
 | `eq`, `=` | `equal` | No | 정확 일치 |
-| `like` | `like` (%v%) | **v3: Yes** / 2.x 호환: No | 포함 검색. v3 모드(헥사고날·DDD, `-Pv3`, 모든 Kotlin 빌드)에서는 문자열 필드에 `%__%` 와 같음 - 이름 일부를 대소문자와 관계없이 찾습니다. 레이어드 Java(2.x 호환)는 그대로 구분 |
+| `like` | `like` (%v%) | **v3: Yes** / 2.x 호환: No | 포함 검색. v3 모드(플러그인의 기본값인 레이어드 Java, 헥사고날·DDD, 모든 Kotlin 빌드)에서는 문자열 필드에 `%__%` 와 같음 - 이름 일부를 대소문자와 관계없이 찾습니다. 2.x 코드를 유지하는 레이어드 Java(`output = 'v2'`)는 그대로 구분 |
 | `%_%`, `%%` | `like` (%v%) | No | 대소문자를 구분하는 포함 검색 (모든 모드) |
 | `%__%` | `like` (%v%) | Yes | 대소문자 무시 포함 검색 |
 | `__=`, `=__` | `equal` | Yes | 대소문자 무시 정확 일치 |
@@ -822,7 +822,7 @@ customName: string @search(like,comName)   # comName 필드에 like 검색
   원래 대소문자를 무시합니다.
 
 **비교 키워드와 `!=`:**
-- v3 모드(헥사고날·DDD, `-Pv3`, 모든 Kotlin 빌드)에서는 키워드가 기호와 같습니다: `gt` = `>`, `gte`·`ge` = `>=`,
+- v3 모드(플러그인의 기본값인 레이어드 Java, 헥사고날·DDD, 모든 Kotlin 빌드)에서는 키워드가 기호와 같습니다: `gt` = `>`, `gte`·`ge` = `>=`,
   `lt` = `<`, `lte`·`le` = `<=`, `ne`·`neq` = `!=` (대소문자 무관). 생성 코드도 기호로 쓴 것과 같습니다 (3.0.261027-rc2 부터).
   `!=` 는 SQL 의 `<>` 라 컬럼이 비어 있는(NULL) 행은 결과에 없습니다 - 빈 값도 찾으려면 `isnull` 필드를 함께 둡니다.
 - 레이어드 Java(2.x 호환)와 2.x 에서는 키워드와 `!=` 가 **정확 일치**로 동작합니다 (오류도 경고도 없음). 이 모드에서는
@@ -1493,7 +1493,7 @@ fields:
 
 Section 3.2 의 연산자 외에는 **사용 불가**합니다. 비교 키워드와 `!=` 는 모드에 따라 다르게 동작합니다.
 
-| 쓴 것 | v3 모드 (헥사고날·DDD, `-Pv3`, Kotlin) | 레이어드 Java (2.x 호환), 2.x |
+| 쓴 것 | v3 모드 (기본값인 레이어드 Java, 헥사고날·DDD, Kotlin) | 레이어드 Java (`output = 'v2'`), 2.x |
 |---|---|---|
 | `gt`, `gte`/`ge`, `lt`, `lte`/`le` | `>`, `>=`, `<`, `<=` 와 같음 (3.0.261027-rc2 부터) | **정확 일치** - 경고 없음 |
 | `!=`, `ne`, `neq` | 같지 않음 (`notEqual`) | **정확 일치** - 경고 없음 |

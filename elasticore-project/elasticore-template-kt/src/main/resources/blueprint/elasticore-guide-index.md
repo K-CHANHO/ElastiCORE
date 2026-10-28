@@ -109,7 +109,7 @@ elasticore-env-guide.md:468-550  ## 7-1. publisher.rules 설정 (3.0)
 elasticore-env-guide.md:479-493  ### 선택 가능한 번들
 elasticore-env-guide.md:495-520  ### 우선순위 (4단)  [publisher.suppress]
 elasticore-env-guide.md:522-529  ### 주의: 이 설정은 규칙엔진이 읽습니다  [publisher.rules, @ElastiCore]
-elasticore-env-guide.md:531-550  ### 언어는 별도 스위치입니다  [elasticore.rules.v3, elcore3ts, build, elcore3]
+elasticore-env-guide.md:531-550  ### 언어는 별도 스위치입니다  [elasticore.rules.v3, elasticore.rules.v2, elcore3ts, build, elcore3]
 elasticore-env-guide.md:552-731  ## 8. Namespace 설정  [event, @event(...), entity, domainService, domainService:, service, package]
 elasticore-env-guide.md:589-605  ### 8.0 한 줄로: `namespace: base`  [com.acme.erp, entity, enumeration, base.domain.model, event, domainService, domainRepository, base.domain.event, service, dto, base.application, inboundPort]
 elasticore-env-guide.md:607-675  ### 8.1 아키텍처 스타일별 Namespace 프리셋
@@ -397,7 +397,7 @@ elasticore-annotation-guide.md:2110-2116  ### 제약  [namespace.event]
 ## elasticore-rule-guide.md
 
 ```text
-elasticore-rule-guide.md:1-1924  # ElastiCORE Rule Guide
+elasticore-rule-guide.md:1-1946  # ElastiCORE Rule Guide
 elasticore-rule-guide.md:11-30  ## 1. 규칙이란 무엇인가  [@Column(length=200), CodeRules, Syntax]
 elasticore-rule-guide.md:32-1228  ## 2. 규칙 고르기 (env.yml)  [rules, suppress]
 elasticore-rule-guide.md:52-56  ### 우선순위
@@ -457,21 +457,22 @@ elasticore-rule-guide.md:1472-1490  ## 7. 스켈레톤(`.tmpl`)  [target]
 elasticore-rule-guide.md:1492-1519  ## 7.5 생성 파일의 소유권 (elcore3)  [@readonly, @behavior, @Entity, @Table, @DynamicUpdate, @Audited, super]
 elasticore-rule-guide.md:1515-1519  ### Kotlin 예약어가 든 패키지  [adapter.in.web, in]
 elasticore-rule-guide.md:1521-1533  ## 8. 지켜야 할 것  [AnnoCode, @Column, String.format, Formatted, Formatted.text, FileWriter, FileReader, DSL_WARN]
-elasticore-rule-guide.md:1535-1841  ## 9. 검증  [RulesVerifyRunner.ACCEPTED_DIFFS]
-elasticore-rule-guide.md:1567-1658  ### Gradle 플러그인 (권장)  [elcore, elcore3, compileJava, layered, RulesConfig]
+elasticore-rule-guide.md:1535-1863  ## 9. 검증  [RulesVerifyRunner.ACCEPTED_DIFFS]
+elasticore-rule-guide.md:1567-1679  ### Gradle 플러그인 (권장)  [elcore, elcore3, compileJava, layered, RulesConfig]
 elasticore-rule-guide.md:1606-1615  #### 멀티 모듈
 elasticore-rule-guide.md:1617-1620  #### 기존 스위치
-elasticore-rule-guide.md:1622-1644  #### TypeScript 클라이언트 (`elcore3ts`, `typescriptClient`)  [build, compileJava, elcore3, architecture, language, rules, webBuild, suppress]
-elasticore-rule-guide.md:1646-1658  #### 프로젝트의 규칙 더하기  [elasticore]
-elasticore-rule-guide.md:1660-1787  ### Apache Ossie 시맨틱 모델 내보내기 (`ossie-export`)  [name, billing_catalog_shop, @abstract, @embeddable, source, @table, table.prefix, description, @id, primary_key, @unique, @Index(unique="true"), unique_keys]
-elasticore-rule-guide.md:1789-1820  ### 플러그인 없이 실행하기 (수동 구성)  [publisher.rules, @ElastiCore]
-elasticore-rule-guide.md:1822-1841  ### 생성해보기 (이 저장소의 샘플 모듈에서)  [publisher.rules]
-elasticore-rule-guide.md:1843-1908  ## 10. 체크리스트
-elasticore-rule-guide.md:1845-1853  ### 새 규칙을 추가할 때  [@Rule(value = ...), target, order, phase, TAIL, Syntax, RuleCatalog.standard]
-elasticore-rule-guide.md:1855-1860  ### 새 아티팩트를 추가할 때  [RuleCatalog, RulesGenRunner, ArtifactTarget]
-elasticore-rule-guide.md:1862-1895  ### 새 아티팩트 종류를 추가할 때 (확장점)  [ArtifactContributor, artifactsFor, DomainArtifactContributor, orNamespace, SourceCode.artifactName, requireSyntaxAnyOf]
-elasticore-rule-guide.md:1897-1908  ### 새 언어를 추가할 때  [Syntax, SourceCode.TemplateSet]
-elasticore-rule-guide.md:1910-1924  ## 11. 패키지 구조
+elasticore-rule-guide.md:1622-1641  #### 어느 세대의 코드인가 (`output`)  [_V2.x, elcore3]
+elasticore-rule-guide.md:1643-1665  #### TypeScript 클라이언트 (`elcore3ts`, `typescriptClient`)  [build, compileJava, elcore3, architecture, language, rules, webBuild, suppress]
+elasticore-rule-guide.md:1667-1679  #### 프로젝트의 규칙 더하기  [elasticore]
+elasticore-rule-guide.md:1681-1808  ### Apache Ossie 시맨틱 모델 내보내기 (`ossie-export`)  [name, billing_catalog_shop, @abstract, @embeddable, source, @table, table.prefix, description, @id, primary_key, @unique, @Index(unique="true"), unique_keys]
+elasticore-rule-guide.md:1810-1841  ### 플러그인 없이 실행하기 (수동 구성)  [publisher.rules, @ElastiCore]
+elasticore-rule-guide.md:1843-1863  ### 생성해보기 (이 저장소의 샘플 모듈에서)  [publisher.rules, elcore3]
+elasticore-rule-guide.md:1865-1930  ## 10. 체크리스트
+elasticore-rule-guide.md:1867-1875  ### 새 규칙을 추가할 때  [@Rule(value = ...), target, order, phase, TAIL, Syntax, RuleCatalog.standard]
+elasticore-rule-guide.md:1877-1882  ### 새 아티팩트를 추가할 때  [RuleCatalog, RulesGenRunner, ArtifactTarget]
+elasticore-rule-guide.md:1884-1917  ### 새 아티팩트 종류를 추가할 때 (확장점)  [ArtifactContributor, artifactsFor, DomainArtifactContributor, orNamespace, SourceCode.artifactName, requireSyntaxAnyOf]
+elasticore-rule-guide.md:1919-1930  ### 새 언어를 추가할 때  [Syntax, SourceCode.TemplateSet]
+elasticore-rule-guide.md:1932-1946  ## 11. 패키지 구조
 ```
 
 ## elasticore-rule-dev-guide.md
@@ -554,18 +555,19 @@ elasticore-ddd-customize-guide.md:1131-1271  ## 부록 A. `AcmeDddRules.java` �
 ## elasticore-migration-guide.md
 
 ```text
-elasticore-migration-guide.md:1-133  # ElastiCORE 2.x → 3.0 마이그레이션 가이드
-elasticore-migration-guide.md:3-30  ## 요약: 고칠 것이 없습니다
-elasticore-migration-guide.md:18-30  ### 근거  [_V2.2]
-elasticore-migration-guide.md:32-65  ## 그래도 달라지는 것 (전부 버그 수정)
-elasticore-migration-guide.md:34-42  ### 1. `schema.yml` 의 위치와 인코딩
-elasticore-migration-guide.md:44-49  ### 2. 생성 코드가 모델을 가진 모듈에 놓입니다
-elasticore-migration-guide.md:51-57  ### 3. `DTOUtils.getMetaInfo(Class)` → `getMetaInfo(Class<T>)`
-elasticore-migration-guide.md:59-65  ### 4. 새 DSL 검증은 2.x 모델에 반응하지 않습니다  [DSL_WARN, domainService, uses:]
-elasticore-migration-guide.md:67-105  ## 3.0 기능을 쓰고 싶다면 (선택)
-elasticore-migration-guide.md:71-79  ### 무엇이 생기나
-elasticore-migration-guide.md:81-99  ### 켜는 법  [@ElastiCore, like, @search(like), @search(%_%)]
-elasticore-migration-guide.md:101-105  ### 되돌리는 법  [publisher.rules]
-elasticore-migration-guide.md:107-114  ## Spring Boot 4 / Spring AI 2.0으로 올리기 (3.0만)
-elasticore-migration-guide.md:116-133  ## 자주 나오는 질문  [publisher.rules, elasticore.modules]
+elasticore-migration-guide.md:1-158  # ElastiCORE 2.x → 3.0 마이그레이션 가이드
+elasticore-migration-guide.md:3-53  ## 요약: 고칠 것이 없습니다  [elcore, @ElastiCore]
+elasticore-migration-guide.md:18-39  ### Gradle 플러그인(`id 'io.elasticore'`)으로 옮긴다면: `output = 'v2'`  [@access, @owner, like, gt, gte]
+elasticore-migration-guide.md:41-53  ### 근거  [_V2.2]
+elasticore-migration-guide.md:55-88  ## 그래도 달라지는 것 (전부 버그 수정)
+elasticore-migration-guide.md:57-65  ### 1. `schema.yml` 의 위치와 인코딩
+elasticore-migration-guide.md:67-72  ### 2. 생성 코드가 모델을 가진 모듈에 놓입니다
+elasticore-migration-guide.md:74-80  ### 3. `DTOUtils.getMetaInfo(Class)` → `getMetaInfo(Class<T>)`
+elasticore-migration-guide.md:82-88  ### 4. 새 DSL 검증은 2.x 모델에 반응하지 않습니다  [DSL_WARN, domainService, uses:]
+elasticore-migration-guide.md:90-130  ## 3.0 기능을 쓰고 싶다면 (선택)
+elasticore-migration-guide.md:94-103  ### 무엇이 생기나
+elasticore-migration-guide.md:105-123  ### 켜는 법  [@ElastiCore, like, @search(like), @search(%_%)]
+elasticore-migration-guide.md:125-130  ### 되돌리는 법  [publisher.rules]
+elasticore-migration-guide.md:132-139  ## Spring Boot 4 / Spring AI 2.0으로 올리기 (3.0만)
+elasticore-migration-guide.md:141-158  ## 자주 나오는 질문  [publisher.rules, elasticore.modules]
 ```

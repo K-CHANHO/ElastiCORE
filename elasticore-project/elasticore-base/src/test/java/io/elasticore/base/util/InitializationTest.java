@@ -127,8 +127,12 @@ public class InitializationTest {
 
         // The wizard asks once. Everything after that is somebody reading
         // their own env.yml, so the choice has to still be visible in it.
-        assertEquals(2, countOf(env, "      #rules: ["),
-                "the other two architectures are not offered in the generated file:" + nl() + env);
+        // The other two architectures, and since 3.0.261028, when layered Java
+        // became the v3 bundle, the code 2.x generates.
+        assertEquals(3, countOf(env, "      #rules: ["),
+                "the other two architectures and 2.x's code are not offered in the generated file:" + nl() + env);
+        assertTrue(env.contains("      rules: [jpa-springboot-v3]"), env);
+        assertTrue(env.contains("      #rules: [jpa-springboot]   # the code 2.x generates"), env);
         assertTrue(env.contains("elasticore-rule-guide.md"), "the file does not say where the bundles are explained");
     }
 
@@ -159,7 +163,25 @@ public class InitializationTest {
     }
 
     /** What the wizard prints when a bundle was chosen. */
+    @Test
+    @DisplayName("a layered project is told to run the rule engine its env.yml now names")
+    public void theLayeredSetupRunsTheRuleEngine() throws Exception {
+        // Since 3.0.261028 the layered env.yml names jpa-springboot-v3. The
+        // setup used to say "run ./gradlew elcore again" - the 2.x generator,
+        // which reads no bundle - so the project got 2.x's code under an
+        // env.yml that said otherwise.
+        String setup = setupFor(false, 0);
+        assertTrue(setup.contains("architecture = 'layered'"), setup);
+        assertTrue(setup.contains("./gradlew elcore3"), setup);
+        assertTrue(setup.contains("output = 'v2'"), setup);
+        assertTrue(envFor(0, false).contains("rule engine"), envFor(0, false));
+    }
+
     private String setupFor(boolean kotlin) throws Exception {
+        return setupFor(kotlin, 1);
+    }
+
+    private String setupFor(boolean kotlin, int architecture) throws Exception {
         java.io.PrintStream real = System.out;
         java.io.ByteArrayOutputStream captured = new java.io.ByteArrayOutputStream();
         try {
@@ -168,7 +190,7 @@ public class InitializationTest {
             Method m = InitializationHelper.class.getDeclaredMethod("printRuleEngineSetup",
                     boolean.class, int.class);
             m.setAccessible(true);
-            m.invoke(new InitializationHelper(), kotlin, 1);
+            m.invoke(new InitializationHelper(), kotlin, architecture);
         } finally {
             System.setOut(real);
         }

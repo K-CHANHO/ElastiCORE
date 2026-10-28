@@ -100,7 +100,9 @@ public final class RulesConfig {
                 return kotlin ? "hexagonal-springboot-kt" : "hexagonal-springboot";
             case LAYERED:
             default:
-                return kotlin ? DEFAULT_BUNDLE_KT : DEFAULT_BUNDLE;
+                // Layered Java is the v3 bundle since 3.0.261028; the code 2.x
+                // generates (DEFAULT_BUNDLE) is chosen, not defaulted to.
+                return kotlin ? DEFAULT_BUNDLE_KT : DEFAULT_BUNDLE_V3;
         }
     }
 
@@ -110,11 +112,10 @@ public final class RulesConfig {
     /**
      * The architecture a build declared, or null when it declared nothing.
      *
-     * Null is not "layered". A project that says nothing must reach the
-     * generator down the same silent channel it always has; answering LAYERED
-     * here would turn every existing project into one that is making a
-     * choice, and the promise that declaring nothing changes nothing is the
-     * most expensive one this product makes.
+     * Null is not "layered": it is a project that made no choice, which the
+     * generator treats differently from one that did - a project that said
+     * nothing and holds the code 2.x generated is stopped rather than
+     * rewritten (RulesGenRunner.twoXGenerated).
      */
     public static Architecture declaredArchitecture() {
         return architectureNamed(System.getProperty(PROP_ARCHITECTURE));

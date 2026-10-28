@@ -114,11 +114,12 @@ public class ElastiCorePlugin implements Plugin<Project> {
             }
 
             if (Boolean.TRUE.equals(extension.getGenerateBeforeCompile().get())) {
-                // Whichever task this project actually runs. A build that
-                // declared an architecture or a language is on the rule
-                // engine, and waiting for the other generator would let
-                // compilation start against a tree nothing had written.
-                dependOnGeneration(evaluated, declaresRules(extension) ? elcore3 : elcore);
+                // Whichever task this project actually runs: the rule engine,
+                // unless the build keeps 2.x's code - then the 2.x generator
+                // itself, which writes it exactly. Waiting for the other one
+                // would let compilation start against a tree nothing had
+                // written.
+                dependOnGeneration(evaluated, keepsTwoX(extension) ? elcore : elcore3);
                 if (client) dependOnGeneration(evaluated, elcore3ts);
             }
         });
@@ -162,18 +163,32 @@ public class ElastiCorePlugin implements Plugin<Project> {
     }
 
     /**
-     * Whether this build has said something the rule engine reads.
+     * Whether this build keeps the code 2.x generates: {@code output = 'v2'}.
      *
-     * Only the build's own declaration counts. A bundle named in a domain's
-     * env.yml says the same thing, but reading YAML here to find out would
-     * make the plugin a second parser of the model - and one that is wrong
-     * whenever the two disagree.
+     * Since 3.0.261028 a build that says nothing is on the rule engine, as one
+     * declaring an architecture always was. The 2.x code is a choice, and one
+     * that cannot be combined with what only the rule engine reads - a domain
+     * model, a hexagon, Kotlin, the project's own rule sets - which would
+     * otherwise be ignored without a word.
      */
-    private boolean declaresRules(ElastiCoreExtension extension) {
-        // Rule sets of the project's own are read only by the rule engine;
-        // running the 2.x generator would ignore them without a word.
-        return extension.getArchitecture().isPresent() || extension.getLanguage().isPresent()
-                || !extension.getRules().getOrElse(new ArrayList<>()).isEmpty();
+    private boolean keepsTwoX(ElastiCoreExtension extension) {
+        if (!extension.getOutput().isPresent()) return false;
+        String output = extension.getOutput().get().trim();
+        if ("v3".equals(output)) return false;
+        if (!"v2".equals(output)) {
+            throw new org.gradle.api.GradleException(
+                    "elasticore { output = '" + output + "' } - write 'v3' (the default) or 'v2'");
+        }
+        String architecture = extension.getArchitecture().getOrElse("layered").trim();
+        String language = extension.getLanguage().getOrElse("java").trim();
+        boolean rules = !extension.getRules().getOrElse(new ArrayList<>()).isEmpty();
+        if (!"layered".equals(architecture) || !"java".equals(language) || rules) {
+            throw new org.gradle.api.GradleException(
+                    "elasticore { output = 'v2' } keeps the code 2.x generates, which is layered Java with no rule sets"
+                            + " of the project's own - remove output, or architecture = '" + architecture
+                            + "', language = '" + language + "'" + (rules ? " and rules" : ""));
+        }
+        return true;
     }
 
     /** What the generator is told, decided once the build script has been read. */
@@ -194,6 +209,11 @@ public class ElastiCorePlugin implements Plugin<Project> {
         }
         if (extension.getLanguage().isPresent()) {
             task.systemProperty("elasticore.language", extension.getLanguage().get());
+        }
+        // The generation, when the build chose one: elcore3 then writes it
+        // without the check for a project 2.x generated (RulesGenRunner).
+        if (extension.getOutput().isPresent()) {
+            task.systemProperty(keepsTwoX(extension) ? "elasticore.rules.v2" : "elasticore.rules.v3", "true");
         }
 
         String springBoot = springBootOf(project, extension);
@@ -222,6 +242,7 @@ public class ElastiCorePlugin implements Plugin<Project> {
         // because the two ways of saying it will coexist for a while.
         flag(project, task, "force", "elasticore.rules.force");
         flag(project, task, "v3", "elasticore.rules.v3");
+        flag(project, task, "v2", "elasticore.rules.v2");
         flag(project, task, "kt", "elasticore.rules.kt");
         flag(project, task, "ts", "elasticore.rules.ts");
         flag(project, task, "listRules", "elasticore.rules.list");

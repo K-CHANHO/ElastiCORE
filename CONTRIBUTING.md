@@ -79,9 +79,13 @@ issue rather than a pull request.
 Rules live in `elasticore-base/src/main/java/io/elasticore/base/model/pub/rules/`
 and are registered in `RuleCatalog`.
 
-1. **Make it opt-in.** A project that does not name your rule must generate
-   exactly what it generated before. This is not a convention; it is what the
-   compatibility gate enforces.
+1. **Keep the 2.x code where it was.** A project that keeps 2.x's code
+   (`output = 'v2'`, the template's setting) must generate exactly what it
+   generated before; that is what the compatibility gate enforces. The 3.0
+   code - the default since 3.0.261028 - may change before 3.0 is released,
+   with the reason in the history; a new behaviour there is still switched on
+   by the DSL or a setting rather than by default where a project could be
+   surprised by it.
 2. **Document it.** `GuideCoverageTest` fails if a rule set, a bundle, a DSL
    word your rule reads, or a namespace key your rule places an artifact by is
    missing from the guides. The test exists because undocumented generated code

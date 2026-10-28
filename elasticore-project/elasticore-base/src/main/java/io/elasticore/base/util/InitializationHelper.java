@@ -388,10 +388,12 @@ public class InitializationHelper {
         // the alternatives beside it is the only reason it is there.
         content.append("    # How the model is read. The commented lines are the other\n");
         content.append("    # bundles - see elasticore-rule-guide.md in the blueprint root.\n");
-        if (architecture != LAYERED) {
+        {
             // Naming a bundle and saying nothing else would be the worst of
             // the three states: the file would look configured, the build
-            // would ignore it, and nothing would report a problem.
+            // would ignore it, and nothing would report a problem. Every
+            // architecture since 3.0.261028, when layered Java became a v3
+            // bundle that the 2.x generator does not read either.
             content.append("    #\n");
             content.append("    # These rules are applied by the rule engine, which is a separate\n");
             content.append("    # entry point from the @ElastiCore annotation processor. A project\n");
@@ -406,6 +408,12 @@ public class InitializationHelper {
             if (alternative.equals(bundle)) continue;
             content.append("      #rules: [").append(alternative).append("]")
                    .append("   # ").append(label(i)).append("\n");
+        }
+        // Layered Java is the v3 bundle since 3.0.261028; the code 2.x
+        // generates is one line away for a project that keeps it.
+        if (!kotlin) {
+            content.append("      #rules: [").append(RulesConfig.DEFAULT_BUNDLE).append("]")
+                   .append("   # the code 2.x generates\n");
         }
         content.append("\n");
 
@@ -560,12 +568,11 @@ public class InitializationHelper {
         System.out.println();
         System.out.println("Next Steps:");
         System.out.println("1. Edit " + BLUEPRINT_DIR + "/" + domainName + "/model/model.yml");
-        if (architecture == LAYERED) {
-            System.out.println("2. Run './gradlew elcore' again to generate code");
-            System.out.println("3. Build your project with './gradlew build'");
-        } else {
-            printRuleEngineSetup(kotlin, architecture);
-        }
+        // Every architecture, layered too: since 3.0.261028 a layered Java
+        // domain names jpa-springboot-v3, which only the rule engine reads.
+        // Telling it to run the 2.x generator wrote 2.x's code under an
+        // env.yml that said otherwise.
+        printRuleEngineSetup(kotlin, architecture);
         System.out.println();
         System.out.println("To change the architecture later, edit publisher.rules in env.yml -");
         System.out.println("the alternatives are listed there, commented out.");
@@ -586,8 +593,9 @@ public class InitializationHelper {
      * from the declaration so a bundle and a switch cannot disagree.
      */
     private void printRuleEngineSetup(boolean kotlin, int architecture) {
-        String architectureWord = ARCHITECTURES[architecture] == RulesConfig.Architecture.HEXAGONAL
-                ? "hexagonal" : "ddd";
+        RulesConfig.Architecture chosen = ARCHITECTURES[architecture];
+        String architectureWord = chosen == RulesConfig.Architecture.HEXAGONAL ? "hexagonal"
+                : chosen == RulesConfig.Architecture.DOMAIN_MODEL ? "ddd" : "layered";
         System.out.println("2. Apply the ElastiCORE plugin in build.gradle and declare the choice");
         System.out.println("   you just made - the rule engine is a separate entry point, and a");
         System.out.println("   bundle does nothing until something runs it:");
@@ -607,6 +615,10 @@ public class InitializationHelper {
         System.out.println("   paths generate the same files from different rules; a project on a");
         System.out.println("   bundle uses the plugin's task alone.");
         System.out.println("4. Run './gradlew elcore3', then './gradlew build'");
+        if (chosen == RulesConfig.Architecture.LAYERED && !kotlin) {
+            System.out.println("   (To keep the code 2.x generates instead, write output = 'v2' in the");
+            System.out.println("   elasticore block and rules: [jpa-springboot] in env.yml.)");
+        }
     }
 
     private void printExitMessage() {

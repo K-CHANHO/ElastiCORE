@@ -1,5 +1,9 @@
 ## 3.0.261028
 
+**플러그인의 기본값이 3.0 코드가 된다**: 아무것도 선언하지 않은 레이어드 Java 프로젝트는 `jpa-springboot-v3` 로
+생성되고, 2.x 의 코드는 `output = 'v2'` 로 고른다. 2.x 가 생성한 코드를 가진 프로젝트가 아무것도 고르지 않으면 소스를
+다시 쓰지 않고 멈춘다.
+
 rc2 를 도메인 9개짜리 프로젝트에 `elcore3`·`-Pv3` 로 적용하고, 같은 모델로 2.x 출력과 비교하며 찾은 차이를 고쳤다.
 2.x 생성기의 출력은 그대로다. `jpa-springboot` 번들은 2.x 와 달랐던 두 곳(선언한 검색 DTO 의 필수 연관, AI 도구 설명)이 2.x 와
 같아졌다. 네 차이 모두 호환성 검사가 비교하는 템플릿 모델 밖이었으므로, CI 가 보지 않던 것을 더 찾아 막았다(생성된
@@ -118,6 +122,58 @@ SaleSrchDTO:
   세 색인뿐
 - 관련 파일: `.github/workflows/ci.yml`, `.github/PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`,
   `elasticore-sample-petstore/build.gradle`, 세 템플릿의 `blueprint/elasticore-guide-index.md`
+
+### Changes (기본값 - 3.0 코드)
+
+#### 아무것도 선언하지 않으면 3.0 코드. 2.x 의 코드는 `output = 'v2'`
+- 왜: 3.0 인데 레이어드 Java 프로젝트가 3.0 코드(`jpa-springboot-v3`)를 받으려면 실행할 때마다 `-Pv3` 를 주거나 도메인마다
+  `publisher.rules` 를 적어야 했다. 새로 시작하는 사람은 그 스위치를 알 길이 없었다. 플러그인은 `elasticore { }` 블록이
+  없으면 2.x 생성기(`elcore`)를 불렀고, `architecture = 'layered'` 를 적어도 2.x 호환 코드였다
+- 전: 선언 없음 → 빌드가 2.x 생성기를 부름. `architecture = 'layered'` → `elcore3` 의 `jpa-springboot`(2.x 호환).
+  v3 는 `-Pv3` 또는 `publisher.rules: [jpa-springboot-v3]`. 초기화 마법사는 레이어드 Java 도메인의 `env.yml` 에
+  `rules: [jpa-springboot]` 를 적었다
+- 후: 선언 없음과 `architecture = 'layered'` → 빌드가 `elcore3` 를 부르고 `jpa-springboot-v3`. 마법사는
+  `rules: [jpa-springboot-v3]` 를 적고 2.x 의 코드를 주석 줄(`#rules: [jpa-springboot]`)로 함께 보인다. 마법사가
+  마지막에 알려 주는 다음 단계도 레이어드 Java 에 플러그인과 `elcore3` 를 안내한다 - 전에는 "`./gradlew elcore` 를 다시
+  실행" 이었는데, 그 2.x 생성기는 `publisher.rules` 를 읽지 않아 env.yml 이 v3 라고 하는데 2.x 코드가 나왔을 것이다.
+  env.yml 의 "이 규칙은 규칙 엔진이 읽는다" 주석도 모든 아키텍처에 적는다. 헥사고날·DDD·Kotlin 은 전과 같다(원래 v3)
+- 2.x 의 코드를 유지하는 길: `elasticore { output = 'v2' }` - 빌드가 2.x 생성기를 부르고, `elcore3` 를 손으로 돌려도
+  2.x 호환 코드(`elasticore.rules.v2`)를 쓴다. 한 번만은 `-Pv2`. 도메인 `env.yml` 이 `jpa-springboot` 를 적고 있으면
+  (전의 마법사가 만든 프로젝트) 그 실행도 2.x 호환이다. `output = 'v2'` 를 헥사고날·DDD·Kotlin·프로젝트 규칙과 함께
+  쓰거나, `-Pv2` 와 `-Pv3` 를 함께 주면 거절한다 - 2.x 의 코드는 레이어드 Java 뿐이다. `-Pv2`/`output = 'v2'` 인데
+  도메인 `env.yml` 이 v3 에만 있는 규칙(`jpa-springboot-v3`, `ddd-...`)을 적었거나 프로젝트 규칙이 더해졌으면 `elcore3` 도
+  거절한다(전에는 그런 도메인이 항상 v3 를 골랐으므로, 그 규칙이 2.x 템플릿에 그려지는 일이 없었다)
+- **2.x 프로젝트를 조용히 바꾸지 않는다**: 아무것도 고르지 않은 실행이 `src/main/java` 에서 2.x 가 생성한 파일(첫 줄
+  해시의 버전이 `_V1.x`/`_V2.x`)을 찾으면, 소스를 하나도 쓰지 않고 1 로 끝나며 `output = 'v2'`(유지)와
+  `output = 'v3'`(이동) 중 고르라고 알린다. 버전만 올렸는데 소스가 다시 쓰이고 `like` 검색, 검색 키워드, 접근 검사,
+  오류 응답의 동작이 바뀌는 것을 막는다. `output = 'v3'`/`-Pv3` 를 주면 2.x 파일이 있어도 3.0 코드를 쓴다.
+  3.0 사전 릴리스를 2.x 호환 모드로 돌린 프로젝트는 파일이 `_V3.0` 이라 해시 줄로는 알아보지 못하므로, 마지막
+  `elcore3` 실행이 `build/elasticore/server.mode` 에 남긴 `compatible` 도 같이 본다. 남은 한계: 그런 프로젝트가 `clean`
+  으로 그 파일을 지웠고 `env.yml` 에 `jpa-springboot` 도 없으면 3.0 코드가 된다(마법사가 만든 프로젝트는 그 줄이 있다).
+  `-PlistRules`(아무것도 쓰지 않는 목록)는 멈추지 않는다. 블루프린트가 없는 새 프로젝트에서 `elcore3` 는 1 로 끝나며
+  이제 `./gradlew elcore` 로 도메인을 만들라고 알린다(빌드가 2.x 생성기 대신 `elcore3` 를 부르므로)
+- TypeScript 클라이언트(`elcore3ts`)는 서버를 따른다: 아무것도 고르지 않았으면 v3 서버로 보되, 2.x 가 생성한 소스가
+  있거나 마지막 `elcore3` 가 `build/elasticore/server.mode` 에 2.x 호환이라고 남겼으면 2.x 서버로 본다
+- 저장소: `elasticore-template`(2.x 기준 트리)은 `output = 'v2'` 를 적고, 그 `elcoreTreeGenerate` 는
+  `elasticore.rules.v2` 로 생성한다. 2.x 호환 검사 결과는 같다(`150 MATCH / 0 DIFF / 2 ACCEPTED`,
+  `0 differ / 0 missing / 0 extra`), 템플릿의 생성 소스도 그대로다
+- 테스트: `DefaultGenerationTest`(선언 없음 → v3, `-Pv2` → 2.x 호환, `env.yml` 의 `jpa-springboot` → 2.x 호환,
+  선언한 `layered` → v3, 둘 다 → 거절, `-Pv2` + 헥사고날 → 거절, 2.x 파일이 있으면 멈추고 아무 소스도 쓰지 않음,
+  `-Pv3` 면 2.x 파일이 있어도 v3, 해시 줄 판별, `-Pv2` + v3 규칙을 적은 도메인·프로젝트 규칙 → 거절,
+  `server.mode` 의 `compatible` → 멈춤, 2.x 파일 위의 TypeScript → 2.x 서버를 따름, 목록 → 멈추지 않음),
+  `ElastiCorePluginTest`(선언 없음 → `:elcore3`, `output = 'v2'` →
+  `:elcore` 와 `elasticore.rules.v2`, `output = 'v3'` 전달, 헥사고날과 함께 쓴 `v2`·모르는 값 거절),
+  `InitializationTest`(마법사의 `jpa-springboot-v3` 와 2.x 주석 줄, 레이어드의 다음 단계가 `elcore3`). 2.x 호환 출력을 만든다고 하던 테스트는
+  `elasticore.rules.v2` 를 준다 - 기본값만 바꾸면 그중 셋(`RequiredReferenceDtoTest`, `SignInAndReferencesTest`,
+  `WritePathsTest`)은 실패했고, 여섯(`EntityNativeClassAnnotationTest`, `DeclaredSearchDtoRelationTest`,
+  `AiToolDescriptionTest`, `DtoNamedLikeASearchDtoTest`, `PortModelImportsTest`, `ModelNamedLikeAnAnnotationTest` 의
+  레이어드 Java)은 **v3 로 돌면서 통과했다** - 2.x 호환 쪽을 더는 검사하지 않으면서. 모두 명시했고, 레이어드 Java 의
+  `@Comment` 검사는 v3 와 2.x 호환 둘 다 본다(`theRuleEngineWritesItInFullOnLayeredJavaKeeping2x`)
+- 관련 파일: `ElastiCoreExtension.java`(`output`), `ElastiCorePlugin.java`(`keepsTwoX`, `-Pv2`), `RulesGenRunner.java`
+  (모드 결정, `domainKeepingTwoX`, `twoXGenerated`, `defaultBundle`), `RulesConfig.java`(`bundleFor` - 레이어드 Java 는
+  `jpa-springboot-v3`), `InitializationHelper.java`, `elasticore-template/build.gradle`, `elasticore-migration-guide.md`,
+  `elasticore-rule-guide.md`(어느 세대의 코드인가), `elasticore-env-guide.md`, `elasticore-annotation-guide.md`,
+  `README.md`·`README.ko.md`·`docs/tour*.md`(현재 상태), `CONTRIBUTING.md`
 
 ## 3.0.261027-rc2
 

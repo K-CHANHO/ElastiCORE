@@ -13,11 +13,11 @@ import org.gradle.api.provider.Property;
  * }
  * </pre>
  *
- * <strong>Declaring nothing keeps 2.x behaviour.</strong> That is the point of
- * the defaults being absent rather than set: with no block, the plugin passes
- * no rule properties at all and the generator takes the path it has always
- * taken. A default written as {@code layered} would look the same and would
- * not be - it would send a value down a channel that was previously silent.
+ * <strong>Declaring nothing generates the 3.0 code</strong> - the layered
+ * Java of the rule engine's v3 bundle - since 3.0.261028. A project that keeps
+ * the code 2.x generated says so: {@code output = 'v2'}. One that has 2.x's
+ * code and says neither is stopped by the generator with that choice to make,
+ * rather than having its sources rewritten by an upgrade (RulesGenRunner).
  *
  * The two are not independently spellable on purpose. A bundle name decides
  * which rules run and a system property decides which tree and extension they
@@ -34,6 +34,17 @@ public abstract class ElastiCoreExtension {
 
     /** {@code java} (default), {@code kotlin}, or {@code typescript}. */
     public abstract Property<String> getLanguage();
+
+    /**
+     * Which generation's code: {@code v3} (the default) or {@code v2}, the code
+     * the 2.x generator writes, unchanged - for a project that keeps it.
+     *
+     * Written here once rather than as -Pv2 on a command line, because the
+     * command line is forgotten: one build run without the switch would
+     * rewrite a 2.x project's sources. -Pv2 and -Pv3 still decide a single
+     * run of elcore3.
+     */
+    public abstract Property<String> getOutput();
 
     /**
      * The Spring Boot generation the generated code runs on: {@code 3} or

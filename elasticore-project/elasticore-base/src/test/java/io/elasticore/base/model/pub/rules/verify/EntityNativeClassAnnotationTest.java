@@ -125,7 +125,7 @@ public class EntityNativeClassAnnotationTest {
         Files.write(new File(dir, "model/model.yml").toPath(), MODEL.getBytes(StandardCharsets.UTF_8));
 
         String[] keys = {"elasticore.base.path", "elasticore.architecture", "elasticore.language",
-                "elasticore.rules.force", "elasticore.rules.v3", "elasticore.rules.ts"};
+                "elasticore.rules.force", "elasticore.rules.v3", "elasticore.rules.v2", "elasticore.rules.ts"};
         String[] saved = new String[keys.length];
         for (int i = 0; i < keys.length; i++) saved[i] = System.getProperty(keys[i]);
         try {
@@ -134,7 +134,7 @@ public class EntityNativeClassAnnotationTest {
             System.setProperty("elasticore.architecture", "layered");
             System.setProperty("elasticore.language", language);
             System.setProperty("elasticore.rules.force", "true");
-            if (v3) System.setProperty("elasticore.rules.v3", "true");
+            System.setProperty(v3 ? "elasticore.rules.v3" : "elasticore.rules.v2", "true");
             assertEquals(0, RulesGenRunner.run(new String[0]), "the run failed: " + project);
         } finally {
             for (int i = 0; i < keys.length; i++) {
