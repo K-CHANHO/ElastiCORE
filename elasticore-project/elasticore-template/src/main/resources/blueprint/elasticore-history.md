@@ -27,6 +27,16 @@ withJoinFetches(): each row loads it with a query of its own (N+1). Fetch it in 
 - 이제 그런 엔티티마다 경고를 낸다. 대상 연관은 2.x 코드가 가져오는 것과 같은 기준으로 고른다. 생성 결과는 그대로다.
 - 마이그레이션 가이드의 v3 항목에 같은 내용을 적었다.
 
+### Documentation (마이그레이션 가이드 - 2.x 코드에서 옮길 때 손볼 것)
+
+#### v3 번들로 옮기면 컴파일·테스트에서 드러나는 차이를 한 표로
+- 왜: rc3 부터 v3 번들이 기본값인데, 가이드의 v3 항목은 `like` 하나였다. 도메인 9개짜리 프로젝트를 `-Pv3` 로 옮기자 본
+  코드 5곳과 테스트 138곳이 컴파일되지 않았고, 우회한 뒤에도 테스트 176개가 실패했다 - 가이드에 없는 차이들이었다
+- `elasticore-migration-guide.md` 에 "2.x 코드에서 옮길 때 손볼 것" 을 더했다: 키를 받는 엔티티 생성자, 보호 블록이
+  기대던 `*` import, `@fetchjoin` 대신 `JoinSpec.fetchJoin`, `@writeonly` 값의 복사, CoreService 의 `save`·`update`
+  검증과 키 중복 거절, `delete(searchDTO)`·`updateBySpecification` 이 행마다 도는 것, 2.x 서비스 테스트의 mock
+- `like` 항목에 `lower(컬럼)` 비교와 인덱스를 적었다
+
 ## 3.0.261028-rc3
 
 **플러그인의 기본값이 3.0 코드가 된다**: 아무것도 선언하지 않은 레이어드 Java 프로젝트는 `jpa-springboot-v3` 로

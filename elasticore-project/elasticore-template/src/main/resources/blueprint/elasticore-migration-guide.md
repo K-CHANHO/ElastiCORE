@@ -33,7 +33,8 @@ elasticore {
 `publisher.rules: [jpa-springboot]` 를 적고 있으면(3.0.261028-rc3 전의 초기화 마법사가 레이어드 Java 에
 적던 값) 그 프로젝트도 2.x 코드를 유지합니다.
 
-3.0 코드로 옮기면 달라지는 동작은 아래 "3.0 기능을 쓰고 싶다면" 과 `elasticore-history.md` 에 있습니다.
+3.0 코드로 옮기면 달라지는 동작은 아래 "3.0 기능을 쓰고 싶다면" 과 `elasticore-history.md` 에 있고, 손볼 코드는
+그 안의 "2.x 코드에서 옮길 때 손볼 것" 에 있습니다.
 레이어드 Java 의 v3 번들(`jpa-springboot-v3`)은 2.x 번들에 없는 규칙을 더 씁니다 - `@access`·`@owner` 접근 검사
 (`jpa-service-access`), 오류 코드가 있는 거절 응답(`spring-api-errors`), 서버가 정하는 필드의 쓰기 보호
 (`jpa-write-guard`). 검색에서는 `like` 가 대소문자를 무시하고 `gt`·`gte` 같은 키워드가 기호와 같아집니다. `@fetchjoin` 연관은 루트와 함께
@@ -121,13 +122,34 @@ elasticore:
 
 **검색의 `like` 가 대소문자를 무시합니다.** v3 번들(2.x 코드를 유지하는 레이어드 Java 제외 - 플러그인의 기본값,
 헥사고날·DDD, `-Pv3`, 모든 Kotlin 빌드)에서 문자열 필드의 `@search(like)` 는 `%__%` 처럼 대소문자를 무시하는 포함 검색입니다. 2.x 처럼
-구분하려면 `@search(%_%)` 로 바꿉니다.
+구분하려면 `@search(%_%)` 로 바꿉니다. 비교는 `lower(컬럼)` 으로 하므로, 포함 검색을 `pg_trgm` 같은 인덱스로
+받치고 있었다면 그 인덱스를 `lower(컬럼)` 에 다시 만드십시오.
 
 **`@fetchjoin`·`table.autoJoin` 은 v3 번들의 서비스가 쓰지 않습니다.** 2.x 코드(`output = 'v2'`)의 CoreService 는
 그 연관을 루트와 함께 가져옵니다(JOIN FETCH, `withJoinFetches()`). v3 번들(플러그인의 기본값, 헥사고날·DDD, `-Pv3`,
 모든 Kotlin 빌드)의 CoreService 에는 그 기능도 `withJoinFetches()` 메서드도 없어서, 연관을 행마다 따로 읽고(N+1) 확장
 서비스에서 `withJoinFetches()` 를 부르던 코드는 컴파일되지 않습니다. 생성할 때 엔티티마다 DSL 경고로 알려 줍니다. 목록에
 필요한 연관은 직접 쓴 쿼리에서 가져오십시오.
+
+### 2.x 코드에서 옮길 때 손볼 것
+
+2.x 가 생성한 코드(또는 `output = 'v2'`)를 쓰던 프로젝트가 v3 번들로 옮기면, 아래 차이가 컴파일이나 테스트에서
+드러납니다. 도메인 9개짜리 프로젝트를 옮기며 실제로 걸린 것들입니다.
+
+| 무엇이 | 2.x 코드 | v3 코드 | 할 일 |
+|---|---|---|---|
+| 키를 받는 엔티티 생성자 | `new Order(id)` | 없음 (기본 생성자만) | 연관에 넣을 참조는 `repository.getReferenceById(id)`, 테스트 데이터는 기본 생성자와 setter 로 만듭니다 |
+| 보호 블록(`// !----` ~ `// ----!`) 안 코드가 쓰는 import | `jakarta.persistence.*`·`java.util.*` 같은 `*` import 덕에 컴파일됨 | 생성 코드가 쓰는 것만 import | 블록이 쓰는 import 를 `package` 아래의 보호 블록에 적습니다 (`elasticore-dev-guide.md` 의 "사용자 코드 보존 블록") |
+| `@fetchjoin`·`table.autoJoin` | `withJoinFetches()` 가 루트와 함께 가져옴 | 가져오지 않음 (위) | `Q.$Order.joinSpec().fetchJoin(Q.Order.getCustomer())` 처럼 직접 쓴 쿼리에서 가져옵니다 (`elasticore-dev-guide.md` 의 "JoinSpec 빌더") |
+| `@writeonly`·`@nooutput` 값 | 엔티티 → DTO 로 복사 (JSON 응답에서만 빠짐) | 복사하지 않음 | 서버 코드에서 그 값이 필요하면 엔티티에서 읽습니다 |
+| CoreService `save(dto)` | 키가 이미 있으면 그 행을 덮어씀 | 먼저 Bean Validation (`ConstraintViolationException`), 키가 이미 있으면 `DuplicateKeyException` | 있는 행은 `update(dto)` 로 바꿉니다 |
+| CoreService `update(dto)` | 검증 없음 | 먼저 Bean Validation (기본은 보낸 값만) - 없는 키보다 검증 오류가 먼저 납니다 | |
+| CoreService `delete(searchDTO)` | 조건으로 한 번에 지움 (bulk DELETE) | 찾은 행을 하나씩 지움 - 엔티티 리스너와 cascade 가 동작합니다 | |
+| CoreService `updateBySpecification` | 한 번의 bulk UPDATE | 행마다 읽어 매퍼로 바꾸고 저장 - 버전·감사 필드·`beforeSave` 가 적용됩니다 | |
+
+2.x 가 생성한 서비스 테스트(`*ServiceTest`)는 2.x CoreService 가 부르는 리포지토리 메서드를 mock 으로 고정해 두었습니다.
+v3 CoreService 는 다른 메서드를 부르므로(`deleteById` 는 `findById` 후 `delete`, `delete(searchDTO)` 는 `findAll` 후
+`delete`) 그 테스트는 맞지 않습니다 - 지우고 다시 생성하거나(`env.yml` 의 `testCode: "true"`) 새 호출에 맞춰 고칩니다.
 
 ### 되돌리는 법
 
