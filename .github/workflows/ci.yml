@@ -9,6 +9,30 @@ permissions:
   contents: read
 
 jobs:
+  # How a pull request records its change (changes/README.md, CONTRIBUTING.md):
+  # a fragment in changes/, never the history itself, no committed guide
+  # copies. Checked here so a contributor learns it from the pull request -
+  # the failure says what to do - rather than from a conflict later.
+  change-record:
+    name: Change record
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # The branch name comes from the contributor; it reaches the script as an
+      # environment variable, never as text spliced into the command.
+      - name: The change is recorded the way a pull request records it
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: bash .github/scripts/change-record.sh "origin/$BASE_REF" "$HEAD_SHA" "$HEAD_BRANCH"
+
   build:
     name: Build, test and compatibility checks
     runs-on: ubuntu-latest
