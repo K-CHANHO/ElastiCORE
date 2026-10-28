@@ -445,6 +445,33 @@ public final class RulesGenRunner {
         // rewrote its sources, and changed how its search and its refusals
         // behave, without the project asking, is stopped and the choice put
         // to it instead.
+        // A domain's mode (env.yml config.mode, "jpa" when unsaid) names what the
+        // 2.x generator writes for it: jpa code, mongo code, uml and dsl
+        // documents. The rule engine writes JPA code only, and read no mode at
+        // all: a MongoDB domain got JPA entities and repositories without a
+        // word - since 3.0.261029 the default for a build that says nothing.
+        // A domain whose modes leave out jpa is refused; documents beside it
+        // are said to be the 2.x generator's.
+        for (ECoreModel model : loader.allModels()) {
+            java.util.List<String> modes = new ArrayList<String>();
+            for (String m : String.valueOf(model.getConfig("mode", "jpa")).split(",")) {
+                if (!m.trim().isEmpty()) modes.add(m.trim().toLowerCase());
+            }
+            if (!modes.contains("jpa")) {
+                io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] domain '" + model.getInternalDomainName()
+                        + "' is mode: " + String.join(",", modes) + ". The rule engine writes JPA code only; "
+                        + (modes.contains("mongo") ? "MongoDB code" : "this mode") + " comes from the 2.x generator -"
+                        + " elasticore { output = 'v2' }, whose build runs it, or ./gradlew elcore. No source was written.");
+                return 1;
+            }
+            for (String m : modes) {
+                if (m.equals("jpa")) continue;
+                io.elasticore.base.util.ConsoleLog.storeLog("DSL_WARN", "[" + model.getInternalDomainName()
+                        + "] mode " + m + " is not written by elcore3 - only the JPA code is. The 2.x generator"
+                        + " (./gradlew elcore) writes the " + m + " output.");
+            }
+        }
+
         String why = v2Asked ? "-Pv2 / output = 'v2'" : v3Asked ? "-Pv3 / output = 'v3'"
                 : v3 ? "architecture " + declaredArchitecture : null;
         // 2.x's code is the 2.x bundle on the 2.x templates. A rule that
