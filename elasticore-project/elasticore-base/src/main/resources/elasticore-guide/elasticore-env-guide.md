@@ -54,7 +54,7 @@ config:
 - `prefix`: 엔티티의 `@Table` 어노테이션에 적용되는 테이블명 접두사
 - `tableSchema`: 도메인 내 모든 엔티티에 `@Table(schema="...")` 적용. 엔티티별 `@schema` 어노테이션이 우선
 - `autoJoin`:
-  - `true`: 모든 엔티티 참조 필드에 대해 `findById` 시 JOIN FETCH 자동 적용 (N+1 방지)
+  - `true`: 모든 엔티티 참조 필드에 대해 페이지 검색(`findBySearch`) 시 JOIN FETCH 자동 적용 (N+1 방지)
   - `false` (기본값): `@fetchjoin` 어노테이션이 명시된 필드에만 JOIN FETCH 적용
 
 **`@fetchjoin` vs `autoJoin` 관계:**

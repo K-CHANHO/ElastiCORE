@@ -31,6 +31,7 @@ import java.util.Optional
 open class ${className}(
     ${ctorParams}
 ) {
+    ${joinFetchMethod}
 
     /**
      * Returns every ${entityClassName} as ${dtoClassName}.
@@ -80,7 +81,7 @@ open class ${className}(
      */
     open fun findBySearch(searchDTO: ${searchDTOClassName}): Page<${searchResultDTOClassName}> {
         ${accessSearch}
-        val specification = ${accessSpecOpen}${mapperName}.toSpec(searchDTO)${accessSpecClose}
+        val specification = ${accessSpecOpen}${mapperName}.toSpec(searchDTO)${accessSpecClose}${fetchSpec}
         val pageable = searchDTO.getPageable()
         return ${qryRef}.findAll(specification, pageable)
                 .map { ${mapperName}.${toSearchListMappingName}(it)${pageNonNull} }

@@ -15,6 +15,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -22,13 +23,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A relation marked @fetchjoin (or every relation, under table.autoJoin) is
- * fetched with the root by 2.x's CoreService (output = 'v2'). The v3 one -
- * the default, and every Kotlin build - has no JOIN FETCH at all, so the
- * relation loads a query per row - and said nothing. The run now warns,
- * naming the relations; the 2.x-compatible run, which does fetch them, does
- * not.
+ * fetched with the root in the paged search - by 2.x's CoreService
+ * (output = 'v2') and, since 3.0.261029, by the v3 one: the default, every
+ * hexagonal, DDD and Kotlin build.
+ *
+ * Until then the v3 service had no JOIN FETCH, so the relation loaded a query
+ * per row, and an extension service calling withJoinFetches() did not
+ * compile; 3.0.261029 first warned of it. The method is written only for an
+ * entity that asks for a fetch. That the fetch takes the per-row selects
+ * away is shown on a running application: elasticore-template-ddd's
+ * JoinFetchTest.
  */
-public class FetchJoinWarningTest {
+public class FetchJoinTest {
 
     private static final String MODEL = String.join("\n",
             "entity:",
@@ -48,8 +54,6 @@ public class FetchJoinWarningTest {
             "      customer: Customer @ManyToOne",
             "");
 
-    private static final String WARNING = "[Shop] Purchase: customer (@fetchjoin) is not fetched with Purchase";
-
     private static final List<File> projects = new ArrayList<File>();
 
     @AfterAll
@@ -61,35 +65,62 @@ public class FetchJoinWarningTest {
     }
 
     @Test
-    public void theV3RunWarnsOfTheRelationItDoesNotFetch() throws Exception {
-        String out = run("elcore-fetchjoin-v3", "java", true);
-        assertTrue(out.contains(WARNING), out);
-        assertFalse(out.contains("Coupon: customer"), out);
+    public void theV3ServiceFetchesTheMarkedRelationInThePagedSearch() throws Exception {
+        File project = run("elcore-fetchjoin-v3", "java", true, "layered");
+        String purchase = generated(project, "PurchaseCoreService.java");
+        assertTrue(purchase.contains("protected Specification<Purchase> withJoinFetches() {"), purchase);
+        assertTrue(purchase.contains("root.fetch(\"customer\", jakarta.persistence.criteria.JoinType.LEFT);"), purchase);
+        assertTrue(purchase.contains("if (query != null && !Long.class.equals(query.getResultType())) {"), purchase);
+        assertTrue(purchase.contains("toSpec(searchDTO).and(withJoinFetches());"), purchase);
+        // Only the paged search fetches, as in 2.x.
+        assertEquals(1, count(purchase, ".and(withJoinFetches())"), purchase);
+
+        // A relation not marked is not fetched, and its service is as it was.
+        String coupon = generated(project, "CouponCoreService.java");
+        assertFalse(coupon.contains("withJoinFetches"), coupon);
     }
 
     @Test
-    public void theKotlinRunWarnsToo() throws Exception {
-        assertTrue(run("elcore-fetchjoin-kt", "kotlin", true).contains(WARNING));
+    public void theKotlinServiceFetchesItToo() throws Exception {
+        File project = run("elcore-fetchjoin-kt", "kotlin", true, "layered");
+        String purchase = generated(project, "PurchaseCoreService.kt");
+        assertTrue(purchase.contains("protected fun withJoinFetches(): Specification<Purchase> = Specification { root, query, _ ->"),
+                purchase);
+        assertTrue(purchase.contains("root.fetch<Purchase, Any>(\"customer\", jakarta.persistence.criteria.JoinType.LEFT)"),
+                purchase);
+        assertTrue(purchase.contains("toSpec(searchDTO).and(withJoinFetches())"), purchase);
+        assertFalse(generated(project, "CouponCoreService.kt").contains("withJoinFetches"));
     }
 
     @Test
-    public void theHexagonalRunWarnsToo() throws Exception {
-        // Hexagonal and DDD are v3 bundles: the same CoreService, the same missing fetch.
-        assertTrue(run("elcore-fetchjoin-hex", "java", true, "hexagonal").contains(WARNING));
+    public void theHexagonalServiceFetchesItToo() throws Exception {
+        // Hexagonal and DDD are v3 bundles: the same CoreService, searching through its port.
+        File project = run("elcore-fetchjoin-hex", "java", true, "hexagonal");
+        String purchase = generated(project, "PurchaseCoreService.java");
+        assertTrue(purchase.contains("root.fetch(\"customer\", jakarta.persistence.criteria.JoinType.LEFT);"), purchase);
+        assertTrue(purchase.contains(".and(withJoinFetches());"), purchase);
     }
 
     @Test
-    public void theCompatibleRunFetchesItAndSaysNothing() throws Exception {
-        String out = run("elcore-fetchjoin-compat", "java", false);
-        assertFalse(out.contains("is not fetched with"), out);
+    public void theRunNoLongerWarns() throws Exception {
+        // 3.0.261029 warned that the v3 service did not fetch; it does now.
+        File project = run("elcore-fetchjoin-quiet", "java", true, "layered");
+        assertFalse(lastOutput.contains("is not fetched with"), lastOutput);
+        assertTrue(project.isDirectory());
     }
 
-    /** Generates the model and returns what the run printed. */
-    private static String run(String name, String language, boolean v3) throws Exception {
-        return run(name, language, v3, "layered");
+    @Test
+    public void theCompatibleServiceStillFetchesIt() throws Exception {
+        File project = run("elcore-fetchjoin-compat", "java", false, "layered");
+        String purchase = generated(project, "PurchaseCoreService.java");
+        assertTrue(purchase.contains("root.fetch(\"customer\", JoinType.LEFT);"), purchase);
+        assertFalse(lastOutput.contains("is not fetched with"), lastOutput);
     }
 
-    private static String run(String name, String language, boolean v3, String architecture) throws Exception {
+    private static String lastOutput = "";
+
+    /** Generates the model; what the run printed is kept in lastOutput. */
+    private static File run(String name, String language, boolean v3, String architecture) throws Exception {
         File project = Files.createTempDirectory(name).toFile();
         projects.add(project);
         File dir = new File(project, "src/main/resources/blueprint/shop");
@@ -125,7 +156,22 @@ public class FetchJoinWarningTest {
                 else System.setProperty(keys[i], saved[i]);
             }
         }
-        return new String(printed.toByteArray(), StandardCharsets.UTF_8);
+        lastOutput = new String(printed.toByteArray(), StandardCharsets.UTF_8);
+        return project;
+    }
+
+    private static String generated(File project, String fileName) throws IOException {
+        try (Stream<Path> all = Files.walk(project.toPath())) {
+            Path found = all.filter(p -> p.getFileName().toString().equals(fileName)).findFirst().orElse(null);
+            assertTrue(found != null, "not generated: " + fileName + " in " + project);
+            return new String(Files.readAllBytes(found), StandardCharsets.UTF_8);
+        }
+    }
+
+    private static int count(String text, String part) {
+        int n = 0;
+        for (int at = text.indexOf(part); at >= 0; at = text.indexOf(part, at + 1)) n++;
+        return n;
     }
 
     private static void delete(File root) throws IOException {
