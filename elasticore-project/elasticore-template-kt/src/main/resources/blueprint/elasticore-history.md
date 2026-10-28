@@ -1,3 +1,15 @@
+## 3.0.261029
+
+### Build (릴리스 노트 - 영어)
+
+#### GitHub 릴리스의 노트는 영어 파일 `docs/releases/{version}.md`
+- 왜: Release 워크플로가 이 이력의 버전 섹션을 그대로 GitHub 릴리스 노트로 옮겨서, 공개 저장소의 릴리스가 모두 한글이었다
+- `release.yml` 은 `docs/releases/{version}.md` 를 노트로 쓰고, 이 이력(한글)은 링크로 덧붙인다. 태그의 버전에 그 파일이
+  없거나 비어 있으면 업로드하기 전에 멈춘다. `RELEASING.md` 의 2단계에 그 파일을 쓰는 일을 더했다
+- 이미 낸 다섯 릴리스(3.0.261015-alpha1 ~ 3.0.261028-rc3)의 영어 노트를 이 이력에서 옮겨 써서 GitHub 릴리스의 본문을
+  바꿨다
+- 관련 파일: `.github/workflows/release.yml`, `RELEASING.md`, `docs/releases/*.md`
+
 ## 3.0.261028-rc3
 
 **플러그인의 기본값이 3.0 코드가 된다**: 아무것도 선언하지 않은 레이어드 Java 프로젝트는 `jpa-springboot-v3` 로

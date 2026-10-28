@@ -30,6 +30,9 @@ as a pre-release. What is published:
      READMEs and the guides; the build refreshes the guides' copies in the template `blueprint/` folders)
    - the `## {version}` heading in `elasticore-history.md` - and its three copies in the template `blueprint/`
      folders, by hand: the build does not copy the history
+   - the English release notes, `docs/releases/{version}.md`: what the GitHub release shows. The history is written in
+     Korean, so the notes say in English what changed for a user - new features, changes, bug fixes - and the release
+     links the history for the rest. The workflow refuses a tag without them
 3. Push the branch, open its pull request and merge it once CI passes. Then tag the commit the merge made on `main` -
    the pull request names it - and push the tag; the workflow refuses a tag whose commit is on no branch:
    ```bash
@@ -39,7 +42,7 @@ as a pre-release. What is published:
    git push origin v3.0.261020
    ```
 4. The workflow waits for approval when the `release` environment asks for one. It stops unless the tag and both
-   versions in `gradle.properties` agree, the history has the section, and the commit is on `main` or a `release/*`
+   versions in `gradle.properties` agree, the history has the section, `docs/releases/{version}.md` exists, and the commit is on `main` or a `release/*`
    branch.
 5. Central validates the upload. By default the deployment then waits at
    [central.sonatype.com/publishing/deployments](https://central.sonatype.com/publishing/deployments): check it, then
