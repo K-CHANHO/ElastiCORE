@@ -108,6 +108,42 @@ public class JpaEntityAnnotationRules implements CodeRules {
         }
     }
 
+    /**
+     * The packages 2.x's entity template imports on demand. A line the DSL
+     * hands to the class as written - "@jpa:Where(clause = ...)",
+     * "@jpa:Inheritance(strategy = InheritanceType.JOINED)" - is opaque text
+     * written against them, with no telling which of their names it uses.
+     */
+    public static final java.util.List<String> NATIVE_LINE_PACKAGES = java.util.Collections.unmodifiableList(
+            java.util.Arrays.asList("jakarta.persistence", "org.hibernate.annotations"));
+
+    /**
+     * Annotations the DSL hands to the class as written - "@jpa:..." and the
+     * env.yml "@entity:..." mappings - after the rule-made ones, as the
+     * compatibility shell writes them too (JpaEntityClassRules). Left out,
+     * a soft-delete filter went away without a word.
+     */
+    @Rule(value = "v3-class-native-annotations", order = 7)
+    void nativeAnnotations(EntitySpec e) {
+        for (String line : e.nativeEntityAnnotationLines()) {
+            ctx(e).ensureClassAnnotation(AnnoCode.raw(String.format("native:%s", line), "%s", line));
+        }
+    }
+
+    /**
+     * The import lines a class carrying native annotation lines needs: the
+     * packages they are written against, on demand. Empty for any other
+     * class, whose import block stays the types it uses.
+     */
+    public static String nativeLineImports(EntitySpec e, Syntax syntax) {
+        if (e.nativeEntityAnnotationLines().isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (String pkg : NATIVE_LINE_PACKAGES) {
+            sb.append(syntax.importLine(pkg + ".*")).append('\n');
+        }
+        return sb.toString();
+    }
+
     private void classTable(SourceCode c, EntitySpec e) {
         AnnoCode table = AnnoCode.of("jakarta.persistence.Table").val("name", tableName(e));
         if (e.schema() != null && !e.schema().isEmpty()) {

@@ -1,7 +1,78 @@
 ## 3.0.261028
 
-Ossie 시맨틱 모델의 식을 Apache Ossie 가 새로 정한 형태로 내보낸다. 2.x 생성기와 `jpa-springboot` 번들의 출력은
-그대로다 - `ossie-export` 를 켠 프로젝트의 `semantic_model.yml` 만 바뀐다.
+rc2 를 도메인 9개짜리 프로젝트에 `elcore3`·`-Pv3` 로 적용하고, 같은 모델로 2.x 출력과 비교하며 찾은 차이를 고쳤다.
+2.x 생성기의 출력은 그대로다. `jpa-springboot` 번들은 2.x 와 달랐던 두 곳(선언한 검색 DTO 의 필수 연관, AI 도구 설명)이 2.x 와
+같아졌다. 네 차이 모두 호환성 검사가 비교하는 템플릿 모델 밖이었으므로, CI 가 보지 않던 것을 더 찾아 막았다(생성된
+TypeScript 의 컴파일, 빌드가 쓰는 `blueprint/` 파일). Ossie 시맨틱 모델의 식은 Apache Ossie 가 새로 정한 형태로
+내보낸다 - `ossie-export` 를 켠 프로젝트의 `semantic_model.yml` 만 바뀐다.
+
+### Bug Fixes (엔티티 - DSL 이 클래스에 준 어노테이션)
+
+#### `-Pv3`·Kotlin 엔티티가 클래스의 `@jpa:` 어노테이션을 버리던 것 - soft-delete 필터가 사라졌다
+
+```yaml
+LifecycleEntity:
+  meta: entity @abstract @jpa:Where(clause = "delete_yn = 'N'")
+```
+
+- 엔티티 `meta` 에 적은 `@jpa:...`(그리고 env.yml `annotations` 의 `@entity:...` 매핑)는 클래스에 적은 그대로 붙는다.
+  호환 출력은 2.x 처럼 그렇게 썼지만 `-Pv3`·DDD·헥사고날과 Kotlin 엔티티에서는 경고 없이 빠졌다. 컴파일도 테스트도
+  통과하는데, `@Where` 가 빠진 soft-delete 엔티티는 지운 행을 모든 조회에 다시 돌려준다.
+- 이제 v3 와 Kotlin 엔티티도 규칙이 만든 클래스 어노테이션 뒤에 그 줄을 쓴다.
+- 그 줄은 2.x 엔티티 템플릿이 on-demand 로 import 하는 `jakarta.persistence`·`org.hibernate.annotations` 를 기대고 쓴
+  글자 그대로라, 어느 이름을 쓰는지 알 수 없다. 그래서 그런 줄이 있는 엔티티는 두 패키지를 `*` 로 import 한다. 그런 줄이
+  없는 엔티티의 출력은 그대로다.
+- Kotlin 은 필드의 `@jpa:` 처럼 줄을 그대로 쓴다. `X.class` 같은 Java 문법은 Kotlin 문법(`X::class`)으로 적어야 한다.
+
+### Bug Fixes (검색 DTO - 선언한 검색 DTO 의 필수 연관)
+
+#### 선언한 검색 DTO 가 필수(`!`) 연관의 검색 프로퍼티를 버리던 것 - 그 연관으로 하던 검색의 조건이 사라졌다
+
+```yaml
+Sale:
+  fields:
+    insurer: Company! @search(eq)
+SaleSrchDTO:
+  meta: dto @searchable(entity=Sale, pageable=true)
+```
+
+- `dto:` 로 선언한 검색 DTO 는 엔티티의 `@search(eq)` 연관을 같음 조건 프로퍼티(`private Company insurer;`)와 `toSpec`
+  조건으로 갖는다. 2.x 는 필수 여부·도메인과 상관없이 그렇게 쓰는데, 호환 출력과 `-Pv3` 는 필수(`!`) 연관을 뺐다.
+  컴파일은 되고, `{"insurer": {"id": ...}}` 로 하던 검색의 조건만 빠진다.
+- 이제 2.x 처럼 남긴다. 선언 없이 엔티티의 `@search` 에서 만든 검색 DTO 는 2.x 와 같이 평탄화 id 만 갖고, 바뀌지 않는다.
+
+### Bug Fixes (AI 확장 서비스 - 도구 설명의 엔티티 이름)
+
+#### `supportAI` 도메인의 `@Tool` 설명이 라벨만 쓰던 것 - 엔티티 이름이 빠졌다
+
+```yaml
+Accident:
+  meta: entity @expose -- 사고
+```
+
+- `supportAI: true` 도메인의 확장 서비스(`AccidentService`)는 서비스 메서드를 Spring AI 도구로 내보낸다. 2.x 는 도구 설명에
+  엔티티 이름을 쓰고 라벨을 괄호로 곁들인다: `"Retrieves all Accident (사고) records without sorting"`. 규칙엔진은 라벨만
+  썼다(`"Retrieves all 사고 records ..."`). 모델이 요청을 도구에 잇는 단서인 이름이 빠졌다.
+- 이제 호환·`-Pv3`·Kotlin 모두 2.x 처럼 `이름 (라벨)` 로 쓴다. 라벨이 없는 엔티티는 이름만 쓰고, 바뀌지 않는다.
+- 확장 서비스는 처음 한 번 생성하는 파일이다. 손대지 않은 파일은 다음 생성 때 새 설명으로 다시 쓰이고, 손댄 파일은 그대로다.
+
+### Bug Fixes (TypeScript - 검색 DTO 의 연관)
+
+#### TypeScript 검색 DTO 가 생성되지 않는 엔티티 타입을 import 하던 것 - 클라이언트가 컴파일되지 않았다
+
+```yaml
+Sale:
+  fields:
+    insurer: Company @search(eq)
+SaleSrchDTO:
+  meta: dto @searchable(entity=Sale, pageable=true)
+```
+
+- Java 검색 DTO 의 연관은 엔티티 타입(`private Company insurer;`)이고, 검색은 그 키만 보낸다: `{"insurer": {"id": "C1"}}`.
+  TypeScript 검색 DTO 는 같은 타입으로 `insurer?: Company` 와 `import { Company } from './Company'` 를 썼는데,
+  `elcore3ts` 는 엔티티를 쓰지 않으므로 그 모듈이 없어 `tsc` 가 TS2307 로 멈췄다.
+- 이제 그 프로퍼티는 엔티티 키의 모양이다: `insurer?: { id: string }`. 키가 여럿이면 모두 담는다. 열거형과 DTO 는 전처럼
+  import 한다.
 
 ### Changes (Ossie 내보내기 - 식의 형태)
 
