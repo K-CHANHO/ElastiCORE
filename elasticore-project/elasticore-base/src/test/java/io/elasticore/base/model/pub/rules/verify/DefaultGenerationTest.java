@@ -189,6 +189,39 @@ public class DefaultGenerationTest {
     }
 
     @Test
+    public void aMongoDomainIsRefusedNotWrittenAsJpa() throws Exception {
+        // mode: mongo is MongoDB code, which only the 2.x generator writes. The
+        // rule engine read no mode at all: the 3.0 default wrote JPA entities,
+        // repositories and services for a MongoDB domain without a word.
+        File project = project(null, "mongo");
+        System.setProperty("elasticore.base.path", project.getAbsolutePath());
+        System.setProperty("elasticore.rules.force", "true");
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        PrintStream out = System.out;
+        System.setOut(new PrintStream(bytes, true, "UTF-8"));
+        int code;
+        try {
+            code = RulesGenRunner.run(new String[0]);
+        } finally {
+            System.setOut(out);
+        }
+        String log = new String(bytes.toByteArray(), StandardCharsets.UTF_8);
+        assertEquals(1, code, log);
+        assertTrue(log.contains("mode: mongo"), log);
+        assertNull(find(project, "Note.java"), "JPA code was written for a MongoDB domain: " + log);
+    }
+
+    @Test
+    public void aDiagramModeBesideJpaIsSaidNotDropped() throws Exception {
+        // uml and dsl are documents the 2.x generator writes beside the code;
+        // the rule engine writes the code and says what it leaves out.
+        File project = project(null, "jpa,uml");
+        String log = run(project);
+        assertTrue(log.contains("mode uml"), log);
+        assertNotNull(find(project, "Note.java"), log);
+    }
+
+    @Test
     public void theMarkerIsReadAsTheGeneratorWroteIt() throws Exception {
         File project = project(null);
         List<String> roots = new ArrayList<String>();
@@ -244,6 +277,10 @@ public class DefaultGenerationTest {
     }
 
     private File project(String rules) throws IOException {
+        return project(rules, "jpa");
+    }
+
+    private File project(String rules, String mode) throws IOException {
         File dir = Files.createTempDirectory("elcore-default").toFile();
         projects.add(dir);
         File blueprint = new File(dir, "src/main/resources/blueprint/dgshop");
@@ -254,7 +291,7 @@ public class DefaultGenerationTest {
         env.add("  config:");
         env.add("    domainName: dgshop");
         env.add("    framework: springboot");
-        env.add("    mode: jpa");
+        env.add("    mode: " + mode);
         env.add("    j2ee: jakarta");
         if (rules != null) {
             env.add("    publisher:");
