@@ -9,7 +9,7 @@ plugins {
 }
 
 // This module is the golden tree: what it generates must equal what 2.x
-// generated, byte for byte. Since 3.0.261028 a build that says nothing gets
+// generated, byte for byte. Since 3.0.261028-rc3 a build that says nothing gets
 // the 3.0 code, so it says what every project keeping 2.x's code says:
 // output = 'v2' - the build then runs the 2.x generator, and elcore3 run here
 // by hand writes the 2.x-compatible code that elcoreRulesCheck compares.
@@ -201,7 +201,7 @@ task elcoreTreeGenerate(type: JavaExec) {
 	mainClass = 'io.elasticore.base.model.pub.rules.verify.RulesGenRunner'
 	systemProperty 'elasticore.base.path', treeCheckRoot.absolutePath
 	// The 2.x-compatible code, which is what 2.x's tree is compared with -
-	// not the default, which is the 3.0 code since 3.0.261028.
+	// not the default, which is the 3.0 code since 3.0.261028-rc3.
 	systemProperty 'elasticore.rules.v2', 'true'
 	jvmArgs '-Dfile.encoding=UTF-8'
 	outputs.upToDateWhen { false }

@@ -275,7 +275,7 @@ public class ElastiCorePluginTest {
 
         // Gradle is otherwise free to compile the previous tree, whose symptom
         // is a compile error in generated code that no longer matches the
-        // model and whose cause is invisible from there. Since 3.0.261028 a
+        // model and whose cause is invisible from there. Since 3.0.261028-rc3 a
         // build that declares nothing is on the rule engine: ":elcore3
         // SKIPPED", and not the 2.x generator - ":elcore SKIPPED" exactly,
         // since the loose ":elcore" is also satisfied by :elcore3.

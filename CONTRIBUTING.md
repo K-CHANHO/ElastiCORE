@@ -82,7 +82,7 @@ and are registered in `RuleCatalog`.
 1. **Keep the 2.x code where it was.** A project that keeps 2.x's code
    (`output = 'v2'`, the template's setting) must generate exactly what it
    generated before; that is what the compatibility gate enforces. The 3.0
-   code - the default since 3.0.261028 - may change before 3.0 is released,
+   code - the default since 3.0.261028-rc3 - may change before 3.0 is released,
    with the reason in the history; a new behaviour there is still switched on
    by the DSL or a setting rather than by default where a project could be
    surprised by it.

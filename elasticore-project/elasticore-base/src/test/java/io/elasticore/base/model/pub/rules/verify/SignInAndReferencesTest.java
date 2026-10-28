@@ -1231,7 +1231,7 @@ public class SignInAndReferencesTest {
             System.clearProperty("elasticore.architecture");
             System.clearProperty("elasticore.language");
             System.setProperty("elasticore.rules.force", "true");
-            // The 2.x-compatible code is chosen since 3.0.261028: output = 'v2'.
+            // The 2.x-compatible code is chosen since 3.0.261028-rc3: output = 'v2'.
             System.setProperty("elasticore.rules.v2", "true");
             RulesGenRunner.run(new String[0]);
         } finally {

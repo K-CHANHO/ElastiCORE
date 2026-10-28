@@ -173,7 +173,7 @@ public class RequiredReferenceDtoTest {
     @Test
     public void theCompatibleModeAnd2xKeepRequiringTheNestedObject() throws Exception {
         Path compatible = project("compatible", BOARD, env2x());
-        // Layered Java is the v3 code by default since 3.0.261028; the
+        // Layered Java is the v3 code by default since 3.0.261028-rc3; the
         // 2.x-compatible code is asked for, as output = 'v2' asks.
         generate(compatible, RulesGenRunner.class.getName(), "-Delasticore.architecture=layered",
                 "-Delasticore.language=java", "-Delasticore.springBoot=4.0.8", "-Delasticore.rules.v2=true");

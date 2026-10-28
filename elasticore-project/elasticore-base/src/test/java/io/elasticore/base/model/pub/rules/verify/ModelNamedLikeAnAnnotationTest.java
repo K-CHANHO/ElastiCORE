@@ -81,7 +81,7 @@ public class ModelNamedLikeAnAnnotationTest {
         assertNoSimpleComment(project);
     }
 
-    /** Layered Java is the v3 code since 3.0.261028; the 2.x-compatible code is asked for, and checked too. */
+    /** Layered Java is the v3 code since 3.0.261028-rc3; the 2.x-compatible code is asked for, and checked too. */
     @Test
     public void theRuleEngineWritesItInFullOnLayeredJavaKeeping2x() throws Exception {
         Path project = project("layered-v2", BOARD, env3());

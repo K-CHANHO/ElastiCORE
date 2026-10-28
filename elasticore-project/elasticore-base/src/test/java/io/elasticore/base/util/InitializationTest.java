@@ -127,7 +127,7 @@ public class InitializationTest {
 
         // The wizard asks once. Everything after that is somebody reading
         // their own env.yml, so the choice has to still be visible in it.
-        // The other two architectures, and since 3.0.261028, when layered Java
+        // The other two architectures, and since 3.0.261028-rc3, when layered Java
         // became the v3 bundle, the code 2.x generates.
         assertEquals(3, countOf(env, "      #rules: ["),
                 "the other two architectures and 2.x's code are not offered in the generated file:" + nl() + env);
@@ -166,7 +166,7 @@ public class InitializationTest {
     @Test
     @DisplayName("a layered project is told to run the rule engine its env.yml now names")
     public void theLayeredSetupRunsTheRuleEngine() throws Exception {
-        // Since 3.0.261028 the layered env.yml names jpa-springboot-v3. The
+        // Since 3.0.261028-rc3 the layered env.yml names jpa-springboot-v3. The
         // setup used to say "run ./gradlew elcore again" - the 2.x generator,
         // which reads no bundle - so the project got 2.x's code under an
         // env.yml that said otherwise.

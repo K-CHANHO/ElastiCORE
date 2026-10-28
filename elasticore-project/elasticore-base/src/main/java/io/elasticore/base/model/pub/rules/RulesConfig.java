@@ -100,7 +100,7 @@ public final class RulesConfig {
                 return kotlin ? "hexagonal-springboot-kt" : "hexagonal-springboot";
             case LAYERED:
             default:
-                // Layered Java is the v3 bundle since 3.0.261028; the code 2.x
+                // Layered Java is the v3 bundle since 3.0.261028-rc3; the code 2.x
                 // generates (DEFAULT_BUNDLE) is chosen, not defaulted to.
                 return kotlin ? DEFAULT_BUNDLE_KT : DEFAULT_BUNDLE_V3;
         }

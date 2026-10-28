@@ -33,7 +33,7 @@ import java.util.Map;
  *   ./gradlew elcore3 [-Pdomain=content] [-Pv3|-Pv2] [-Pforce]
  *
  * Modes (layered Java; DDD, hexagonal and Kotlin are always v3):
- *   default : v3 since 3.0.261028 - the v3 templates (used-imports only,
+ *   default : v3 since 3.0.261028-rc3 - the v3 templates (used-imports only,
  *             rule-emitted class annotations, per-entity method selection);
  *             a project that chose nothing and holds code 2.x generated is
  *             stopped instead (twoXGenerated)
@@ -136,7 +136,7 @@ public final class RulesGenRunner {
     /**
      * The first domain whose env.yml names the 2.x bundle, jpa-springboot -
      * the initialization wizard wrote it for a layered Java domain before
-     * 3.0.261028 - as a line for the log, or null.
+     * 3.0.261028-rc3 - as a line for the log, or null.
      */
     static String domainKeepingTwoX(List<ECoreModel> models) {
         if (models == null) return null;
@@ -346,7 +346,7 @@ public final class RulesGenRunner {
 
         // The generation the build chose: -Pv3 / output = 'v3', or -Pv2 /
         // output = 'v2' for the code 2.x generates. Neither is the default -
-        // the 3.0 code since 3.0.261028 - decided once the model is read.
+        // the 3.0 code since 3.0.261028-rc3 - decided once the model is read.
         boolean v3Asked = Boolean.getBoolean("elasticore.rules.v3");
         boolean v2Asked = Boolean.getBoolean("elasticore.rules.v2");
         if (v3Asked && v2Asked) {
@@ -440,7 +440,7 @@ public final class RulesGenRunner {
         // The generation, where the build chose none. A domain that names a
         // v3 bundle in its env.yml gets v3, one that names the 2.x bundle
         // (jpa-springboot) keeps 2.x's code - the rule names say what they
-        // need. Otherwise the 3.0 code, the default since 3.0.261028; but not
+        // need. Otherwise the 3.0 code, the default since 3.0.261028-rc3; but not
         // over a project that holds what 2.x generated: an upgrade that
         // rewrote its sources, and changed how its search and its refusals
         // behave, without the project asking, is stopped and the choice put
@@ -482,7 +482,7 @@ public final class RulesGenRunner {
             } else if ((twoX != null || lastRun != null) && !typescript && !listing) {
                 io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] This project holds the code 2.x generates ("
                         + (twoX != null ? twoX : "the last run of elcore3 wrote it: build/elasticore/server.mode")
-                        + "). Since 3.0.261028 the generator writes the 3.0 code unless told otherwise,"
+                        + "). Since 3.0.261028-rc3 the generator writes the 3.0 code unless told otherwise,"
                         + " which would rewrite these sources and change how search, refusals and access behave."
                         + " Choose in build.gradle: elasticore { output = 'v2' } keeps the 2.x code;"
                         + " elasticore { output = 'v3' } moves to the 3.0 code - see elasticore-migration-guide.md."

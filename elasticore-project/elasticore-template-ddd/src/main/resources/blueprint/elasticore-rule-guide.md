@@ -1583,7 +1583,7 @@ pluginManagement {
 
 ```gradle
 plugins {
-    id 'io.elasticore' version '3.0.261027-rc2'
+    id 'io.elasticore' version '3.0.261028-rc3'
 }
 
 elasticore {
@@ -1621,7 +1621,7 @@ elasticore {
 
 #### 어느 세대의 코드인가 (`output`)
 
-3.0.261028 부터 플러그인은 아무것도 선언하지 않은 레이어드 Java 프로젝트에 **3.0 코드**(`jpa-springboot-v3`)를
+3.0.261028-rc3 부터 플러그인은 아무것도 선언하지 않은 레이어드 Java 프로젝트에 **3.0 코드**(`jpa-springboot-v3`)를
 생성합니다. 2.x 생성기가 쓰던 코드를 유지하는 프로젝트는 한 줄로 정합니다:
 
 ```gradle
@@ -1635,7 +1635,7 @@ elasticore {
 | 없음 | 3.0 코드. 단 2.x 가 생성한 소스(첫 줄 `//ecd:..._V1.x`/`_V2.x`)가 있거나 마지막 `elcore3` 실행이 2.x 호환이었으면(`build/elasticore/server.mode`) **아무 소스도 쓰지 않고 멈추고** 고르라고 알립니다 |
 | `output = 'v3'` / `-Pv3` | 3.0 코드 (2.x 소스가 있어도 - 옮기겠다는 선택) |
 | `output = 'v2'` / `-Pv2` | 2.x 코드. 레이어드 Java 만 됩니다 - 헥사고날·DDD·Kotlin·프로젝트 규칙과 함께 쓰거나, 도메인 `env.yml` 이 v3 에만 있는 규칙(`jpa-springboot-v3`, `ddd-...` 등)을 적고 있으면 거절합니다 |
-| 도메인 `env.yml` 의 `publisher.rules: [jpa-springboot]` | 2.x 코드 (3.0.261028 전의 초기화 마법사가 레이어드 Java 에 적던 값) |
+| 도메인 `env.yml` 의 `publisher.rules: [jpa-springboot]` | 2.x 코드 (3.0.261028-rc3 전의 초기화 마법사가 레이어드 Java 에 적던 값) |
 
 `-Pv2`·`-Pv3` 는 그 한 번의 실행만 정합니다. 매번 적는 것을 잊으면 다른 코드가 생성되므로, 프로젝트의 선택은
 `output` 으로 적습니다. 3.0 코드로 옮길 때 달라지는 동작은 `elasticore-migration-guide.md` 에 있습니다.

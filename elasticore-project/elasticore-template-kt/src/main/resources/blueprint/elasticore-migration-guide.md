@@ -7,7 +7,7 @@
 
 ```gradle
 - implementation      'io.elasticore:elasticore-base:2.2.260703'
-+ implementation      'io.elasticore:elasticore-base:3.0.261027-rc2'
++ implementation      'io.elasticore:elasticore-base:3.0.261028-rc3'
 ```
 
 **생성되는 소스 코드는 바뀌지 않습니다** - 2.x 의 결함을 고친 몇 곳만 다르고, 그 목록은
@@ -17,7 +17,7 @@ TypeScript)은 선언해야 켜집니다.
 
 ### Gradle 플러그인(`id 'io.elasticore'`)으로 옮긴다면: `output = 'v2'`
 
-3.0.261028 부터 플러그인은 **아무것도 선언하지 않으면 3.0 코드**(레이어드 Java 의 v3 번들)를
+3.0.261028-rc3 부터 플러그인은 **아무것도 선언하지 않으면 3.0 코드**(레이어드 Java 의 v3 번들)를
 생성합니다. 2.x 코드를 그대로 유지하려면 한 줄을 적습니다:
 
 ```gradle
@@ -30,7 +30,7 @@ elasticore {
 (`build/elasticore/server.mode`)을 찾아 **아무 소스도 쓰지 않고 멈춥니다** - 버전만 올렸는데 소스 수백 개가 다시 쓰이고 검색·거절 응답·접근 검사의 동작이 바뀌는
 일을 막기 위해서입니다. 메시지대로 `output = 'v2'`(유지) 나 `output = 'v3'`(3.0 코드로 이동) 중 하나를
 적으면 됩니다. 한 번만 실행할 때는 `-Pv2` / `-Pv3` 도 됩니다. 도메인의 `env.yml` 이
-`publisher.rules: [jpa-springboot]` 를 적고 있으면(3.0.261028 전의 초기화 마법사가 레이어드 Java 에
+`publisher.rules: [jpa-springboot]` 를 적고 있으면(3.0.261028-rc3 전의 초기화 마법사가 레이어드 Java 에
 적던 값) 그 프로젝트도 2.x 코드를 유지합니다.
 
 3.0 코드로 옮기면 달라지는 동작은 아래 "3.0 기능을 쓰고 싶다면" 과 `elasticore-history.md` 에 있습니다.
@@ -96,7 +96,7 @@ IDE 가 생성된 컨트롤러의 호출부에 raw type 경고를 표시하던 �
 | 번들 | 내용 |
 |---|---|
 | `jpa-springboot` | 2.x 와 같은 코드 (`output = 'v2'` 와 같음) |
-| `jpa-springboot-v3` | 레이어드 Java 의 3.0 코드 - 플러그인의 기본값 (3.0.261028 부터) |
+| `jpa-springboot-v3` | 레이어드 Java 의 3.0 코드 - 플러그인의 기본값 (3.0.261028-rc3 부터) |
 | `ddd-springboot` | 집합체 경계, 불변식, 도메인 이벤트, 값 객체 |
 | `hexagonal-springboot` | 위 + 인바운드 포트, 헥사고날 패키지 배치 |
 | `*-kt` | 위 셋의 Kotlin 판 |

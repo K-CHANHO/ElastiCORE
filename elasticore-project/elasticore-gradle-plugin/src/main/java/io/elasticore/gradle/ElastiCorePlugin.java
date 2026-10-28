@@ -165,7 +165,7 @@ public class ElastiCorePlugin implements Plugin<Project> {
     /**
      * Whether this build keeps the code 2.x generates: {@code output = 'v2'}.
      *
-     * Since 3.0.261028 a build that says nothing is on the rule engine, as one
+     * Since 3.0.261028-rc3 a build that says nothing is on the rule engine, as one
      * declaring an architecture always was. The 2.x code is a choice, and one
      * that cannot be combined with what only the rule engine reads - a domain
      * model, a hexagon, Kotlin, the project's own rule sets - which would
