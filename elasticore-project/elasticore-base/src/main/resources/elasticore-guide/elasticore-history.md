@@ -1,7 +1,7 @@
 ## 3.0.261028
 
 rc2 를 도메인 9개짜리 프로젝트에 `elcore3`·`-Pv3` 로 적용하고, 같은 모델로 2.x 출력과 비교하며 찾은 차이를 고쳤다.
-2.x 생성기와 `jpa-springboot` 번들의 출력은 그대로다.
+2.x 생성기의 출력은 그대로다. `jpa-springboot` 번들은 2.x 와 달랐던 한 곳(선언한 검색 DTO 의 필수 연관)이 2.x 와 같아졌다.
 
 ### Bug Fixes (엔티티 - DSL 이 클래스에 준 어노테이션)
 
@@ -20,6 +20,23 @@ LifecycleEntity:
   글자 그대로라, 어느 이름을 쓰는지 알 수 없다. 그래서 그런 줄이 있는 엔티티는 두 패키지를 `*` 로 import 한다. 그런 줄이
   없는 엔티티의 출력은 그대로다.
 - Kotlin 은 필드의 `@jpa:` 처럼 줄을 그대로 쓴다. `X.class` 같은 Java 문법은 Kotlin 문법(`X::class`)으로 적어야 한다.
+
+### Bug Fixes (검색 DTO - 선언한 검색 DTO 의 필수 연관)
+
+#### 선언한 검색 DTO 가 필수(`!`) 연관의 검색 프로퍼티를 버리던 것 - 그 연관으로 하던 검색의 조건이 사라졌다
+
+```yaml
+Sale:
+  fields:
+    insurer: Company! @search(eq)
+SaleSrchDTO:
+  meta: dto @searchable(entity=Sale, pageable=true)
+```
+
+- `dto:` 로 선언한 검색 DTO 는 엔티티의 `@search(eq)` 연관을 같음 조건 프로퍼티(`private Company insurer;`)와 `toSpec`
+  조건으로 갖는다. 2.x 는 필수 여부·도메인과 상관없이 그렇게 쓰는데, 호환 출력과 `-Pv3` 는 필수(`!`) 연관을 뺐다.
+  컴파일은 되고, `{"insurer": {"id": ...}}` 로 하던 검색의 조건만 빠진다.
+- 이제 2.x 처럼 남긴다. 선언 없이 엔티티의 `@search` 에서 만든 검색 DTO 는 2.x 와 같이 평탄화 id 만 갖고, 바뀌지 않는다.
 
 ## 3.0.261027-rc2
 

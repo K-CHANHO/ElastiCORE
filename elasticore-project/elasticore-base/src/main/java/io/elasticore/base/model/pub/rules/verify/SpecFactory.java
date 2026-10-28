@@ -594,9 +594,12 @@ public final class SpecFactory {
                 // A field still typed as an entity has no place in a DTO: the
                 // relation is carried by the counterpart's DTO and by the
                 // flattened id, both added when the deferral was resolved.
-                // The search DTO is the exception: an optional relation stays
-                // as an equality property, while a required one searches only
-                // through its flattened id - which is what 2.x emits.
+                // The search DTO is the exception: a relation it carries stays
+                // as an equality property beside the flattened id, required
+                // or not - which is what 2.x emits for a declared
+                // @searchable DTO. (One derived from the entity's @search
+                // carries the flattened id alone; its fields never name an
+                // entity here.)
                 if (namesAnEntity(f, model)) {
                     // A value object travels whole: it is immutable, has no
                     // identity and no relation to follow, so the DTO can carry
@@ -610,7 +613,6 @@ public final class SpecFactory {
                     }
                     if (!searchable) continue;
                     if (f.getTypeInfo().isList()) continue;
-                    if (f.hasAnnotation(EntityAnnotation.NOT_NULL)) continue;
                 }
                 // A named model type the context cannot serve is dropped, as
                 // isEnableInDTO drops it: a relation whose counterpart has no
