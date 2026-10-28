@@ -155,7 +155,7 @@ plugin's version, `./gradlew elcore3ts` for the TypeScript client, or only some 
 ## Status
 
 **3.0 is in pre-release** ([on Maven Central](https://central.sonatype.com/artifact/io.elasticore/elasticore-base)).
-A project gets the 3.0 code unless it keeps 2.x's: `elasticore { output = 'v2' }` generates what 2.x generated, apart
+A project on the Gradle plugin gets the 3.0 code unless it keeps 2.x's: `elasticore { output = 'v2' }` generates what 2.x generated, apart
 from the bug fixes the history lists and, on Spring Boot 4, enums written for Jackson 3. A project that holds code 2.x
 generated and chose neither is stopped before anything is rewritten, with that choice to make
 ([migration guide](elasticore-project/elasticore-base/src/main/resources/elasticore-guide/elasticore-migration-guide.md)).

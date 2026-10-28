@@ -161,7 +161,9 @@ public final class RulesGenRunner {
      * that ran a 3.0 release candidate in the 2.x-compatible mode carries
      * "_V3.0" like any other and is not seen here - its env.yml names
      * jpa-springboot when the wizard wrote it (domainKeepingTwoX), and its
-     * last run is in build/elasticore/server.mode for the client.
+     * last run is in build/elasticore/server.mode, which generateAll reads
+     * too. A clean build deletes that file: such a project, cleaned and
+     * never told, is the one case left that gets the 3.0 code unasked.
      */
     static String twoXGenerated(java.util.Collection<String> roots) {
         for (String root : roots) {
@@ -420,7 +422,8 @@ public final class RulesGenRunner {
                 ? BlueprintLoader.loadModules(modulePaths)
                 : BlueprintLoader.load(basePath + "/src/main/resources/blueprint");
         if (loader.isEmpty()) {
-            System.out.println("[elcore3] no blueprint domain found");
+            System.out.println("[elcore3] no blueprint domain found - run ./gradlew elcore to create one,"
+                    + " or write src/main/resources/blueprint/<domain>/env.yml and model/ by hand");
             return 1;
         }
 
@@ -444,32 +447,50 @@ public final class RulesGenRunner {
         // to it instead.
         String why = v2Asked ? "-Pv2 / output = 'v2'" : v3Asked ? "-Pv3 / output = 'v3'"
                 : v3 ? "architecture " + declaredArchitecture : null;
+        // 2.x's code is the 2.x bundle on the 2.x templates. A rule that
+        // exists only in v3 - named by a domain, or the project's own rule
+        // sets - would be rendered on templates it was not written for, or,
+        // through the 2.x generator the build then runs, not at all.
+        if (v2Asked) {
+            String asking = domainAskingForV3(loader.allModels());
+            if (asking != null || !RulesConfig.addedRules().isEmpty()) {
+                io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] -Pv2 / output = 'v2' asks for the code 2.x"
+                        + " generates, but " + (asking != null ? asking : "the build adds rule sets of its own "
+                        + RulesConfig.addedRules()) + ", which only the 3.0 code carries - remove one or the other");
+                return 1;
+            }
+        }
         if (!v3 && !v2Asked && !kotlin) {
             String asking = domainAskingForV3(loader.allModels());
             String keeping = asking == null ? domainKeepingTwoX(loader.allModels()) : null;
             java.util.List<String> sourceRoots = new ArrayList<String>(loader.moduleRoots().values());
             if (sourceRoots.isEmpty()) sourceRoots.add(basePath);
             String twoX = asking == null && keeping == null ? twoXGenerated(sourceRoots) : null;
+            // A 3.0 pre-release that generated the 2.x-compatible code stamps
+            // its files _V3.0 like any other; what its run left in
+            // build/elasticore/server.mode is what says so.
+            String lastRun = null;
+            for (String root : sourceRoots) {
+                if ("compatible".equals(readText(serverMode(root)))) lastRun = root;
+            }
+            boolean listing = Boolean.getBoolean("elasticore.rules.list");
             if (asking != null) {
                 v3 = true;
                 why = asking;
             } else if (keeping != null) {
                 why = keeping;
-            } else if (twoX != null) {
-                if (!typescript) {
-                    io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] This project holds code 2.x generated ("
-                            + twoX + "). Since 3.0.261028 the generator writes the 3.0 code unless told otherwise,"
-                            + " which would rewrite these sources and change how search, refusals and access behave."
-                            + " Choose in build.gradle: elasticore { output = 'v2' } keeps the 2.x code;"
-                            + " elasticore { output = 'v3' } moves to the 3.0 code - see elasticore-migration-guide.md."
-                            + " No source was written.");
-                    return 1;
-                }
+            } else if ((twoX != null || lastRun != null) && !typescript && !listing) {
+                io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] This project holds the code 2.x generates ("
+                        + (twoX != null ? twoX : "the last run of elcore3 wrote it: build/elasticore/server.mode")
+                        + "). Since 3.0.261028 the generator writes the 3.0 code unless told otherwise,"
+                        + " which would rewrite these sources and change how search, refusals and access behave."
+                        + " Choose in build.gradle: elasticore { output = 'v2' } keeps the 2.x code;"
+                        + " elasticore { output = 'v3' } moves to the 3.0 code - see elasticore-migration-guide.md."
+                        + " No source was written.");
+                return 1;
+            } else if ((twoX != null || lastRun != null) && typescript) {
                 // A client of that server: the server is 2.x's until the project moves.
-                why = "the server holds code 2.x generated";
-            } else if (typescript && "compatible".equals(readText(serverMode(
-                    sourceRoots.get(0))))) {
-                why = "the server's last run";
+                why = twoX != null ? "the server holds code 2.x generated" : "the server's last run";
             } else {
                 v3 = true;
                 why = "the default";

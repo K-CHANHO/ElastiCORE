@@ -35,7 +35,7 @@ public class DefaultGenerationTest {
 
     private static final String[] KEYS = {"elasticore.base.path", "elasticore.architecture",
             "elasticore.language", "elasticore.rules.force", "elasticore.rules.v2", "elasticore.rules.v3",
-            "elasticore.rules.ts", "elasticore.rules.kt"};
+            "elasticore.rules.ts", "elasticore.rules.kt", "elasticore.publisher.rules.add", "elasticore.rules.list"};
 
     private static final String MODEL = String.join("\n",
             "entity:",
@@ -135,6 +135,57 @@ public class DefaultGenerationTest {
         String log = run(project, "elasticore.rules.v3");
         assertTrue(log.contains("mode      : v3 - -Pv3 / output = 'v3'"), log);
         assertV3(project, log);
+    }
+
+    @Test
+    public void v2IsNotAV3BundleADomainNames() throws Exception {
+        // What the wizard writes for layered Java since 3.0.261028, then output = 'v2'.
+        File project = project("jpa-springboot-v3");
+        System.setProperty("elasticore.base.path", project.getAbsolutePath());
+        System.setProperty("elasticore.rules.v2", "true");
+        assertEquals(1, RulesGenRunner.run(new String[0]));
+        assertNull(find(project, "Note.java"));
+    }
+
+    @Test
+    public void v2IsNotTheProjectsOwnRules() throws Exception {
+        File project = project(null);
+        System.setProperty("elasticore.base.path", project.getAbsolutePath());
+        System.setProperty("elasticore.rules.v2", "true");
+        System.setProperty("elasticore.publisher.rules.add", "ossie-export");
+        assertEquals(1, RulesGenRunner.run(new String[0]));
+    }
+
+    @Test
+    public void aLastRunInThe2xModeStopsTheDefaultToo() throws Exception {
+        // A 3.0 pre-release that generated the 2.x-compatible code stamps
+        // _V3.0; what it left in build/elasticore/server.mode says which.
+        File project = project(null);
+        File mode = new File(project, "build/elasticore/server.mode");
+        assertTrue(mode.getParentFile().mkdirs());
+        Files.write(mode.toPath(), "compatible".getBytes(StandardCharsets.UTF_8));
+        System.setProperty("elasticore.base.path", project.getAbsolutePath());
+        System.setProperty("elasticore.rules.force", "true");
+        assertEquals(1, RulesGenRunner.run(new String[0]));
+        assertNull(find(project, "Note.java"));
+    }
+
+    @Test
+    public void aClientOfA2xServerFollowsIt() throws Exception {
+        // The TypeScript client writes no Java: it is not stopped, it follows the server it has.
+        File project = project(null);
+        twoXFile(project);
+        String log = run(project, "elasticore.rules.ts");
+        assertTrue(log.contains("typescript, for a server in 2.x-compatible - the server holds code 2.x generated"), log);
+    }
+
+    @Test
+    public void aListingIsNotStopped() throws Exception {
+        // -PlistRules writes nothing, so there is nothing to protect.
+        File project = project(null);
+        twoXFile(project);
+        String log = run(project, "elasticore.rules.list");
+        assertFalse(log.contains("holds the code 2.x generates"), log);
     }
 
     @Test

@@ -282,7 +282,7 @@ The declarations also produce `blueprint/context-map.md`, a Mermaid context map.
 
 ### Status
 
-- **3.0 is in pre-release.** A project gets the 3.0 code unless it keeps 2.x's. What 2.x generated stays as it was
+- **3.0 is in pre-release.** A project on the Gradle plugin gets the 3.0 code unless it keeps 2.x's. What 2.x generated stays as it was
   for a project that keeps it, apart from the bug fixes the history lists and, on Spring Boot 4, enums written for
   Jackson 3: `elasticore { output = 'v2' }` runs 2.x's generator, whose output for the reference project is held to
   the committed tree, and the rule engine's `jpa-springboot` bundle (layered Java) is compared with it — both on every

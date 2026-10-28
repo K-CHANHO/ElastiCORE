@@ -461,7 +461,7 @@ elasticore-rule-guide.md:1535-1863  ## 9. 검증  [RulesVerifyRunner.ACCEPTED_DI
 elasticore-rule-guide.md:1567-1679  ### Gradle 플러그인 (권장)  [elcore, elcore3, compileJava, layered, RulesConfig]
 elasticore-rule-guide.md:1606-1615  #### 멀티 모듈
 elasticore-rule-guide.md:1617-1620  #### 기존 스위치
-elasticore-rule-guide.md:1622-1641  #### 어느 세대의 코드인가 (`output`)  [_V2.x]
+elasticore-rule-guide.md:1622-1641  #### 어느 세대의 코드인가 (`output`)  [_V2.x, elcore3]
 elasticore-rule-guide.md:1643-1665  #### TypeScript 클라이언트 (`elcore3ts`, `typescriptClient`)  [build, compileJava, elcore3, architecture, language, rules, webBuild, suppress]
 elasticore-rule-guide.md:1667-1679  #### 프로젝트의 규칙 더하기  [elasticore]
 elasticore-rule-guide.md:1681-1808  ### Apache Ossie 시맨틱 모델 내보내기 (`ossie-export`)  [name, billing_catalog_shop, @abstract, @embeddable, source, @table, table.prefix, description, @id, primary_key, @unique, @Index(unique="true"), unique_keys]
