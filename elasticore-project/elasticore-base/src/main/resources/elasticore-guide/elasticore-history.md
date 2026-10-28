@@ -26,6 +26,28 @@ Ossie 시맨틱 모델의 식을 Apache Ossie 가 새로 정한 형태로 내보
   `OssieSqlTest.java`, `MetricsTest.java`, `elasticore-rule-guide.md`(식의 형태 단락과 대응표), `dsl-guide.html`(펫스토어
   안내 페이지의 예, `guide/build_guide.py` 로 다시 생성)
 
+### Build (CI 가 보지 않던 것)
+
+#### 생성된 TypeScript 를 CI 가 컴파일하고, 빌드가 쓴 `blueprint/` 파일이 커밋된 것과 같은지 본다
+- 왜: 9개 도메인의 실제 프로젝트에 v3 를 적용해 2.x 와 다른 곳 네 군데가 나왔다(각각의 수정은 따로).
+  호환성 검사(`elcoreRulesCheck`, `elcoreTreeCheck`)는 템플릿 모델이 쓰는 것만 비교하므로 넷 모두 그 밖이었다. 같은 종류의
+  빈틈 두 개를 더 찾았다
+  - 펫스토어 `build.gradle` 은 "Node 가 있는 CI 작업이 `webBuild`(생성된 클라이언트와 화면의 `tsc`)를 돌린다" 고 적었지만
+    그런 단계는 없었다. 생성된 TypeScript 를 CI 가 컴파일하는 것은 Kotlin 샘플의 `elcore3tsVerify` 뿐이었고, 그마저 Node 가
+    없으면 건너뛰었다
+  - 3.0.261028 의 Ossie 변경이 규칙 가이드를 고친 뒤 세 템플릿의 `elasticore-guide-index.md` 를 다시 만들지 않아, 색인이
+    규칙 가이드를 `1-1909` 줄로, 그 뒤 절들도 옮겨지기 전의 줄 범위로 가리켰다. 빌드는 다시 만들지만 아무도 비교하지 않았다
+- `ci.yml` 에 두 단계를 더했다: 빌드 뒤 모든 샘플의 `src/main/resources/blueprint` 가 커밋된 것과 같아야 하고(가이드,
+  색인, Ossie 모델), `elcore3tsVerify -Pstrict`(Node 가 없으면 실패)와 펫스토어 `webBuild` 가 통과하고 펫스토어의 생성
+  클라이언트(`src/main/ts`)가 커밋된 것과 같아야 한다. 세 템플릿의 색인을 다시 만들어 커밋했다
+- `CONTRIBUTING.md` 에 세 가지를 적었다: 호환성 검사는 템플릿 모델이 선언한 것만 본다(건드린 기능이 거기 없으면 더한다),
+  "2.x 는 이렇게 생성한다" 는 2.x 로 생성해 본 뒤에만 쓴다(그렇지 않은 주석 하나가 네 차이 중 하나를 가렸다), 빌드가 쓰는
+  파일은 다시 만든 그대로 커밋한다. PR 템플릿의 체크리스트에도 같은 세 줄을 넣었다
+- 확인: 로컬에서 `elcore3tsVerify -Pstrict` 와 `webBuild` 통과(`tsc --noEmit`), 템플릿 셋을 다시 생성했을 때 바뀐 것은
+  세 색인뿐
+- 관련 파일: `.github/workflows/ci.yml`, `.github/PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`,
+  `elasticore-sample-petstore/build.gradle`, 세 템플릿의 `blueprint/elasticore-guide-index.md`
+
 ## 3.0.261027-rc2
 
 펫스토어에 팀 규칙 모듈(`elasticore { rules = [...] }`)을 붙여 rc1 로 생성·빌드·실행하며 규칙 가이드의 예제를 하나씩 다시
