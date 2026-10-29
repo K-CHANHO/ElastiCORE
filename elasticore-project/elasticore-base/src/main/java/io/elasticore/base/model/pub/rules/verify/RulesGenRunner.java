@@ -327,6 +327,12 @@ public final class RulesGenRunner {
         try {
             return generateAll(args);
         } finally {
+            // A run that ended on an exception has still written what it
+            // wrote: the cache follows the files (a no-op when it already has).
+            if (merging != null) {
+                merging.saveCache();
+                merging = null;
+            }
             io.elasticore.base.model.entity.BaseFieldType.ruleEngineTypes(false);
             // What this run said of its applications is not the next caller's.
             SpecFactory.applicationSignIns(-1, null);
@@ -602,6 +608,20 @@ public final class RulesGenRunner {
 
         RulesGenRunner runner = new RulesGenRunner(basePath, v3, force, kotlin, typescript);
         runner.moduleRoots = loader.moduleRoots();
+        // What was generated last, to merge the developer's edits against. One
+        // that cannot be read stops the run - without it an edited file can
+        // only be overwritten or left behind.
+        if (merges(v3, kotlin)) {
+            try {
+                runner.cache = GeneratedCache.load(new File(basePath));
+                merging = runner;
+            } catch (IOException e) {
+                io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] " + GeneratedCache.DIR + "/" + GeneratedCache.NAME
+                        + " cannot be read (" + e.getMessage() + ") - take it from git again;"
+                        + " deleting it keeps every generated file that differs from what is generated now");
+                return 1;
+            }
+        }
         List<ECoreModel> allModels = loader.allModels();
         runner.countSignIns(loader);
 
@@ -634,11 +654,14 @@ public final class RulesGenRunner {
                 }
             }
             if (io.elasticore.base.model.pub.rules.ModelCheck.failures().isEmpty()) runner.writeDdl();
+            runner.saveCache();
             io.elasticore.base.util.ConsoleLog.printStoredWarnLog("DSL_WARN", "  ");
             for (String f : io.elasticore.base.model.pub.rules.ModelCheck.failures()) {
                 io.elasticore.base.util.ConsoleLog.printWarn(f);
             }
-            return io.elasticore.base.model.pub.rules.ModelCheck.failures().isEmpty() ? 0 : 1;
+            // A schema left with conflict marks, or one that could not be written, is the build's answer too.
+            for (String n : runner.notes) System.out.println("  " + n);
+            return io.elasticore.base.model.pub.rules.ModelCheck.failures().isEmpty() && runner.succeeded() ? 0 : 1;
         }
 
         for (Map.Entry<String, ECoreModelContext> en : loader.contexts().entrySet()) {
@@ -661,7 +684,13 @@ public final class RulesGenRunner {
             runner.writeDdl();
             modelChecked = io.elasticore.base.model.pub.rules.ModelCheck.failures().isEmpty();
         }
-        if (domainFilter == null && runner.succeeded() && modelChecked) runner.removeStale();
+        if (domainFilter == null && runner.succeeded() && modelChecked) {
+            runner.removeStale();
+            runner.removeStaleMerged();
+        }
+        // Whatever else happened: the files this run wrote are on disk, and
+        // the next run merges against what it wrote into them.
+        runner.saveCache();
         if (domainFilter == null && runner.succeeded() && !modelChecked) {
             System.out.println("[elcore3] generated files the DSL no longer produces are kept until the model check passes");
         }
@@ -684,7 +713,7 @@ public final class RulesGenRunner {
         }
         if (!typescript && !Boolean.getBoolean("elasticore.rules.list")
                 && !Boolean.getBoolean("elasticore.rules.tsWithBuild")) {
-            String stale = staleClient(roots);
+            String stale = staleClient(roots, runner.cachedFiles());
             if (stale != null) io.elasticore.base.util.ConsoleLog.printWarn(stale);
         }
 
@@ -738,8 +767,13 @@ public final class RulesGenRunner {
      * it from. Null when there is none. Said once.
      */
     static String staleClient(java.util.List<String> roots) {
+        return staleClient(roots, java.util.Collections.<String>emptySet());
+    }
+
+    /** cached: the files .elasticore/cache holds, by absolute path - a merged client has no stamp. */
+    static String staleClient(java.util.List<String> roots, java.util.Set<String> cached) {
         for (String root : roots) {
-            if (!holdsGeneratedClient(root)) continue;
+            if (!holdsGeneratedClient(root, cached)) continue;
             if (modelDigest(root).equals(readStamp(root))) continue;
             return "[elcore3] " + new File(root, "src/main/ts").getPath() + " holds a generated TypeScript client"
                     + " made from an older model - run the elcore3ts task after a model change, or set"
@@ -748,11 +782,12 @@ public final class RulesGenRunner {
         return null;
     }
 
-    private static boolean holdsGeneratedClient(String root) {
+    private static boolean holdsGeneratedClient(String root, java.util.Set<String> cached) {
         File[] files = new File(root, "src/main/ts").listFiles();
         if (files == null) return false;
         for (File f : files) {
             if (!f.isFile() || !f.getName().endsWith(".ts")) continue;
+            if (cached.contains(absolute(f))) return true;
             try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(
                     new java.io.FileInputStream(f), StandardCharsets.UTF_8))) {
                 String first = r.readLine();
@@ -3666,6 +3701,11 @@ public final class RulesGenRunner {
                 io.elasticore.base.model.pub.rules.ErrorCatalog.recorded());
         File file = new File(rootFor(handler) + "/src/main/resources/i18n/" + domainName + "-messages.properties");
         String label = String.format("    %-12s %s", "messages", relative(file));
+        String key = cache != null ? cacheKey(file) : null;
+        if (key != null) {
+            writeMerged(label, file, key, text, true);
+            return;
+        }
         if (file.isFile()) {
             try {
                 String existing = new String(java.nio.file.Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
@@ -3702,6 +3742,19 @@ public final class RulesGenRunner {
             if (m.isEmpty()) continue;
             File file = new File(en.getKey() + "/src/main/resources/META-INF/orm.xml");
             String xml = m.toXml();
+            String key = cache != null ? cacheKey(file) : null;
+            if (key != null) {
+                // An orm.xml of the developer's own - not the generator's, not
+                // in the cache - keeps its place, and the mapping goes beside it.
+                if (file.isFile() && cache.get(key) == null && !ownOrmXml(file)) {
+                    file = new File(en.getKey() + "/src/main/resources/META-INF/elasticore-orm.xml");
+                    key = cacheKey(file);
+                    notes.add("META-INF/orm.xml is yours, so the mapping went to META-INF/elasticore-orm.xml:"
+                            + " add spring.jpa.mapping-resources=META-INF/elasticore-orm.xml");
+                }
+                writeMerged("  " + relative(file), file, key, xml, true);
+                continue;
+            }
             if (file.isFile()) {
                 String existing;
                 try {
@@ -3736,6 +3789,12 @@ public final class RulesGenRunner {
                 }
             }
         }
+    }
+
+    /** Whether an orm.xml is one this generator wrote: it says so in its comment. */
+    private static boolean ownOrmXml(File file) {
+        String text = readLf(file);
+        return text != null && text.contains("Generated by ElastiCORE (mapping: xml)");
     }
 
     /** Every file this run produced or considered, and the directories they are in. */
@@ -3867,6 +3926,246 @@ public final class RulesGenRunner {
         return p.startsWith(root + "/") ? p.substring(root.length() + 1) : p;
     }
 
+    /** What was generated last (elasticore.merge), or null when the project does not merge. */
+    private GeneratedCache cache;
+
+    /** The run of this JVM that holds a cache, for run() to save it whatever ends the run. */
+    private static RulesGenRunner merging;
+
+    /** The cache entries this run wrote or kept - the rest are stale after a whole run. */
+    private final java.util.Set<String> mergedKeys = new java.util.HashSet<String>();
+
+    /**
+     * Whether this run merges: the 3.0 code does unless the build said
+     * merge = false (elasticore.merge); the code 2.x generates keeps its
+     * stamps, and stays byte for byte what 2.x wrote, unless it was asked.
+     */
+    static boolean merges(boolean v3, boolean kotlin) {
+        String said = System.getProperty("elasticore.merge");
+        if (said == null || said.trim().isEmpty()) return v3 || kotlin;
+        return Boolean.parseBoolean(said.trim());
+    }
+
+    /**
+     * Whether a file is merged rather than stamped: every file but the Java
+     * and Kotlin sources, which keep their //ecd: line for now - the
+     * generate-once marker, the custom blocks and the 2.x detection read it.
+     */
+    private boolean merges(ArtifactTarget out) {
+        return cache != null && !"java".equals(out.extension()) && !"kt".equals(out.extension());
+    }
+
+    /**
+     * Whether a cache entry is this run's to call stale: the client run
+     * (TypeScript) and the server run write into one project and one cache,
+     * and neither produces the other's files.
+     */
+    private boolean ownsEntry(String key) {
+        return key.endsWith(".ts") == typescript;
+    }
+
+    /** The files the cache holds, by absolute path; empty when this run does not merge. */
+    private java.util.Set<String> cachedFiles() {
+        java.util.Set<String> files = new java.util.HashSet<String>();
+        if (cache == null) return files;
+        for (String key : cache.paths()) files.add(absolute(new File(projectRoot, key)));
+        return files;
+    }
+
+    private static String absolute(File f) {
+        return f.getAbsoluteFile().toPath().normalize().toString().replace('\\', '/');
+    }
+
+    /** The file's path in the cache: relative to the project, or null outside it. */
+    private String cacheKey(File file) {
+        String p = absolute(file);
+        String root = absolute(new File(projectRoot));
+        return p.startsWith(root + "/") ? p.substring(root.length() + 1) : null;
+    }
+
+    /**
+     * A generated file without a stamp, kept in step with the DSL and with
+     * whatever the developer wrote into it.
+     *
+     * The base is what this generator wrote into the file last time, from the
+     * cache. The developer's edits are what the file has and the base has
+     * not; the DSL's are what the new text has and the base has not. Both are
+     * kept - whatever kind of edit it was - unless they touch the same lines:
+     * then the file gets git's conflict marks and the run fails, as a merge
+     * would. The cache takes the new text either way, so the file, resolved,
+     * is the developer's against it.
+     */
+    private void writeMerged(String label, File file, String key, String content) {
+        writeMerged(label, file, key, content, false);
+    }
+
+    /**
+     * overwritten: a file the generator used to write over on every run
+     * (orm.xml, the messages) - on the project's first merging run, one it
+     * finds is its own last output, not something to leave alone. Once there
+     * is a cache, one it does not hold is treated as any other.
+     */
+    private void writeMerged(String label, File file, String key, String content, boolean overwritten) {
+        mergedKeys.add(key);
+        String generated = content.replace("\r\n", "\n");
+        String base = cache.get(key);
+        String disk = null;
+        if (file.isFile()) {
+            disk = readLf(file);
+            if (disk == null) {
+                failed++;
+                notes.add(key + ": cannot be read");
+                System.out.println(label + "  ERROR cannot read " + key);
+                return;
+            }
+        }
+        if (disk == null) {
+            if (writeLf(label, file, generated)) {
+                cache.put(key, generated);
+                wrote++;
+                System.out.println(label + "  WROTE");
+            }
+            return;
+        }
+        boolean stamped = false;
+        if (base == null) {
+            // Written before the project merged: the stamp says whether it is
+            // still what was generated then. That text is the base - custom
+            // blocks are left out of the hash, and are the developer's like any
+            // other edit - and the stamp goes with this run.
+            HashUtils.Response st = readStatus(file);
+            if (st != null && st.getStatus() == HashUtils.NO_MODIFIED && st.getPreSourceContent() != null) {
+                base = st.getPreSourceContent().replace("\r\n", "\n");
+                disk = disk.substring(disk.indexOf('\n') + 1);
+                stamped = true;
+            } else if (overwritten && !cache.existed()) {
+                // The first merging run: the file holds what the last run wrote over it.
+                base = disk;
+            } else if (!disk.equals(generated)) {
+                skipped++;
+                System.out.println(label + "  SKIP(not in the cache)");
+                notes.add("[elcore3] " + key + ": not in " + GeneratedCache.DIR + "/" + GeneratedCache.NAME
+                        + " - edited before merging was turned on, or not written by ElastiCORE - so what to merge"
+                        + " it with is not known; left as it is (delete it to have it generated)");
+                return;
+            }
+        }
+        // -Pforce does not reach here: builds leave it on to regenerate every
+        // run, which merging does anyway, and an edit is never thrown away by
+        // a setting. Deleting the file is how to have it generated afresh.
+        if (base == null || disk.equals(base)) {
+            if ((stamped || !disk.equals(generated)) && !writeLf(label, file, generated)) return;
+            cache.put(key, generated);
+            if (disk.equals(generated) && !stamped) {
+                unchanged++;
+                System.out.println(label + "  UNCHANGED");
+            } else {
+                wrote++;
+                System.out.println(label + "  WROTE");
+            }
+            return;
+        }
+        if (io.elasticore.base.util.ThreeWayMerge.hasConflictMarks(disk)) {
+            failed++;
+            String message = "[elcore3] " + key + " still has conflict marks (<<<<<<< yours) - resolve them first";
+            System.out.println(label + "  CONFLICT(unresolved)");
+            notes.add(message);
+            return;
+        }
+        if (disk.equals(generated) || base.equals(generated)) {
+            // The developer's text already is the new one, or the DSL did not
+            // change this file: nothing to write - but a stamp to take off.
+            if (stamped && !writeLf(label, file, disk)) return;
+            cache.put(key, generated);
+            unchanged++;
+            System.out.println(label + (disk.equals(generated) ? "  UNCHANGED" : "  UNCHANGED(your edits kept)"));
+            return;
+        }
+        io.elasticore.base.util.ThreeWayMerge.Result merged = io.elasticore.base.util.ThreeWayMerge.merge(base, disk, generated);
+        if (!writeLf(label, file, merged.text())) return;
+        cache.put(key, generated);
+        if (merged.conflicts() == 0) {
+            wrote++;
+            System.out.println(label + "  MERGED(your edits kept)");
+        } else {
+            failed++;
+            String message = "[elcore3] " + key + ": " + merged.conflicts() + " place(s) where your edits and the DSL's"
+                    + " change the same lines - marked <<<<<<< yours / >>>>>>> elasticore in the file; resolve them"
+                    + " and run again";
+            System.out.println(label + "  CONFLICT");
+            notes.add(message);
+        }
+    }
+
+    /**
+     * After a whole run: a merged file the DSL no longer produces is removed
+     * when it is still what was generated, and kept with a warning when the
+     * developer edited it - then it is theirs, and leaves the cache.
+     */
+    private void removeStaleMerged() {
+        if (cache == null) return;
+        int removed = 0;
+        for (String key : cache.paths()) {
+            if (mergedKeys.contains(key) || !ownsEntry(key)) continue;
+            File f = new File(projectRoot, key);
+            String disk = f.isFile() ? readLf(f) : null;
+            if (disk != null && disk.equals(cache.get(key))) {
+                if (!f.delete()) continue;
+                removed++;
+                System.out.println("  " + key + "  REMOVED(the DSL no longer produces it)");
+            } else if (disk != null) {
+                String message = "[elcore3] " + key + " was generated, the DSL no longer produces it,"
+                        + " and it has been edited - it is yours now; delete it, or move what you wrote.";
+                io.elasticore.base.util.ConsoleLog.printWarn(message);
+                notes.add(message);
+            }
+            cache.remove(key);
+        }
+        if (removed > 0) notes.add(removed + " merged file(s) the DSL no longer produces were removed.");
+    }
+
+    private void saveCache() {
+        if (cache == null) return;
+        try {
+            cache.save();
+        } catch (IOException e) {
+            failed++;
+            notes.add(cache.file() + " cannot be written: " + e.getMessage()
+                    + " - the next run merges against what it held before");
+        }
+    }
+
+    /** A file's text with LF line ends, or null when it cannot be read. */
+    private static String readLf(File file) {
+        try {
+            return new String(java.nio.file.Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8)
+                    .replace("\r\n", "\n");
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** LF text written with the line ends a stamped file would get, in UTF-8. */
+    private boolean writeLf(String label, File file, String text) {
+        File dir = file.getParentFile();
+        if (dir != null && !dir.exists() && !dir.mkdirs()) {
+            failed++;
+            notes.add(file + ": cannot create " + dir);
+            System.out.println(label + "  ERROR cannot create " + dir);
+            return false;
+        }
+        String eol = style.lineEnding() == null ? System.lineSeparator() : style.lineEnding();
+        try {
+            java.nio.file.Files.write(file.toPath(), text.replace("\n", eol).getBytes(StandardCharsets.UTF_8));
+            return true;
+        } catch (IOException e) {
+            failed++;
+            notes.add(file + ": " + e);
+            System.out.println(label + "  ERROR " + e.getMessage());
+            return false;
+        }
+    }
+
     private void write(String label, ArtifactTarget out, String rendered) {
         File file = new File(rootFor(out) + "/" + out.relativePath());
         remember(file);
@@ -3884,6 +4183,14 @@ public final class RulesGenRunner {
             content = orm(out).extract(content, out.packageName(), out.fileName(), kotlin);
         }
         if (xmlMapping()) content = movedQuery(out, content);
+
+        if (merges(out)) {
+            String key = cacheKey(file);
+            if (key != null) {
+                writeMerged(label, file, key, content);
+                return;
+            }
+        }
 
         HashUtils.Response st = null;
         if (file.isFile()) {

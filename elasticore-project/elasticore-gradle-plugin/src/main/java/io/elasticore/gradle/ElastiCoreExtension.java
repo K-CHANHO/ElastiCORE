@@ -110,6 +110,19 @@ public abstract class ElastiCoreExtension {
      */
     public abstract Property<Boolean> getTypescriptClient();
 
+    /**
+     * Whether a generated file the developer edited is merged with what the
+     * DSL now generates, rather than skipped. On by default for the 3.0 code;
+     * off for the code 2.x generates ({@code output = 'v2'}).
+     *
+     * What was generated last is kept in {@code .elasticore/cache}, committed
+     * with the project; a file is merged against it line by line, as git
+     * merges, and the lines both sides changed are marked as a conflict that
+     * stops the build. Every generated file but the Java and Kotlin sources,
+     * which keep their //ecd: line.
+     */
+    public abstract Property<Boolean> getMerge();
+
     /** The project's DDL (see {@link DdlSpec}); none unless said. */
     @org.gradle.api.tasks.Nested
     public abstract DdlSpec getDdl();
