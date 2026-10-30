@@ -491,6 +491,67 @@ public class GeneratedMergeTest {
     }
 
     @Test
+    public void theCustomBlocksOfATwoXFileComeIntoTheThreeZeroCodeWithoutAConflict() throws Exception {
+        // 2.x leaves a custom block out of the hash: a file with one where its developer put it - here
+        // in the middle of the class - is still what 2.x generated. The move to 3.0 changes the lines
+        // around it. The blocks are not merged as edits but put back where 2.x puts them on a rewrite:
+        // a block of imports under the package line, any other before the closing brace.
+        File project = project(CUSTOMER + ORDER, "jpa", "");
+        System.setProperty("elasticore.rules.v2", "true");
+        System.setProperty("elasticore.merge", "false");
+        run(project, 0);
+        try (Stream<Path> all = Files.walk(new File(project, "src/main/java").toPath())) {
+            for (Path p : (Iterable<Path>) all::iterator) {
+                if (!p.toString().endsWith(".java")) continue;
+                String s = read(p);
+                if (s.startsWith("//ecd:")) Files.write(p, s.replaceFirst("_V3\\.0", "_V2.2").getBytes(StandardCharsets.UTF_8));
+            }
+        }
+        Path dto = java(project, "PurchaseOrderDTO.java");
+        String[] lines = read(dto).split("\n", -1);
+        StringBuilder withBlocks = new StringBuilder();
+        boolean placed = false;
+        for (int i = 0; i < lines.length; i++) {
+            withBlocks.append(lines[i]);
+            if (i < lines.length - 1) withBlocks.append('\n');
+            if (i == 2) withBlocks.append("// !---------- imports\nimport java.util.UUID;\n// ------------!\n");
+            if (!placed && lines[i].trim().startsWith("private ")) {
+                // after the first field, as a developer would put it
+                withBlocks.append("    // !---------- mine\n    public String mine() { return \"mine\"; }\n"
+                        + "    // ------------!\n");
+                placed = true;
+            }
+        }
+        assertTrue(placed);
+        Files.write(dto, withBlocks.toString().getBytes(StandardCharsets.UTF_8));
+        String status = "";
+        try (java.io.Reader r = Files.newBufferedReader(dto, StandardCharsets.UTF_8)) {
+            status = String.valueOf(io.elasticore.base.util.HashUtils.checkContentModified(r).getStatus());
+        }
+        assertEquals(String.valueOf(io.elasticore.base.util.HashUtils.NO_MODIFIED), status, "the blocks are out of the hash");
+
+        System.clearProperty("elasticore.rules.v2");
+        System.setProperty("elasticore.rules.v3", "true");
+        System.clearProperty("elasticore.merge");
+        unsaid = true;
+        String log = run(project, 0);
+        String moved = read(dto);
+        assertFalse(log.contains("PurchaseOrderDTO.java  CONFLICT"), log + moved);
+        assertFalse(moved.contains("<<<<<<<"), moved);
+        assertFalse(moved.contains("//ecd:"), moved);
+        assertTrue(moved.contains("public String mine()") && moved.contains("import java.util.UUID;"), moved);
+        assertTrue(moved.indexOf("import java.util.UUID;") < moved.indexOf("class PurchaseOrderDTO"), moved);
+
+        // From now on the blocks are the developer's lines like any other: a model change merges around them.
+        model(project, CUSTOMER + ORDER + "      madeOn: date\n");
+        log = run(project, 0);
+        String next = read(dto);
+        assertFalse(log.contains("PurchaseOrderDTO.java  CONFLICT"), log + next);
+        assertTrue(next.contains("madeOn") && next.contains("public String mine()") && next.contains("import java.util.UUID;"),
+                log + next);
+    }
+
+    @Test
     public void everyKindOfGeneratedTextIsMerged() throws Exception {
         // The project DDL and the messages, edited, then the model changed.
         System.setProperty("elasticore.ddl.databases", "h2,postgresql");
