@@ -53,6 +53,51 @@ tests run as part of `build` through `elasticore-base:check`, and its artifact
 publishes alongside the framework's. If you change the plugin, `./gradlew
 build` at the root is enough to know.
 
+### The gates on the lines you write
+
+Many people and assistants change this code, so four more checks hold every
+pull request to the same bar. They look at **the lines your change adds or
+edits** - between the merge base with `origin/main` and your working tree, new
+files and uncommitted edits included - not at the code older than them:
+
+```bash
+./gradlew formatChanged     # formats your changed Java lines, and only those (palantir-java-format)
+./gradlew prCheck           # all four gates below
+```
+
+| Gate | Fails when | CI job |
+|---|---|---|
+| `formatCheck` | a changed Java line of the libraries, the plugin or the quality tools is not formatted | Format and static analysis of the change |
+| `diffErrorprone` | [Error Prone](https://errorprone.info/bugpatterns) reports a warning on a changed library line (an ERROR fails `build` anywhere) | Format and static analysis of the change |
+| `diffCoverage` | tests run less than 80% of the changed library lines - the samples' tests count for the runtime libraries | Build, test and compatibility checks |
+| `diffMutation` | tests detect less than 70% of PIT's mutations of the changed library lines they run | Mutation testing of the change |
+
+"The libraries" are `elasticore-base`, `elasticore-springboot3` and
+`elasticore-springboot4`, main sources, the Jackson adapters (`src/jackson2`,
+`src/jackson3`) included. A failing gate annotates the lines on
+the pull request and lists them in the job summary; the HTML reports are under
+each module's `build/reports/jacoco/` and `build/reports/pitest/`, and in the
+run's artifacts.
+
+- **Not run** (coverage): no test executes the line. Write the test that fails
+  without your change.
+- **Survived** (mutation): PIT changed the line - negated a condition, replaced a
+  return value, removed a call - and every test that runs it still passed. The
+  test runs the line but does not check what it does; assert the result.
+- **An Error Prone warning that is wrong for its line** is suppressed on the
+  smallest element with the reason: `@SuppressWarnings("CheckName") // why`.
+- The thresholds are properties (`-PdiffCoverageMinimum=`, `-PdiffMutationMinimum=`)
+  for trying things locally; CI uses the defaults. `-PdiffBase=<ref>` measures
+  against another base; on CI, or with `-PdiffBase` given, a base that cannot be
+  found fails the gates rather than letting them compare with nothing.
+- Error Prone runs on JDK 21 as a compile of its own (`errorprone`, part of
+  `check`, so of `build`); Gradle downloads a JDK 21 where there is none. The
+  published classes are still `compileJava`'s.
+- A change of more than 300 library lines gets one mutation per changed line
+  (`-PmutationsPerLine=0` for all of them); PIT's tests run on four JVMs on CI
+  and two on a workstation (`-PmutationThreads=`).
+- A file moved and edited counts the lines that differ from the old one.
+
 ### `elcoreRulesCheck -Pstrict` — the compatibility gate
 
 This renders the sample's artifacts through the rule engine, in memory - seven
