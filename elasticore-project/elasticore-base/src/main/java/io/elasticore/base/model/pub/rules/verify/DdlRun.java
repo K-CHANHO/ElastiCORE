@@ -281,6 +281,34 @@ final class DdlRun {
                         + " up to the model with, build once with -PddlBaseline; no migration was written", relative(dir)));
                 return;
             }
+            // A history of the project's own straight in migration/ - Spring Boot's default location,
+            // classpath:db/migration. Flyway reads the folders under it too, so a first migration in
+            // migration/{db}/ would run after that history and create every table again.
+            if (hasMigrations(dir)) {
+                String location = "classpath:" + g.dir + "/migration";
+                if (g.databases.size() > 1) {
+                    // Where Flyway reads migration/ with its folders, it runs each database's migrations on the other.
+                    problems.add(String.format("[elcore3] ddl: %s holds a Flyway history of the project's own, and %s"
+                            + " reads the folders under it - with %s, each database's migrations would run on the other."
+                            + " Move the history into %s/{db}/ for each database and point spring.flyway.locations at"
+                            + " %s/{vendor}; no migration was written", relative(dir), location, ids(g.databases),
+                            relative(dir), location));
+                    return;
+                }
+                if (baseline) {
+                    writeState(stateFile, schema, g);
+                    messages.add(String.format("[elcore3] ddl: %s starts from the model as it is, after the history beside"
+                            + " it - check that the database matches it; the next change is a migration in %s/%s/, which"
+                            + " %s reads too", relative(stateFile), relative(dir),
+                            g.databases.isEmpty() ? "{db}" : g.databases.iterator().next().id, location));
+                    return;
+                }
+                problems.add(String.format("[elcore3] ddl: %s holds a Flyway history of the project's own - a first"
+                        + " migration in a folder under it would create every table again, since %s reads the folders"
+                        + " under it. For a database already up to the model, build once with -PddlBaseline; no migration"
+                        + " was written", relative(dir), location));
+                return;
+            }
         }
         for (String had : state.databases()) {
             Database d = Database.of(had);

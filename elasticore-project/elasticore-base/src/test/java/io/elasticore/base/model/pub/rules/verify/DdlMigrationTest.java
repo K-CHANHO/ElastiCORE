@@ -213,6 +213,66 @@ public class DdlMigrationTest {
     }
 
     @Test
+    public void aHistoryOfTheProjectsOwnInTheDefaultLocationIsNotWrittenOver() throws Exception {
+        // Spring Boot's default, classpath:db/migration, holds the project's own history - and Flyway
+        // reads the folders under it, so a first migration in migration/h2/ would create every table again.
+        File project = project(V1);
+        System.setProperty(DdlConfig.MIGRATION, "flyway");
+        System.setProperty(DdlConfig.DATABASES, "h2");
+        File migration = new File(project, "src/main/resources/db/migration");
+        File state = new File(migration, "schema-state.json");
+        assertTrue(migration.mkdirs());
+        Files.write(new File(migration, "V1__baseline.sql").toPath(), "-- the project's own\n".getBytes(StandardCharsets.UTF_8));
+
+        System.setProperty("elasticore.ddl.now", "20260101000000");
+        String log = run(project, 1);
+        assertTrue(log.contains("holds a Flyway history of the project's own"), log);
+        assertFalse(state.exists(), "no state");
+        assertFalse(new File(migration, "h2").exists(), "no first migration beside the history");
+
+        // -PddlBaseline: the state starts from the model, and the next change goes into migration/h2/.
+        System.setProperty("elasticore.ddl.baseline", "");
+        try {
+            run(project, 0);
+        } finally {
+            System.clearProperty("elasticore.ddl.baseline");
+        }
+        assertTrue(state.isFile());
+        assertFalse(new File(migration, "h2").exists(), "a baseline writes no init");
+        Files.write(new File(project, "src/main/resources/blueprint/dgshop/model/model.yml").toPath(),
+                V2.getBytes(StandardCharsets.UTF_8));
+        System.setProperty("elasticore.ddl.now", "20260102000000");
+        run(project, 0);
+        String[] h2 = new File(migration, "h2").list();
+        assertNotNull(h2);
+        assertEquals(1, h2.length);
+        assertTrue(h2[0].startsWith("V20260102000000__") && !h2[0].contains("init"), h2[0]);
+        assertTrue(read(new File(migration, "h2/" + h2[0])).contains("CREATE TABLE visit ("));
+    }
+
+    @Test
+    public void aHistoryInTheDefaultLocationIsNotForSeveralDatabases() throws Exception {
+        // Flyway reading migration/ and its folders would run each database's migrations on the other.
+        File project = project(V1);
+        System.setProperty(DdlConfig.MIGRATION, "flyway");
+        System.setProperty(DdlConfig.DATABASES, "h2,postgresql");
+        File migration = new File(project, "src/main/resources/db/migration");
+        assertTrue(migration.mkdirs());
+        Files.write(new File(migration, "V1__baseline.sql").toPath(), "-- the project's own\n".getBytes(StandardCharsets.UTF_8));
+        System.setProperty("elasticore.ddl.baseline", "");
+        String log;
+        try {
+            log = run(project, 1);
+        } finally {
+            System.clearProperty("elasticore.ddl.baseline");
+        }
+        assertTrue(log.contains("Move the history into"), log);
+        assertFalse(new File(migration, "schema-state.json").exists());
+        assertFalse(new File(migration, "h2").exists());
+        assertFalse(new File(migration, "postgresql").exists());
+    }
+
+    @Test
     public void aDomainCanLeaveTheProjectsDdlOrHaveADatabaseOfItsOwn() throws Exception {
         File project = project(V1);
         System.setProperty(DdlConfig.DATABASES, "h2");
