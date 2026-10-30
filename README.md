@@ -25,8 +25,9 @@ answers, shortened to one line each.</sub>
   merges a branch, against what it generated last (`.elasticore/cache`, committed with the code). Only where your
   edit and the model change the same lines does it stop, with the usual `<<<<<<<` marks for you to resolve. So the
   code never drifts from the model, and you are never forced to choose between your edit and the next DSL change.
-- **One model, the code you want.** Java or Kotlin; layered, DDD or hexagonal; Spring Boot 3 or 4; plus a typed
-  TypeScript client with the server's validation messages.
+- **One model, the code you want.** Java or Kotlin; layered, DDD or hexagonal, over JPA or MyBatis (`mode: mybatis` -
+  Java only - the domain model and the hexagon too, a generated adapter doing what JPA did for an aggregate); Spring Boot 3 or 4;
+  plus a typed TypeScript client with the server's validation messages.
 
 **Built for** business systems that live for years and pass through many hands — orders, billing, contracts, back
 offices. **Not for** a UI-first application, persistence that is not relational (JPA or MyBatis), or logic that does not
@@ -55,7 +56,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '4.0.8'      // 3.x works too - the version is read and followed
     id 'io.spring.dependency-management' version '1.1.7'
-    id 'io.elasticore' version '3.0.261030-rc5'
+    id 'io.elasticore' version '3.0.261030-rc6'
 }
 
 repositories {
@@ -68,8 +69,8 @@ elasticore {
 }
 
 dependencies {
-    implementation 'io.elasticore:elasticore-base:3.0.261030-rc5'
-    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.261030-rc5'
+    implementation 'io.elasticore:elasticore-base:3.0.261030-rc6'
+    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.261030-rc6'
 
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
