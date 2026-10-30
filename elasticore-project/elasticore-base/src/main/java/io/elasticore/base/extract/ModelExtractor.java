@@ -349,12 +349,31 @@ public class ModelExtractor {
 
     }
 
-
     /**
      * Multi-module extraction: loads all blueprints across modules first,
      * then publishes code for each domain with the correct module's src path.
      * Cross-module model sharing is automatic via STATIC_DOMAIN_MAP.
      */
+    /**
+     * The Ossie semantic model of every loaded domain, into the blueprint
+     * directory given, when a domain or the build asked for it (ossie-export) -
+     * a single module and a multi-module build alike.
+     */
+    private static void exportOssieIfRequested(List<ECoreModelContext> contexts, String blueprintDir) {
+        List<io.elasticore.base.model.ECoreModel> loadedModels = new ArrayList<>();
+        for (ECoreModelContext each : contexts) {
+            String[] names = each.getInternalDomainNames();
+            if (names == null) continue;
+            for (String dn : names) {
+                ModelDomain md = each.getDomain(dn);
+                if (md != null && md.getModel() != null) loadedModels.add(md.getModel());
+            }
+        }
+        if (io.elasticore.base.model.pub.ossie.OssieSemanticModelExporter.requested(loadedModels)) {
+            io.elasticore.base.model.pub.ossie.OssieSemanticModelExporter.export(contexts, blueprintDir);
+        }
+    }
+
     public void extractMultiModule(String modulePaths) throws FileNotFoundException {
         String[] modules = modulePaths.split(",");
 
@@ -461,6 +480,9 @@ public class ModelExtractor {
             } catch (Exception e) {
                 ConsoleLog.printWarn("Failed to generate schema.yml: " + e.getMessage());
             }
+            // The Ossie semantic model beside that schema.yml, as on a single module:
+            // a multi-module build that asked for it got no file and no word.
+            exportOssieIfRequested(allContexts, modules[0].trim() + "/" + ConstantParam.PROPERTY_ELCORE_HOME);
         }
 
         // Phase 2: Publish code --filtered by -Pdomain when active.
@@ -574,20 +596,7 @@ public class ModelExtractor {
                 // The Ossie export answers to the same opt-in whichever door
                 // the project came in through - entry-point parity is the
                 // rule the schema work above just re-established.
-                java.util.List<io.elasticore.base.model.ECoreModel> loadedModels =
-                        new ArrayList<>();
-                for (ECoreModelContext each : contextList) {
-                    String[] names = each.getInternalDomainNames();
-                    if (names == null) continue;
-                    for (String dn : names) {
-                        ModelDomain md = each.getDomain(dn);
-                        if (md != null && md.getModel() != null) loadedModels.add(md.getModel());
-                    }
-                }
-                if (io.elasticore.base.model.pub.ossie.OssieSemanticModelExporter.requested(loadedModels)) {
-                    io.elasticore.base.model.pub.ossie.OssieSemanticModelExporter.export(
-                            contextList, this.modelResourcePath);
-                }
+                exportOssieIfRequested(contextList, this.modelResourcePath);
             } catch (Exception e) {
                 ConsoleLog.printWarn("Failed to generate schema.yml file: " + e.getMessage());
             }

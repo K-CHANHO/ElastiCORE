@@ -159,6 +159,63 @@ public class DefaultGenerationTest {
     }
 
     @Test
+    public void ossieExportIsNoRuleSetOfTheCodeHoweverOftenItIsNamed() {
+        System.setProperty("elasticore.publisher.rules.add", "ossie-export,com.acme.rules.AcmeRules,ossie-export");
+        assertEquals(java.util.Collections.singletonList("com.acme.rules.AcmeRules"), RulesGenRunner.addedCodeRules());
+        System.setProperty("elasticore.publisher.rules.add", "ossie-export, ossie-export");
+        assertTrue(RulesGenRunner.addedCodeRules().isEmpty());
+    }
+
+    @Test
+    public void v2ExportsTheOssieModelOfAMultiModuleBuild() throws Exception {
+        // The 2.x generator of a multi-module build (elasticore.modules) loads
+        // every module's domains; it exports the semantic model beside the
+        // schema.yml it writes into the first module's blueprint.
+        File root = Files.createTempDirectory("elcore-multi").toFile();
+        projects.add(root);
+        File first = new File(root, "app");
+        File second = new File(root, "billing");
+        for (File module : new File[] {first, second}) {
+            String domain = module == first ? "dgshop" : "dgbill";
+            File blueprint = new File(module, "src/main/resources/blueprint/" + domain);
+            assertTrue(new File(blueprint, "model").mkdirs());
+            Files.write(
+                    new File(blueprint, "env.yml").toPath(),
+                    String.join(
+                                    "\n",
+                                    "elasticore:",
+                                    "  enable: true",
+                                    "  config:",
+                                    "    domainName: " + domain,
+                                    "    framework: springboot",
+                                    "    mode: jpa",
+                                    "    j2ee: jakarta",
+                                    "    publisher:",
+                                    "      rules: [ossie-export]",
+                                    "  namespace:",
+                                    "    base: io.acme." + domain,
+                                    "")
+                            .getBytes(StandardCharsets.UTF_8));
+            Files.write(
+                    new File(blueprint, "model/model.yml").toPath(),
+                    MODEL.replace("Note", module == first ? "Note" : "Bill").getBytes(StandardCharsets.UTF_8));
+        }
+        String savedModules = System.getProperty("elasticore.modules");
+        System.setProperty("elasticore.base.path", first.getAbsolutePath());
+        try {
+            new io.elasticore.base.extract.ModelExtractor()
+                    .extractMultiModule(first.getAbsolutePath() + "," + second.getAbsolutePath());
+        } finally {
+            if (savedModules == null) System.clearProperty("elasticore.modules");
+            else System.setProperty("elasticore.modules", savedModules);
+        }
+        File exported = new File(first, "src/main/resources/blueprint/semantic_model.yml");
+        assertTrue(exported.isFile(), "no semantic model in " + first);
+        String yaml = new String(Files.readAllBytes(exported.toPath()), StandardCharsets.UTF_8);
+        assertTrue(yaml.contains("dgshop") && yaml.contains("dgbill"), yaml);
+    }
+
+    @Test
     public void v2KeepsTheOssieExport() throws Exception {
         // The opt-in for the semantic model writes no code, and the 2.x
         // generator exports the model too (ModelExtractor): not a rule set

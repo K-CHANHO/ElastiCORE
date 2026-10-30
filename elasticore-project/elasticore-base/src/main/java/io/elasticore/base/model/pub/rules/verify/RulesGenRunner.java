@@ -293,7 +293,8 @@ public final class RulesGenRunner {
      */
     static java.util.List<String> addedCodeRules() {
         java.util.List<String> added = new ArrayList<String>(RulesConfig.addedRules());
-        added.remove(io.elasticore.base.model.pub.ossie.OssieSemanticModelExporter.RULE_SET);
+        added.removeAll(java.util.Collections.singleton(
+                io.elasticore.base.model.pub.ossie.OssieSemanticModelExporter.RULE_SET));
         return added;
     }
 
@@ -563,8 +564,9 @@ public final class RulesGenRunner {
             java.util.List<String> added = addedCodeRules();
             if (asking != null || !added.isEmpty()) {
                 io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] -Pv2 / output = 'v2' asks for the code 2.x"
-                        + " generates, but " + (asking != null ? asking : "the build adds rule sets of its own "
-                        + added) + ", which only the 3.0 code carries - remove one or the other");
+                        + " generates, but "
+                        + (asking != null ? asking : "the build adds rule sets of its own " + added)
+                        + ", which only the 3.0 code carries - remove one or the other");
                 return 1;
             }
         }
