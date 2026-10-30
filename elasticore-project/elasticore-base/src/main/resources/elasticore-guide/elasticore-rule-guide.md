@@ -1642,7 +1642,7 @@ elasticore {
 |---|---|
 | 없음 | 3.0 코드. 단 2.x 가 생성한 소스(첫 줄 `//ecd:..._V1.x`/`_V2.x`)가 있거나 마지막 `elcore3` 실행이 2.x 호환이었으면(`build/elasticore/server.mode`) **아무 소스도 쓰지 않고 멈추고** 고르라고 알립니다 |
 | `output = 'v3'` / `-Pv3` | 3.0 코드 (2.x 소스가 있어도 - 옮기겠다는 선택) |
-| `output = 'v2'` / `-Pv2` | 2.x 코드. 레이어드 Java 만 됩니다 - 헥사고날·DDD·Kotlin·프로젝트 규칙과 함께 쓰거나, 도메인 `env.yml` 이 v3 에만 있는 규칙(`jpa-springboot-v3`, `ddd-...` 등)을 적고 있으면 거절합니다 |
+| `output = 'v2'` / `-Pv2` | 2.x 코드. 레이어드 Java 만 됩니다 - 헥사고날·DDD·Kotlin·프로젝트 규칙과 함께 쓰거나, 도메인 `env.yml` 이 v3 에만 있는 규칙(`jpa-springboot-v3`, `ddd-...` 등)을 적고 있으면 거절합니다. `rules = ['ossie-export']` 는 함께 쓸 수 있습니다 - 코드를 쓰지 않고, 2.x 생성기도 시맨틱 모델을 내보냅니다 |
 | 도메인 `env.yml` 의 `publisher.rules: [jpa-springboot]` | 2.x 코드 (3.0.261028-rc3 전의 초기화 마법사가 레이어드 Java 에 적던 값) |
 
 `-Pv2`·`-Pv3` 는 그 한 번의 실행만 정합니다. 매번 적는 것을 잊으면 다른 코드가 생성되므로, 프로젝트의 선택은
@@ -1700,6 +1700,9 @@ elasticore {
     rules = ['ossie-export']          // 번들은 그대로, 내보내기만 추가
 }
 ```
+
+2.x 코드를 지키는 프로젝트(`output = 'v2'`, `./gradlew elcore`)도 같은 줄로 켭니다 - 이 규칙은 코드를 쓰지 않으므로
+`output = 'v2'` 와 함께 써도 거절되지 않습니다.
 
 ```yaml
     publisher:

@@ -286,6 +286,17 @@ public final class RulesGenRunner {
         return false;
     }
 
+    /**
+     * The rule sets the build adds that write code: all of them but
+     * ossie-export, the opt-in for the semantic model, which the 2.x generator
+     * exports too (ModelExtractor) - a build keeping 2.x's code may name it.
+     */
+    static java.util.List<String> addedCodeRules() {
+        java.util.List<String> added = new ArrayList<String>(RulesConfig.addedRules());
+        added.remove(io.elasticore.base.model.pub.ossie.OssieSemanticModelExporter.RULE_SET);
+        return added;
+    }
+
     /** Whether a rule name exists only as a v3 reading (the DDD, hexagonal and clean bundles). */
     static boolean needsV3(String rule) {
         if (rule == null) return false;
@@ -531,10 +542,11 @@ public final class RulesGenRunner {
         // through the 2.x generator the build then runs, not at all.
         if (v2Asked) {
             String asking = domainAskingForV3(loader.allModels());
-            if (asking != null || !RulesConfig.addedRules().isEmpty()) {
+            java.util.List<String> added = addedCodeRules();
+            if (asking != null || !added.isEmpty()) {
                 io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] -Pv2 / output = 'v2' asks for the code 2.x"
                         + " generates, but " + (asking != null ? asking : "the build adds rule sets of its own "
-                        + RulesConfig.addedRules()) + ", which only the 3.0 code carries - remove one or the other");
+                        + added) + ", which only the 3.0 code carries - remove one or the other");
                 return 1;
             }
         }

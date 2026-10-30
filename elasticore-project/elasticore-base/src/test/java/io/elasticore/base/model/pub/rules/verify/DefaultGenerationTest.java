@@ -152,8 +152,23 @@ public class DefaultGenerationTest {
         File project = project(null);
         System.setProperty("elasticore.base.path", project.getAbsolutePath());
         System.setProperty("elasticore.rules.v2", "true");
-        System.setProperty("elasticore.publisher.rules.add", "ossie-export");
+        // The rule-dev guide's own example: refused before its class is looked up.
+        System.setProperty("elasticore.publisher.rules.add", "com.acme.rules.AcmeRules");
         assertEquals(1, RulesGenRunner.run(new String[0]));
+        assertNull(find(project, "Note.java"));
+    }
+
+    @Test
+    public void v2KeepsTheOssieExport() throws Exception {
+        // The opt-in for the semantic model writes no code, and the 2.x
+        // generator exports the model too (ModelExtractor): not a rule set
+        // only the 3.0 code carries.
+        File project = project(null);
+        System.setProperty("elasticore.publisher.rules.add", "ossie-export");
+        String log = run(project, "elasticore.rules.v2");
+        assertTrue(log.contains("mode      : 2.x-compatible - -Pv2 / output = 'v2'"), log);
+        assertCompatible(project, log);
+        assertTrue(new File(project, "src/main/resources/blueprint/semantic_model.yml").isFile(), log);
     }
 
     @Test
