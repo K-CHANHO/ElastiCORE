@@ -27,6 +27,13 @@ public final class Schema {
     private final Map<String, Sequence> sequences = new LinkedHashMap<String, Sequence>();
     /** The databases a migration history has been started for. */
     private final Set<String> databases = new LinkedHashSet<String>();
+    /**
+     * Keys and indexes the state names as this model would name them, though a
+     * history of the project's own made them (-PddlBaseline): the database may
+     * call them otherwise - Hibernate names a key by a hash - or hold a unique
+     * one as a constraint, so a statement by that name waits for review.
+     */
+    private final Set<String> takenOver = new LinkedHashSet<String>();
 
     /** Adds a table; one already there by the name stays and the new one's columns are added to it. */
     public Table table(Table t) {
@@ -67,6 +74,26 @@ public final class Schema {
         return databases;
     }
 
+    public Set<String> takenOver() {
+        return takenOver;
+    }
+
+    /** Every key and index of the schema, as named by a history this state takes over. */
+    public void takeOverKeysAndIndexes() {
+        for (Table t : tables.values()) {
+            for (Table.ForeignKey fk : t.foreignKeys()) takenOver.add(fk.name);
+            for (Table.Index i : t.indexes()) takenOver.add(i.name);
+        }
+    }
+
+    /** The names of an earlier state taken over that this schema still has a key or an index by. */
+    public void keepTakenOver(Schema earlier) {
+        for (Table t : tables.values()) {
+            for (Table.ForeignKey fk : t.foreignKeys()) if (earlier.takenOver.contains(fk.name)) takenOver.add(fk.name);
+            for (Table.Index i : t.indexes()) if (earlier.takenOver.contains(i.name)) takenOver.add(i.name);
+        }
+    }
+
     public boolean isEmpty() {
         return tables.isEmpty() && sequences.isEmpty();
     }
@@ -105,6 +132,11 @@ public final class Schema {
                 + " Commit it with them; the next change of the model is a migration from this.");
         ArrayNode dbs = root.putArray("databases");
         for (String d : databases) dbs.add(d);
+        if (!takenOver.isEmpty()) {
+            // Only when there is one: a state of a history these migrations built reads as it did.
+            ArrayNode to = root.putArray("takenOver");
+            for (String n : takenOver) to.add(n);
+        }
         ArrayNode ts = root.putArray("tables");
         for (Table t : tables.values()) {
             ObjectNode tn = ts.addObject();
@@ -168,6 +200,7 @@ public final class Schema {
             throw new IllegalArgumentException("The schema state is not JSON: " + e.getMessage(), e);
         }
         for (JsonNode d : root.path("databases")) s.databases.add(d.asText());
+        for (JsonNode n : root.path("takenOver")) s.takenOver.add(n.asText());
         for (JsonNode tn : root.path("tables")) {
             Table t = new Table(tn.path("name").asText(), tn.path("source").asText(""));
             for (JsonNode cn : tn.path("columns")) {

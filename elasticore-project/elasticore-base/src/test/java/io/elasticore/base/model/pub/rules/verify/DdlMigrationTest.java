@@ -41,6 +41,9 @@ public class DdlMigrationTest {
     private final String[] saved = new String[KEYS.length];
     private final List<File> projects = new ArrayList<File>();
 
+    /** What the last {@link #change} printed. */
+    private String lastLog = "";
+
     {
         for (int i = 0; i < KEYS.length; i++) saved[i] = System.getProperty(KEYS[i]);
     }
@@ -210,6 +213,111 @@ public class DdlMigrationTest {
         log = run(project, 1);
         assertTrue(log.contains("has this run's version already"), log);
         assertEquals(before, read(state), "the state did not move");
+    }
+
+    @Test
+    public void aKeyNamedByAHistoryTakenOverIsNotDroppedAsWritten() throws Exception {
+        // The project's own history built the database - Hibernate names a key by a hash - and the state
+        // starts from the model (-PddlBaseline), naming its keys as the model would. A statement by such a
+        // name waits for review; a key the migrations made later is theirs, and goes as written.
+        File project = project(V2);
+        System.setProperty(DdlConfig.MIGRATION, "flyway");
+        System.setProperty(DdlConfig.DATABASES, "h2");
+        File migration = new File(project, "src/main/resources/db/migration");
+        File state = new File(migration, "schema-state.json");
+        File h2 = new File(migration, "h2");
+        assertTrue(h2.mkdirs());
+        Files.write(new File(h2, "V1__mine.sql").toPath(), "-- the project's own\n".getBytes(StandardCharsets.UTF_8));
+        System.setProperty("elasticore.ddl.baseline", "");
+        try {
+            run(project, 0);
+        } finally {
+            System.clearProperty("elasticore.ddl.baseline");
+        }
+        assertTrue(read(state).contains("\"takenOver\""), read(state));
+        assertTrue(read(state).contains("\"fk_visit_customer\""), read(state));
+
+        // A change elsewhere keeps the name taken over while the model still has the key.
+        String sql = change(project, V2 + "      note: string(40)\n", "20260101120000");
+        assertTrue(sql.contains("note"), sql);
+        assertTrue(read(state).contains("\"fk_visit_customer\""), "the name taken over was forgotten: " + read(state));
+
+        String withoutCustomer = V2.replace("      customer: Customer @ManyToOne\n", "");
+        sql = change(project, withoutCustomer, "20260102000000");
+        assertTrue(sql.contains("-- ALTER TABLE visit DROP CONSTRAINT fk_visit_customer;"), sql);
+        assertFalse(sql.contains("\nALTER TABLE visit DROP CONSTRAINT fk_visit_customer;"), sql);
+        assertTrue(sql.contains("taken over with -PddlBaseline"), sql);
+        // The build says so, for every database's file.
+        assertTrue(
+                lastLog.contains("[elcore3] ddl: REVIEW ")
+                        && lastLog.contains("/*/V20260102000000: drop foreign key fk_visit_customer"),
+                lastLog);
+        assertFalse(read(state).contains("\"takenOver\""), "nothing by a taken-over name is left: " + read(state));
+
+        // A key the migrations make is named by them: dropped later, as written.
+        sql = change(project, withoutCustomer + "      owner: Customer @ManyToOne\n", "20260103000000");
+        assertTrue(sql.contains("\nALTER TABLE visit ADD CONSTRAINT fk_visit_owner FOREIGN KEY"), sql);
+        assertFalse(read(state).contains("\"takenOver\""), read(state));
+        sql = change(project, withoutCustomer, "20260104000000");
+        assertTrue(sql.contains("\nALTER TABLE visit DROP CONSTRAINT fk_visit_owner;"), sql);
+        assertFalse(sql.contains("-- ALTER TABLE visit DROP CONSTRAINT fk_visit_owner"), sql);
+        assertFalse(lastLog.contains("fk_visit_owner"), lastLog);
+    }
+
+    @Test
+    public void whatOnlySqlServerDropsAndMakesAgainWaitsThereAlone() throws Exception {
+        // A history of the project's own for H2 and SQL Server, taken over with its index. Widening the
+        // column the index is on: SQL Server drops the index and makes it again by the name taken over -
+        // that waits there; H2 widens the column as written.
+        String model = V1.replace(
+                "@access(*=public)", "@access(*=public) @Index(name=\"ix_customer_name\", columnList=\"name\")");
+        File project = project(model);
+        System.setProperty(DdlConfig.MIGRATION, "flyway");
+        System.setProperty(DdlConfig.DATABASES, "h2,sqlserver");
+        File migration = new File(project, "src/main/resources/db/migration");
+        for (String db : new String[] {"h2", "sqlserver"}) {
+            File dir = new File(migration, db);
+            assertTrue(dir.mkdirs());
+            Files.write(
+                    new File(dir, "V1__mine.sql").toPath(), "-- the project's own\n".getBytes(StandardCharsets.UTF_8));
+        }
+        System.setProperty("elasticore.ddl.baseline", "");
+        try {
+            run(project, 0);
+        } finally {
+            System.clearProperty("elasticore.ddl.baseline");
+        }
+        assertTrue(read(new File(migration, "schema-state.json")).contains("\"ix_customer_name\""));
+
+        String h2 = change(project, model.replace("name: string(30)!", "name: string(60)!"), "20260105000000");
+        assertTrue(h2.contains("\nALTER TABLE customer ALTER COLUMN name"), h2);
+        File sqlserver = null;
+        for (File each : new File(migration, "sqlserver").listFiles()) {
+            if (each.getName().startsWith("V20260105000000__")) sqlserver = each;
+        }
+        assertNotNull(sqlserver);
+        String ms = read(sqlserver);
+        assertTrue(ms.contains("-- ALTER TABLE customer ALTER COLUMN name") && ms.contains("ix_customer_name"), ms);
+        assertTrue(lastLog.contains("/sqlserver/V20260105000000: customer.name"), lastLog);
+        assertFalse(
+                lastLog.contains("REVIEW src/main/resources/db/migration/h2/")
+                        || lastLog.contains("/*/V20260105000000"),
+                lastLog);
+    }
+
+    /** The model changes; the migration of that change, for H2. */
+    private String change(File project, String model, String version) throws Exception {
+        Files.write(
+                new File(project, "src/main/resources/blueprint/dgshop/model/model.yml").toPath(),
+                model.getBytes(StandardCharsets.UTF_8));
+        System.setProperty("elasticore.ddl.now", version);
+        lastLog = run(project, 0);
+        File f = null;
+        File[] all = new File(project, "src/main/resources/db/migration/h2").listFiles();
+        assertNotNull(all);
+        for (File each : all) if (each.getName().startsWith("V" + version + "__")) f = each;
+        assertNotNull(f, "a migration of " + version);
+        return read(f);
     }
 
     @Test
