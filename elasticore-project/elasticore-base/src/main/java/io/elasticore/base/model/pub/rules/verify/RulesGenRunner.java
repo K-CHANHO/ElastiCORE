@@ -4954,7 +4954,8 @@ public final class RulesGenRunner {
                 hasImport = true;
             }
         }
-        return true;
+        // A block never closed runs, for HashUtils, to the end of the file - the closing brace with it.
+        return !inBlock;
     }
 
     /**

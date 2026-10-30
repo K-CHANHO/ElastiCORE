@@ -549,6 +549,9 @@ public class GeneratedMergeTest {
                 "package a;\n" + imports + imports.replace("UUID", "Locale") + "class A {\n}\n"));
         // Code above a block of imports: HashUtils takes it into the import area.
         assertFalse(RulesGenRunner.blocksPutBackWhole("package a;\nclass A {\n" + code + "}\n" + imports));
+        // A block whose closing line is one dash short: for HashUtils it runs to the end, closing brace and all.
+        assertFalse(RulesGenRunner.blocksPutBackWhole(
+                "package a;\nclass A {\n    // !---------- mine\n    void mine() {}\n    // -----------!\n}\n"));
     }
 
     @Test
