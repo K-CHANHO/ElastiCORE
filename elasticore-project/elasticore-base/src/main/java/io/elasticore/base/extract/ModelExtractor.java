@@ -350,11 +350,6 @@ public class ModelExtractor {
     }
 
     /**
-     * Multi-module extraction: loads all blueprints across modules first,
-     * then publishes code for each domain with the correct module's src path.
-     * Cross-module model sharing is automatic via STATIC_DOMAIN_MAP.
-     */
-    /**
      * The Ossie semantic model of every loaded domain, into the blueprint
      * directory given, when a domain or the build asked for it (ossie-export) -
      * a single module and a multi-module build alike.
@@ -374,6 +369,11 @@ public class ModelExtractor {
         }
     }
 
+    /**
+     * Multi-module extraction: loads all blueprints across modules first,
+     * then publishes code for each domain with the correct module's src path.
+     * Cross-module model sharing is automatic via STATIC_DOMAIN_MAP.
+     */
     public void extractMultiModule(String modulePaths) throws FileNotFoundException {
         String[] modules = modulePaths.split(",");
 
