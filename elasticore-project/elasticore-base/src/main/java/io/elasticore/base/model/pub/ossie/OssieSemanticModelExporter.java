@@ -324,8 +324,8 @@ public final class OssieSemanticModelExporter {
             if (!f.hasAnnotation("unique") || "false".equals(f.getAnnotationValue("unique"))) continue;
             if (!f.getTypeInfo().isBaseType()) continue;
             List<String> key = new ArrayList<String>();
-            key.add(f.getDbColumnName());
-            keys.add(key);
+            key.add(columnOf(f));
+            if (!keys.contains(key)) keys.add(key);
         }
         Annotation index = entity.getMetaInfo().getMetaAnnotation("Index");
         if (index != null) {
@@ -336,16 +336,32 @@ public final class OssieSemanticModelExporter {
                 if (columns == null || columns.trim().isEmpty()) continue;
                 List<String> key = new ArrayList<String>();
                 for (String c : columns.split(",")) {
-                    // A column list may say a direction after the name. The name is
-                    // logical, as Hibernate reads it - seqCd is the column seq_cd -
-                    // so it is named as the fields are (getDbColumnName).
+                    // A column list may say a direction after the name.
                     String col = c.trim().split("\\s+")[0];
-                    if (!col.isEmpty()) key.add(StringUtils.camelToSnake(col));
+                    if (!col.isEmpty()) key.add(keyColumn(col, all));
                 }
                 if (!key.isEmpty() && !keys.contains(key)) keys.add(key);
             }
         }
         return keys;
+    }
+
+    /**
+     * A name of an @Index column list as the dataset's column, so that the key
+     * names fields the dataset has: a property (seatNo) is its field's column; a
+     * column (hall_id, or HALL_ID that @column wrote) is the column of the field
+     * stored in it, in the case that field has; any other name is read as
+     * Hibernate's naming reads it (seqCd is seq_cd).
+     */
+    private static String keyColumn(String name, List<Field> all) {
+        for (Field f : all) {
+            if (f.getName().equals(name)) return columnOf(f);
+        }
+        for (Field f : all) {
+            String column = columnOf(f);
+            if (column != null && column.equalsIgnoreCase(name)) return column;
+        }
+        return StringUtils.camelToSnake(name);
     }
 
     // ---- fields --------------------------------------------------------------------
