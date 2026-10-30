@@ -891,17 +891,23 @@ public class GeneratedMergeTest {
         }
         run(link, 0);
         Path dto = java(project, "CouponDTO.java");
-        java.util.regex.Matcher pkg = java.util.regex.Pattern.compile("(?m)^package ([\\w.]+);").matcher(read(dto));
+        java.util.regex.Matcher pkg =
+                java.util.regex.Pattern.compile("(?m)^package ([\\w.]+);").matcher(read(dto));
         assertTrue(pkg.find());
         Path report = new File(project, "src/main/java/io/acme/dgshop/report/CouponReport.java").toPath();
         Files.createDirectories(report.getParent());
-        Files.write(report, ("package io.acme.dgshop.report;\n\nimport " + pkg.group(1) + ".CouponDTO;\n\n"
-                + "public class CouponReport {\n    CouponDTO last;\n}\n").getBytes(StandardCharsets.UTF_8));
+        Files.write(
+                report,
+                ("package io.acme.dgshop.report;\n\nimport " + pkg.group(1) + ".CouponDTO;\n\n"
+                                + "public class CouponReport {\n    CouponDTO last;\n}\n")
+                        .getBytes(StandardCharsets.UTF_8));
 
         model(project, CUSTOMER + ORDER);
         String log = run(link, 0);
-        assertTrue(log.contains("CouponDTO.java is no longer generated, but src/main/java/io/acme/dgshop/report/"
-                + "CouponReport.java still uses it - kept"), log);
+        assertTrue(
+                log.contains("CouponDTO.java is no longer generated, but src/main/java/io/acme/dgshop/report/"
+                        + "CouponReport.java still uses it - kept"),
+                log);
     }
 
     @Test
