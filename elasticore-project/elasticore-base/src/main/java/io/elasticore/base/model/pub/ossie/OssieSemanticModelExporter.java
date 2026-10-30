@@ -336,9 +336,11 @@ public final class OssieSemanticModelExporter {
                 if (columns == null || columns.trim().isEmpty()) continue;
                 List<String> key = new ArrayList<String>();
                 for (String c : columns.split(",")) {
-                    // A column list may say a direction after the name.
+                    // A column list may say a direction after the name. The name is
+                    // logical, as Hibernate reads it - seqCd is the column seq_cd -
+                    // so it is named as the fields are (getDbColumnName).
                     String col = c.trim().split("\\s+")[0];
-                    if (!col.isEmpty()) key.add(col);
+                    if (!col.isEmpty()) key.add(StringUtils.camelToSnake(col));
                 }
                 if (!key.isEmpty() && !keys.contains(key)) keys.add(key);
             }
