@@ -4449,6 +4449,9 @@ public final class RulesGenRunner {
         }
         boolean stamped = false;
         HashUtils.Response blocks = null;
+        // With blocks: the file as it was, blocks where the developer put them - what is
+        // written where the run keeps the developer's text rather than making a new one.
+        String asOnDisk = null;
         if (base == null) {
             HashUtils.Response st = readStatus(file);
             if (st == null || st.getEcd() == null || st.getPreSourceContent() == null) {
@@ -4469,19 +4472,22 @@ public final class RulesGenRunner {
                 }
                 disk = stripped;
                 stamped = true;
-                if (st.hasCustomizedScopeContent()) {
+                if (st.hasCustomizedScopeContent() && blocksPutBackWhole(stripped)) {
                     // The custom blocks are out of the hash, and out of this merge too: the text around
                     // them is merged, and they go back where the stamp's generator writes them on a
                     // rewrite. Merged as edits, wherever the developer put them, they conflicted with
-                    // what the new text changes beside them - the closing line, the imports.
+                    // what the new text changes beside them - the closing line, the imports. A file
+                    // whose blocks would not all come back as they are stays on the merge as edits.
                     disk = st.getPreSourceContent().replace("\r\n", "\n");
                     blocks = st;
+                    asOnDisk = stripped;
                 }
             }
         }
         mergedKeys.add(key);
         if (disk.equals(base)) {
-            if ((stamped || !disk.equals(generated)) && !writeLf(label, file, withBlocks(generated, blocks))) return true;
+            if ((stamped || !disk.equals(generated)) && !writeLf(label, file, withBlocks(generated, blocks)))
+                return true;
             cache.put(key, generated);
             if (disk.equals(generated) && !stamped) {
                 unchanged++;
@@ -4499,7 +4505,7 @@ public final class RulesGenRunner {
             return true;
         }
         if (disk.equals(generated) || base.equals(generated)) {
-            if (stamped && !writeLf(label, file, withBlocks(disk, blocks))) return true;
+            if (stamped && !writeLf(label, file, asOnDisk != null ? asOnDisk : disk)) return true;
             cache.put(key, generated);
             unchanged++;
             System.out.println(label + (disk.equals(generated) ? "  UNCHANGED" : "  UNCHANGED(your edits kept)"));
@@ -4507,6 +4513,13 @@ public final class RulesGenRunner {
         }
         io.elasticore.base.util.ThreeWayMerge.Result merged =
                 io.elasticore.base.util.ThreeWayMerge.mergeSource(base, disk, generated);
+        if (merged.conflicts() > 0 && asOnDisk != null) {
+            // Conflict marks around the end of the file would leave a block put back there on one
+            // side of them: a conflict is the merge with the blocks as edits, where they stand.
+            merged = io.elasticore.base.util.ThreeWayMerge.mergeSource(base, asOnDisk, generated);
+            disk = asOnDisk;
+            blocks = null;
+        }
         if (merged.conflicts() == 0) {
             if (!writeLf(label, file, withBlocks(merged.text(), blocks))) return true;
             cache.put(key, generated);
@@ -4518,7 +4531,7 @@ public final class RulesGenRunner {
         if (skeleton) {
             // The developer's own code: left as it is, against the base it
             // was written from, so the next run tries again.
-            if (stamped && !writeLf(label, file, withBlocks(disk, blocks))) return true;
+            if (stamped && !writeLf(label, file, disk)) return true;
             cache.put(key, base);
             skipped++;
             keptAsYours++;
@@ -4532,7 +4545,7 @@ public final class RulesGenRunner {
             warnIfBaseNotExtended(out, file, content);
             return true;
         }
-        if (!writeLf(label, file, withBlocks(merged.text(), blocks))) return true;
+        if (!writeLf(label, file, merged.text())) return true;
         cache.put(key, generated);
         failed++;
         conflicts++;
@@ -4654,7 +4667,7 @@ public final class RulesGenRunner {
                 base = st.getPreSourceContent().replace("\r\n", "\n");
                 disk = disk.substring(disk.indexOf('\n') + 1);
                 stamped = true;
-                if (st.hasCustomizedScopeContent()) {
+                if (st.hasCustomizedScopeContent() && blocksPutBackWhole(disk)) {
                     disk = base;
                     blocks = st;
                 }
@@ -4910,6 +4923,40 @@ public final class RulesGenRunner {
         }
     }
 
+    /** A merged text with the custom blocks of the stamped file it replaces put back; as it is when there are none. */
+    private static String withBlocks(String text, HashUtils.Response blocks) {
+        return blocks == null ? text : withCustomBlocks(text, blocks);
+    }
+
+    /**
+     * Whether every custom block of a stamped file comes back whole when put
+     * back as the stamp's generator puts it (withCustomBlocks over HashUtils):
+     * at most one block of imports, and that one first. HashUtils keeps only
+     * the last block of imports, and takes the blocks above one into it - two
+     * blocks of imports lost the first, and a block of code above the imports
+     * went into the import area. Such a file merges its blocks as edits, where
+     * they stand.
+     */
+    static boolean blocksPutBackWhole(String text) {
+        int index = 0;
+        int imports = 0;
+        boolean inBlock = false;
+        boolean hasImport = false;
+        for (String line : text.replace("\r\n", "\n").split("\n", -1)) {
+            if (line.contains("// !----------")) {
+                inBlock = true;
+                hasImport = false;
+            } else if (inBlock && line.contains("------------!") && line.contains("//")) {
+                if (hasImport && (++imports > 1 || index > 0)) return false;
+                index++;
+                inBlock = false;
+            } else if (inBlock && line.startsWith("import ")) {
+                hasImport = true;
+            }
+        }
+        return true;
+    }
+
     /**
      * The generated text with the user's custom blocks (from a line holding
      * "// !----------" to one holding "------------!") put back.
@@ -4920,11 +4967,6 @@ public final class RulesGenRunner {
      * was safe there. Placement is 2.x's: a block of imports after the second
      * line, the rest before the closing line.
      */
-    /** A merged text with the custom blocks of the stamped file it replaces put back; as it is when there are none. */
-    private static String withBlocks(String text, HashUtils.Response blocks) {
-        return blocks == null ? text : withCustomBlocks(text, blocks);
-    }
-
     static String withCustomBlocks(String content, HashUtils.Response st) {
         String[] lines = content.split("\n", -1);
         int last = lines.length - 1;
