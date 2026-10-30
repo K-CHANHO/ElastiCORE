@@ -29,6 +29,127 @@ public class SchemaDiffTest {
     }
 
     @Test
+    public void whatANameTakenOverChangesIsSaidAndWaitsWhereItMatters() {
+        // An index and a key the state took over; the column they are on changes.
+        Schema before = of(Column.of("code", ColumnType.TEXT).length(10), Column.of("owner_id", ColumnType.BIGINT));
+        before.table("item").index(new Table.Index("ix_item_code", Collections.singletonList("code"), false));
+        before.table("item")
+                .foreignKey(new Table.ForeignKey(
+                        "fk_item_owner",
+                        Collections.singletonList("owner_id"),
+                        "owner",
+                        Collections.singletonList("owner_id")));
+        before.takeOverKeysAndIndexes();
+        before.databases().add(Database.SQLSERVER.id);
+
+        // Dropped by a name taken over: waits everywhere, and says why.
+        Schema without = of(Column.of("code", ColumnType.TEXT).length(10), Column.of("owner_id", ColumnType.BIGINT));
+        for (SchemaDiff.Change c : SchemaDiff.between(before, without)) {
+            assertFalse(c.safe, c.description);
+            assertTrue(c.description.contains("-PddlBaseline"), c.description);
+        }
+        // The same drops of names not taken over: as written, and nothing said of a baseline.
+        Schema plain = of(Column.of("code", ColumnType.TEXT).length(10), Column.of("owner_id", ColumnType.BIGINT));
+        plain.table("item").index(new Table.Index("ix_item_code", Collections.singletonList("code"), false));
+        plain.table("item")
+                .foreignKey(new Table.ForeignKey(
+                        "fk_item_owner",
+                        Collections.singletonList("owner_id"),
+                        "owner",
+                        Collections.singletonList("owner_id")));
+        for (SchemaDiff.Change c : SchemaDiff.between(plain, without)) {
+            assertTrue(c.safe, c.description);
+            assertFalse(c.description.contains("-PddlBaseline"), c.description);
+        }
+        // Made again by such a name, with other columns: the drop and the making both wait, and say so.
+        Schema moved = of(Column.of("code", ColumnType.TEXT).length(10), Column.of("owner_id", ColumnType.BIGINT));
+        moved.table("item").index(new Table.Index("ix_item_code", java.util.Arrays.asList("code", "owner_id"), false));
+        moved.table("item")
+                .foreignKey(new Table.ForeignKey(
+                        "fk_item_owner",
+                        java.util.Arrays.asList("owner_id", "code"),
+                        "owner",
+                        java.util.Arrays.asList("owner_id", "code")));
+        List<SchemaDiff.Change> again = SchemaDiff.between(before, moved);
+        assertEquals(4, again.size(), again.toString());
+        for (SchemaDiff.Change c : again) {
+            assertFalse(c.safe, c.description);
+            assertTrue(c.description.contains("-PddlBaseline"), c.description);
+        }
+        for (SchemaDiff.Change c : SchemaDiff.between(plain, moved)) {
+            assertTrue(c.safe, c.description);
+            assertFalse(c.description.contains("-PddlBaseline"), c.description);
+        }
+
+        // The key's column may now be empty... it was already; made required, around a key taken over:
+        // a review everywhere (rows may be empty), named; may be empty again: SQL Server alone waits.
+        Schema required = of(
+                Column.of("code", ColumnType.TEXT).length(10),
+                Column.of("owner_id", ColumnType.BIGINT).nullable(false));
+        required.table("item").index(new Table.Index("ix_item_code", Collections.singletonList("code"), false));
+        required.table("item")
+                .foreignKey(new Table.ForeignKey(
+                        "fk_item_owner",
+                        Collections.singletonList("owner_id"),
+                        "owner",
+                        Collections.singletonList("owner_id")));
+        SchemaDiff.Change closing = only(before, required);
+        assertFalse(closing.safe, closing.description);
+        assertTrue(
+                closing.description.contains("is now required") && closing.description.contains("fk_item_owner"),
+                closing.description);
+        required.takeOverKeysAndIndexes();
+        required.databases().add(Database.SQLSERVER.id);
+        Schema opened = of(Column.of("code", ColumnType.TEXT).length(10), Column.of("owner_id", ColumnType.BIGINT));
+        opened.table("item").index(new Table.Index("ix_item_code", Collections.singletonList("code"), false));
+        opened.table("item")
+                .foreignKey(new Table.ForeignKey(
+                        "fk_item_owner",
+                        Collections.singletonList("owner_id"),
+                        "owner",
+                        Collections.singletonList("owner_id")));
+        SchemaDiff.Change opening = only(required, opened);
+        assertTrue(
+                opening.description.contains("may now be empty") && opening.description.contains("fk_item_owner"),
+                opening.description);
+        assertTrue(opening.safeOn(Database.POSTGRESQL), opening.description);
+        assertFalse(opening.safeOn(Database.SQLSERVER), opening.description);
+        // With no name taken over, SQL Server's history runs it too.
+        SchemaDiff.Change free = only(plain, required);
+        assertFalse(free.description.contains("-PddlBaseline"), free.description);
+        Schema plainRequired = of(
+                Column.of("code", ColumnType.TEXT).length(10),
+                Column.of("owner_id", ColumnType.BIGINT).nullable(false));
+        plainRequired.databases().add(Database.SQLSERVER.id);
+        Schema plainOpened =
+                of(Column.of("code", ColumnType.TEXT).length(10), Column.of("owner_id", ColumnType.BIGINT));
+        assertTrue(only(plainRequired, plainOpened).safeOn(Database.SQLSERVER));
+    }
+
+    @Test
+    public void aColumnChangeSaysWhatItIs() {
+        SchemaDiff.Change narrows = only(
+                of(Column.of("name", ColumnType.TEXT).length(40)),
+                of(Column.of("name", ColumnType.TEXT).length(20)));
+        assertFalse(narrows.safe);
+        assertTrue(narrows.description.contains("narrows or changes the type"), narrows.description);
+        SchemaDiff.Change widens = only(
+                of(Column.of("name", ColumnType.TEXT).length(20)),
+                of(Column.of("name", ColumnType.TEXT).length(40)));
+        assertTrue(widens.safe);
+        assertFalse(widens.description.contains(" - "), widens.description);
+        // A column of the key: by hand, whether it widens or not.
+        Table wider = new Table("item", "Item");
+        wider.column(Column.of("item_id", ColumnType.DECIMAL).decimal(20, 0).nullable(false));
+        wider.primaryKey("item_id");
+        Schema keyAfter = new Schema();
+        keyAfter.table(wider);
+        SchemaDiff.Change key = only(of(), keyAfter);
+        assertFalse(key.safe);
+        assertTrue(key.description.contains("a column of the key"), key.description);
+    }
+
+    @Test
     public void aLongerTextOrMoreDigitsRunAtOnce() {
         assertTrue(only(of(Column.of("name", ColumnType.TEXT).length(40)),
                 of(Column.of("name", ColumnType.TEXT).length(80))).safe);

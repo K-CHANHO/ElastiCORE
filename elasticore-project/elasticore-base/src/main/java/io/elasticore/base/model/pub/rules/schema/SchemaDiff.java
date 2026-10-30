@@ -21,6 +21,7 @@ public final class SchemaDiff {
     /** One change: a short description, and whether it runs as written or waits for review. */
     public static final class Change {
         public final String description;
+        /** Runs as written - except on the databases it waits on ({@link #safeOn(Database)} says per database). */
         public final boolean safe;
         /** The statements per database, in order. */
         private final java.util.Map<Database, List<String>> sql = new java.util.EnumMap<Database, List<String>>(Database.class);
@@ -33,9 +34,8 @@ public final class SchemaDiff {
             this.safe = safe;
         }
 
-        Change reviewOn(Database db) {
+        void reviewOn(Database db) {
             reviewOn.add(db);
-            return this;
         }
 
         /** Whether the change runs as written on this database. */
