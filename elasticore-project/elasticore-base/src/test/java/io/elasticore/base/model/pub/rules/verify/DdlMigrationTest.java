@@ -213,6 +213,58 @@ public class DdlMigrationTest {
     }
 
     @Test
+    public void aKeyNamedByAHistoryTakenOverIsNotDroppedAsWritten() throws Exception {
+        // The project's own history built the database - Hibernate names a key by a hash - and the state
+        // starts from the model (-PddlBaseline), naming its keys as the model would. A statement by such a
+        // name waits for review; a key the migrations made later is theirs, and goes as written.
+        File project = project(V2);
+        System.setProperty(DdlConfig.MIGRATION, "flyway");
+        System.setProperty(DdlConfig.DATABASES, "h2");
+        File migration = new File(project, "src/main/resources/db/migration");
+        File state = new File(migration, "schema-state.json");
+        File h2 = new File(migration, "h2");
+        assertTrue(h2.mkdirs());
+        Files.write(new File(h2, "V1__mine.sql").toPath(), "-- the project's own\n".getBytes(StandardCharsets.UTF_8));
+        System.setProperty("elasticore.ddl.baseline", "");
+        try {
+            run(project, 0);
+        } finally {
+            System.clearProperty("elasticore.ddl.baseline");
+        }
+        assertTrue(read(state).contains("\"takenOver\""), read(state));
+        assertTrue(read(state).contains("\"fk_visit_customer\""), read(state));
+
+        String withoutCustomer = V2.replace("      customer: Customer @ManyToOne\n", "");
+        String sql = change(project, withoutCustomer, "20260102000000");
+        assertTrue(sql.contains("-- ALTER TABLE visit DROP CONSTRAINT fk_visit_customer;"), sql);
+        assertFalse(sql.contains("\nALTER TABLE visit DROP CONSTRAINT fk_visit_customer;"), sql);
+        assertTrue(sql.contains("taken over with -PddlBaseline"), sql);
+        assertFalse(read(state).contains("\"takenOver\""), "nothing by a taken-over name is left: " + read(state));
+
+        // A key the migrations make is named by them: dropped later, as written.
+        sql = change(project, withoutCustomer + "      owner: Customer @ManyToOne\n", "20260103000000");
+        assertTrue(sql.contains("\nALTER TABLE visit ADD CONSTRAINT fk_visit_owner FOREIGN KEY"), sql);
+        assertFalse(read(state).contains("\"takenOver\""), read(state));
+        sql = change(project, withoutCustomer, "20260104000000");
+        assertTrue(sql.contains("\nALTER TABLE visit DROP CONSTRAINT fk_visit_owner;"), sql);
+        assertFalse(sql.contains("-- ALTER TABLE visit DROP CONSTRAINT fk_visit_owner"), sql);
+    }
+
+    /** The model changes; the migration of that change, for H2. */
+    private String change(File project, String model, String version) throws Exception {
+        Files.write(new File(project, "src/main/resources/blueprint/dgshop/model/model.yml").toPath(),
+                model.getBytes(StandardCharsets.UTF_8));
+        System.setProperty("elasticore.ddl.now", version);
+        run(project, 0);
+        File f = null;
+        File[] all = new File(project, "src/main/resources/db/migration/h2").listFiles();
+        assertNotNull(all);
+        for (File each : all) if (each.getName().startsWith("V" + version + "__")) f = each;
+        assertNotNull(f, "a migration of " + version);
+        return read(f);
+    }
+
+    @Test
     public void aDomainCanLeaveTheProjectsDdlOrHaveADatabaseOfItsOwn() throws Exception {
         File project = project(V1);
         System.setProperty(DdlConfig.DATABASES, "h2");

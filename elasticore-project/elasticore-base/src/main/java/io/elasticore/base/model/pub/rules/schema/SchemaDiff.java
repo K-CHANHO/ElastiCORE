@@ -81,38 +81,44 @@ public final class SchemaDiff {
             out.add(c);
         }
         for (Table t : added) {
-            for (Table.ForeignKey fk : t.foreignKeys()) out.add(addForeignKey(t, fk));
-            for (Table.Index i : t.indexes()) out.add(createIndex(t, i));
+            for (Table.ForeignKey fk : t.foreignKeys()) out.add(addForeignKey(t, fk, false));
+            for (Table.Index i : t.indexes()) out.add(createIndex(t, i, false));
         }
 
+        // A name the state took over from a history of the project's own may not be the database's:
+        // what drops it, or makes it again after a drop, waits for review.
+        Set<String> takenOver = before.takenOver();
+        boolean sqlServer = before.databases().contains(Database.SQLSERVER.id);
         for (Table t : after.tables()) {
             Table old = before.table(t.name);
             if (old == null) continue;
             // What goes, first: SQL Server alters no column an index or a key is still on.
             for (Table.ForeignKey fk : old.foreignKeys()) {
                 if (!t.foreignKeys().contains(fk)) {
-                    Change c = new Change("drop foreign key " + fk.name, true);
+                    boolean taken = takenOver.contains(fk.name);
+                    Change c = new Change("drop foreign key " + fk.name + (taken ? TAKEN_OVER : ""), !taken);
                     for (Database db : Database.values()) c.sql(db, db.dropConstraint(t.name, fk.name));
                     out.add(c);
                 }
             }
             for (Table.Index i : old.indexes()) {
                 if (!t.indexes().contains(i)) {
-                    Change c = new Change("drop index " + i.name, true);
+                    boolean taken = takenOver.contains(i.name);
+                    Change c = new Change("drop index " + i.name + (taken ? TAKEN_OVER : ""), !taken);
                     for (Database db : Database.values()) c.sql(db, db.dropIndex(t.name, i.name));
                     out.add(c);
                 }
             }
-            columns(old, t, out);
+            columns(old, t, out, sqlServer ? takenOver : java.util.Collections.<String>emptySet());
             if (!old.primaryKey().equals(t.primaryKey())) {
                 out.add(new Change(String.format("the key of %s is now (%s), was (%s) - change it by hand",
                         t.name, String.join(", ", t.primaryKey()), String.join(", ", old.primaryKey())), false));
             }
             for (Table.ForeignKey fk : t.foreignKeys()) {
-                if (!old.foreignKeys().contains(fk)) out.add(addForeignKey(t, fk));
+                if (!old.foreignKeys().contains(fk)) out.add(addForeignKey(t, fk, takenOver.contains(fk.name)));
             }
             for (Table.Index i : t.indexes()) {
-                if (!old.indexes().contains(i)) out.add(createIndex(t, i));
+                if (!old.indexes().contains(i)) out.add(createIndex(t, i, takenOver.contains(i.name)));
             }
         }
 
@@ -130,7 +136,16 @@ public final class SchemaDiff {
         return out;
     }
 
-    private static void columns(Table old, Table t, List<Change> out) {
+    /** Said of a statement that names a key or an index by a name the state took over. */
+    private static final String TAKEN_OVER = " - its name was taken over with -PddlBaseline and the database may call it"
+            + " otherwise (Hibernate names a key by a hash, and holds a unique index as a constraint): use the name it has there";
+
+    /**
+     * The changes of a table's columns. {@code takenOver}: the names SQL Server's
+     * drop-and-make-again around an altered column must not trust - empty where
+     * the history is not for SQL Server.
+     */
+    private static void columns(Table old, Table t, List<Change> out, Set<String> takenOver) {
         for (Column c : t.columns()) {
             Column o = old.column(c.name);
             if (o == null) {
@@ -151,19 +166,22 @@ public final class SchemaDiff {
                 continue;
             }
             boolean keyColumn = t.primaryKey().contains(c.name);
+            String around = takenOverAround(old, t, c, takenOver);
             if (storageDiffers(o, c)) {
                 boolean widens = widens(o, c);
-                Change ch = new Change(String.format("%s.%s: %s -> %s%s", t.name, c.name, describe(o), describe(c),
+                Change ch = new Change(String.format("%s.%s: %s -> %s%s%s", t.name, c.name, describe(o), describe(c),
                         keyColumn ? " - a column of the key; change it by hand"
-                                : widens ? "" : " - narrows or changes the type; check the rows first"), widens && !keyColumn);
+                                : widens ? "" : " - narrows or changes the type; check the rows first", around),
+                        widens && !keyColumn && around.isEmpty());
                 // The type alone: a NOT NULL the change also brings is its own step (below), and a review one.
                 Column typed = c.nullable(o.nullable);
                 for (Database db : Database.values()) alterAround(ch, db, old, t, c, db.alterType(t.name, typed));
                 out.add(ch);
             }
             if (o.nullable != c.nullable && !keyColumn) {
-                Change ch = new Change(String.format("%s.%s %s", t.name, c.name,
-                        c.nullable ? "may now be empty" : "is now required: give empty rows a value first"), c.nullable);
+                Change ch = new Change(String.format("%s.%s %s%s", t.name, c.name,
+                        c.nullable ? "may now be empty" : "is now required: give empty rows a value first", around),
+                        c.nullable && around.isEmpty());
                 for (Database db : Database.values()) alterAround(ch, db, old, t, c, db.alterNullable(t.name, c));
                 out.add(ch);
             }
@@ -242,14 +260,31 @@ public final class SchemaDiff {
         for (Table.ForeignKey fk : keys) ch.sql(db, db.addForeignKey(t.name, fk));
     }
 
-    private static Change addForeignKey(Table t, Table.ForeignKey fk) {
-        Change c = new Change("foreign key " + fk.name, true);
+    /**
+     * What SQL Server's drop-and-make-again around an altered column would name
+     * by a name taken over, said as the reason the change waits - "" if nothing.
+     */
+    private static String takenOverAround(Table old, Table t, Column c, Set<String> takenOver) {
+        List<String> names = new ArrayList<String>();
+        for (Table.Index i : old.indexes()) {
+            if (i.columns.contains(c.name) && t.indexes().contains(i) && takenOver.contains(i.name)) names.add(i.name);
+        }
+        for (Table.ForeignKey fk : old.foreignKeys()) {
+            if (fk.columns.contains(c.name) && t.foreignKeys().contains(fk) && takenOver.contains(fk.name)) names.add(fk.name);
+        }
+        return names.isEmpty() ? "" : " - on SQL Server it drops and makes again " + String.join(", ", names)
+                + ", whose names were taken over with -PddlBaseline: use the names they have there";
+    }
+
+    /** {@code again}: by a name taken over that this change drops first, so it waits with the drop. */
+    private static Change addForeignKey(Table t, Table.ForeignKey fk, boolean again) {
+        Change c = new Change("foreign key " + fk.name + (again ? TAKEN_OVER : ""), !again);
         for (Database db : Database.values()) c.sql(db, db.addForeignKey(t.name, fk));
         return c;
     }
 
-    private static Change createIndex(Table t, Table.Index i) {
-        Change c = new Change((i.unique ? "unique index " : "index ") + i.name, true);
+    private static Change createIndex(Table t, Table.Index i, boolean again) {
+        Change c = new Change((i.unique ? "unique index " : "index ") + i.name + (again ? TAKEN_OVER : ""), !again);
         for (Database db : Database.values()) c.sql(db, db.createIndex(t, i));
         return c;
     }
