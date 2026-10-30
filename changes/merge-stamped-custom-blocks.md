@@ -16,4 +16,5 @@
   `package` 아래 import 블록과 첫 필드 뒤 블록 - 고치기 전 `CONFLICT` 로 실패, 고친 뒤 두 블록이 2.x 의 자리에 남고,
   이어진 모델 변경도 충돌 없이 병합). `customBlocksOfAStampedFileAreKept`(매퍼 XML)는 그대로 통과. 위 프로젝트의 `-Pv3`
   이행: `4 conflict(s)` → `0 conflict(s)`, 4개 파일이 블록 수 그대로 `WROTE`, 다시 돌리면 `0 written / 579 unchanged`
-- 관련 파일: `RulesGenRunner.java`(`writeMergedSource`, `writeMerged`, `withBlocks`), `GeneratedMergeTest.java`
+- 관련 파일: `RulesGenRunner.java`(`writeMergedSource`, `writeMerged`, `withBlocks`), `GeneratedMergeTest.java`,
+  `elasticore-env-guide.md`(9-2 절 - 표시가 있던 프로젝트의 표)
