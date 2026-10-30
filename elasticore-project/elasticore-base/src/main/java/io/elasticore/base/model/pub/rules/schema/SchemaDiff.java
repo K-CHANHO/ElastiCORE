@@ -25,9 +25,22 @@ public final class SchemaDiff {
         /** The statements per database, in order. */
         private final java.util.Map<Database, List<String>> sql = new java.util.EnumMap<Database, List<String>>(Database.class);
 
+        /** The databases this change waits on for review although it runs as written elsewhere. */
+        private final java.util.Set<Database> reviewOn = java.util.EnumSet.noneOf(Database.class);
+
         Change(String description, boolean safe) {
             this.description = description;
             this.safe = safe;
+        }
+
+        Change reviewOn(Database db) {
+            reviewOn.add(db);
+            return this;
+        }
+
+        /** Whether the change runs as written on this database. */
+        public boolean safeOn(Database db) {
+            return safe && !reviewOn.contains(db);
         }
 
         Change sql(Database db, String statement) {
@@ -137,8 +150,9 @@ public final class SchemaDiff {
     }
 
     /** Said of a statement that names a key or an index by a name the state took over. */
-    private static final String TAKEN_OVER = " - its name was taken over with -PddlBaseline and the database may call it"
-            + " otherwise (Hibernate names a key by a hash, and holds a unique index as a constraint): use the name it has there";
+    private static final String TAKEN_OVER =
+            " - its name was taken over with -PddlBaseline and the database may call it"
+                    + " otherwise (Hibernate names a key by a hash, and holds a unique index as a constraint): use the name it has there";
 
     /**
      * The changes of a table's columns. {@code takenOver}: the names SQL Server's
@@ -169,19 +183,35 @@ public final class SchemaDiff {
             String around = takenOverAround(old, t, c, takenOver);
             if (storageDiffers(o, c)) {
                 boolean widens = widens(o, c);
-                Change ch = new Change(String.format("%s.%s: %s -> %s%s%s", t.name, c.name, describe(o), describe(c),
-                        keyColumn ? " - a column of the key; change it by hand"
-                                : widens ? "" : " - narrows or changes the type; check the rows first", around),
-                        widens && !keyColumn && around.isEmpty());
+                Change ch = new Change(
+                        String.format(
+                                "%s.%s: %s -> %s%s%s",
+                                t.name,
+                                c.name,
+                                describe(o),
+                                describe(c),
+                                keyColumn
+                                        ? " - a column of the key; change it by hand"
+                                        : widens ? "" : " - narrows or changes the type; check the rows first",
+                                around),
+                        widens && !keyColumn);
+                // Only SQL Server drops and makes again what is around the column.
+                if (!around.isEmpty()) ch.reviewOn(Database.SQLSERVER);
                 // The type alone: a NOT NULL the change also brings is its own step (below), and a review one.
                 Column typed = c.nullable(o.nullable);
                 for (Database db : Database.values()) alterAround(ch, db, old, t, c, db.alterType(t.name, typed));
                 out.add(ch);
             }
             if (o.nullable != c.nullable && !keyColumn) {
-                Change ch = new Change(String.format("%s.%s %s%s", t.name, c.name,
-                        c.nullable ? "may now be empty" : "is now required: give empty rows a value first", around),
-                        c.nullable && around.isEmpty());
+                Change ch = new Change(
+                        String.format(
+                                "%s.%s %s%s",
+                                t.name,
+                                c.name,
+                                c.nullable ? "may now be empty" : "is now required: give empty rows a value first",
+                                around),
+                        c.nullable);
+                if (!around.isEmpty()) ch.reviewOn(Database.SQLSERVER);
                 for (Database db : Database.values()) alterAround(ch, db, old, t, c, db.alterNullable(t.name, c));
                 out.add(ch);
             }
@@ -270,10 +300,13 @@ public final class SchemaDiff {
             if (i.columns.contains(c.name) && t.indexes().contains(i) && takenOver.contains(i.name)) names.add(i.name);
         }
         for (Table.ForeignKey fk : old.foreignKeys()) {
-            if (fk.columns.contains(c.name) && t.foreignKeys().contains(fk) && takenOver.contains(fk.name)) names.add(fk.name);
+            if (fk.columns.contains(c.name) && t.foreignKeys().contains(fk) && takenOver.contains(fk.name))
+                names.add(fk.name);
         }
-        return names.isEmpty() ? "" : " - on SQL Server it drops and makes again " + String.join(", ", names)
-                + ", whose names were taken over with -PddlBaseline: use the names they have there";
+        return names.isEmpty()
+                ? ""
+                : " - on SQL Server it drops and makes again " + String.join(", ", names)
+                        + ", whose names were taken over with -PddlBaseline: use the names they have there";
     }
 
     /** {@code again}: by a name taken over that this change drops first, so it waits with the drop. */
@@ -302,14 +335,14 @@ public final class SchemaDiff {
         sb.append("-- ").append(title).append(", for ").append(db.title).append(".\n");
         sb.append("-- Written by ElastiCORE from the change of the model; yours from now on - it is never written again.\n");
         List<Change> review = new ArrayList<Change>();
-        for (Change c : changes) if (!c.safe) review.add(c);
+        for (Change c : changes) if (!c.safeOn(db)) review.add(c);
         if (!review.isEmpty()) {
             sb.append("-- REVIEW: ").append(review.size()).append(review.size() == 1 ? " change waits" : " changes wait")
               .append(" for you at the end, commented out - each can lose data or fail on rows already there.\n");
         }
         sb.append("\n");
         for (Change c : changes) {
-            if (!c.safe) continue;
+            if (!c.safeOn(db)) continue;
             sb.append("-- ").append(c.description).append("\n");
             for (String s : c.sql(db)) sb.append(s).append(";\n");
             sb.append("\n");

@@ -345,8 +345,17 @@ final class DdlRun {
             throw e;
         }
         for (SchemaDiff.Change c : changes) {
-            if (!c.safe && !planned.isEmpty()) {
+            if (planned.isEmpty()) break;
+            if (!c.safe) {
                 messages.add(String.format("[elcore3] ddl: REVIEW %s/*/V%s: %s", relative(dir), version, c.description));
+                continue;
+            }
+            // Waiting on some databases only (SQL Server's drop-and-make-again of a name taken over).
+            for (Database db : g.databases) {
+                if (!c.safeOn(db)) {
+                    messages.add(String.format(
+                            "[elcore3] ddl: REVIEW %s/%s/V%s: %s", relative(dir), db.id, version, c.description));
+                }
             }
         }
     }

@@ -252,7 +252,8 @@ public class DdlMigrationTest {
 
     /** The model changes; the migration of that change, for H2. */
     private String change(File project, String model, String version) throws Exception {
-        Files.write(new File(project, "src/main/resources/blueprint/dgshop/model/model.yml").toPath(),
+        Files.write(
+                new File(project, "src/main/resources/blueprint/dgshop/model/model.yml").toPath(),
                 model.getBytes(StandardCharsets.UTF_8));
         System.setProperty("elasticore.ddl.now", version);
         run(project, 0);

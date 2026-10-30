@@ -88,12 +88,23 @@ public class SchemaDiffTest {
 
         // Widening the column runs at once where no history is for SQL Server - no index is touched there.
         assertTrue(only(before, after).safe, only(before, after).description);
-        // On SQL Server the widening drops the index and makes it again: it waits.
+        // On SQL Server the widening drops the index and makes it again: it waits there, and only there -
+        // PostgreSQL in the same history widens the column at once.
+        before.databases().add(Database.POSTGRESQL.id);
         before.databases().add(Database.SQLSERVER.id);
         SchemaDiff.Change around = only(before, after);
-        assertFalse(around.safe);
-        assertTrue(around.description.contains("uk_item_code") && around.description.contains("-PddlBaseline"),
+        assertFalse(around.safeOn(Database.SQLSERVER));
+        assertTrue(around.safeOn(Database.POSTGRESQL));
+        assertTrue(
+                around.description.contains("uk_item_code") && around.description.contains("-PddlBaseline"),
                 around.description);
+        List<SchemaDiff.Change> one = Collections.singletonList(around);
+        assertTrue(
+                SchemaDiff.render(one, Database.SQLSERVER, "t").contains("-- ALTER TABLE"),
+                SchemaDiff.render(one, Database.SQLSERVER, "t"));
+        assertTrue(
+                SchemaDiff.render(one, Database.POSTGRESQL, "t").contains("\nALTER TABLE"),
+                SchemaDiff.render(one, Database.POSTGRESQL, "t"));
 
         // The index itself changes: dropped and made again by that name, both wait.
         Schema moved = of(Column.of("code", ColumnType.TEXT).length(10).nullable(false));
