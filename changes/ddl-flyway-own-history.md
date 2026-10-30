@@ -24,8 +24,9 @@
     길이 함께 씀). 둘이 따로 들어가면 이 길만 이름을 적지 않아, 관계를 뺄 때 없는 이름의 `DROP CONSTRAINT` 로 Flyway 가 실패했다
   - 데이터베이스가 둘 이상이면 상태가 이미 있어도 거절 - baseline 뒤에 `databases` 에 둘째 DB 를 더하면 그 `init` 이 첫 DB 의
     Flyway 가 읽는 자리에 생기고, 그 뒤 변경마다 같은 버전이 두 폴더에 쓰여 Flyway 가 시작을 거부했다
-  - 자기 이력은 Flyway 가 읽는 모든 마이그레이션(`V`·`U`·`R`·`B` 로 시작하고 `__` 가 있는 `.sql`)으로, `migration/` 바로 아래와
-    DB 이름이 아닌 하위 폴더(`common/` 등)에서 찾는다(`hasOwnHistory`) - 전에는 바로 아래의 `V*.sql` 만 보았다
+  - 자기 이력은 Flyway 가 읽는 모든 마이그레이션(`V`·`U`·`R`·`B` 로 시작하고 `__` 가 있는 `.sql`)이 `migration/` 바로 아래에
+    있는 것(`hasOwnHistory`) - 전에는 `V*.sql` 만 보았다. 하위 폴더(Flyway 의 `common/` 과 `{vendor}`)는 세지 않는다 - 프로젝트의
+    `locations` 가 이름을 댈 때만 읽히므로 기본 위치를 쓴다는 표시가 아니고, 세면 그 배치의 여러 DB 빌드를 잘못 거절한다
   - 확인: `aBaselineOverTheDefaultLocationTakesTheNamesOverAndASecondDatabaseIsRefusedLater`,
     `aHistoryOfTheProjectsOwnIsAnyMigrationFlywayReadsOutsideTheDatabasesFolders` - 둘 다 리뷰 전 코드에서 실패
 - 관련 파일: `DdlRun.java`(`write`, `startFromTheModel`, `hasOwnHistory`), `DdlMigrationTest.java`, `elasticore-env-guide.md`(9-1 절 - `locations` 와 이력을 깨는 빌드 표)

@@ -565,10 +565,15 @@ public class DdlMigrationTest {
         Files.write(repeatable.toPath(), new byte[0]);
         assertTrue(DdlRun.hasOwnHistory(migration));
         assertTrue(repeatable.delete());
-        // A versioned one in a folder that is not a database's: Flyway reads it too.
+        // Flyway's "common" beside "{vendor}": read only where the project's locations name it - not
+        // a sign of the default location, so not counted (a multi-database build with it stays fine).
         File common = new File(migration, "common");
         assertTrue(common.mkdirs());
         Files.write(new File(common, "V2__seed.sql").toPath(), new byte[0]);
+        Files.write(new File(common, "R__reference.sql").toPath(), new byte[0]);
+        assertFalse(DdlRun.hasOwnHistory(migration));
+        // A versioned one straight in migration/: the default location.
+        Files.write(new File(migration, "V1__mine.sql").toPath(), new byte[0]);
         assertTrue(DdlRun.hasOwnHistory(migration));
     }
 }

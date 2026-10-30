@@ -443,18 +443,19 @@ final class DdlRun {
     }
 
     /**
-     * Whether migration/ holds a Flyway history of the project's own outside the databases' folders:
-     * a migration Flyway reads (versioned V, undo U, repeatable R, baseline B) in it, or in a folder
-     * under it that is not a database's - Flyway reads every folder under its location.
+     * Whether migration/ itself holds a Flyway history of the project's own - a migration Flyway
+     * reads (versioned V, undo U, repeatable R, baseline B) straight in it, the sign that Spring
+     * Boot's default location, which takes the folders under it too, is in use. A folder of its own
+     * under migration/ (Flyway's "common" beside "{vendor}") is read only where the project's
+     * locations name it, so it is not counted.
      */
     static boolean hasOwnHistory(File dir) {
         File[] files = dir.listFiles();
         if (files == null) return false;
         for (File f : files) {
             String n = f.getName();
-            if (f.isDirectory()) {
-                if (Database.of(n) == null && hasOwnHistory(f)) return true;
-            } else if (n.endsWith(".sql")
+            if (f.isFile()
+                    && n.endsWith(".sql")
                     && n.length() > 1
                     && "VURB".indexOf(n.charAt(0)) >= 0
                     && n.indexOf("__") > 0) {
