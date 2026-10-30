@@ -19,4 +19,13 @@
   도메인 9개짜리 프로젝트(`db/migration/V1__baseline.sql`~`V19`, `classpath:db/migration`)에서 고치기 전에는 `-PddlBaseline`
   을 줘도 `db/migration/postgresql/V…__init.sql`(테이블 54개)이 생겼고, 고친 뒤에는 `elcore`(→ `elcoreDdl`)가 마이그레이션
   없이 멈추고, `-PddlBaseline` 이 `schema-state.json` 만 쓰며, 다시 돌리면 아무것도 쓰지 않는다
-- 관련 파일: `DdlRun.java`(`write`), `DdlMigrationTest.java`, `elasticore-env-guide.md`(9-1 절 - `locations` 와 이력을 깨는 빌드 표)
+- 리뷰 뒤(넘겨받은 이름 - `ddl-baseline-names` - 과 함께):
+  - `migration/` 에 바로 있는 이력의 baseline 도 외래키·인덱스 이름을 `takenOver` 로 적는다(`startFromTheModel` - 두 baseline
+    길이 함께 씀). 둘이 따로 들어가면 이 길만 이름을 적지 않아, 관계를 뺄 때 없는 이름의 `DROP CONSTRAINT` 로 Flyway 가 실패했다
+  - 데이터베이스가 둘 이상이면 상태가 이미 있어도 거절 - baseline 뒤에 `databases` 에 둘째 DB 를 더하면 그 `init` 이 첫 DB 의
+    Flyway 가 읽는 자리에 생기고, 그 뒤 변경마다 같은 버전이 두 폴더에 쓰여 Flyway 가 시작을 거부했다
+  - 자기 이력은 Flyway 가 읽는 모든 마이그레이션(`V`·`U`·`R`·`B` 로 시작하고 `__` 가 있는 `.sql`)으로, `migration/` 바로 아래와
+    DB 이름이 아닌 하위 폴더(`common/` 등)에서 찾는다(`hasOwnHistory`) - 전에는 바로 아래의 `V*.sql` 만 보았다
+  - 확인: `aBaselineOverTheDefaultLocationTakesTheNamesOverAndASecondDatabaseIsRefusedLater`,
+    `aHistoryOfTheProjectsOwnIsAnyMigrationFlywayReadsOutsideTheDatabasesFolders` - 둘 다 리뷰 전 코드에서 실패
+- 관련 파일: `DdlRun.java`(`write`, `startFromTheModel`, `hasOwnHistory`), `DdlMigrationTest.java`, `elasticore-env-guide.md`(9-1 절 - `locations` 와 이력을 깨는 빌드 표)

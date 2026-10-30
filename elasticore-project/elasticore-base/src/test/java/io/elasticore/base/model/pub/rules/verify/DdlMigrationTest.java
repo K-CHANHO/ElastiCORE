@@ -462,7 +462,9 @@ public class DdlMigrationTest {
         File migration = new File(project, "src/main/resources/db/migration");
         File state = new File(migration, "schema-state.json");
         assertTrue(migration.mkdirs());
-        Files.write(new File(migration, "V1__baseline.sql").toPath(), "-- the project's own\n".getBytes(StandardCharsets.UTF_8));
+        Files.write(
+                new File(migration, "V1__baseline.sql").toPath(),
+                "-- the project's own\n".getBytes(StandardCharsets.UTF_8));
 
         System.setProperty("elasticore.ddl.now", "20260101000000");
         String log = run(project, 1);
@@ -479,7 +481,8 @@ public class DdlMigrationTest {
         }
         assertTrue(state.isFile());
         assertFalse(new File(migration, "h2").exists(), "a baseline writes no init");
-        Files.write(new File(project, "src/main/resources/blueprint/dgshop/model/model.yml").toPath(),
+        Files.write(
+                new File(project, "src/main/resources/blueprint/dgshop/model/model.yml").toPath(),
                 V2.getBytes(StandardCharsets.UTF_8));
         System.setProperty("elasticore.ddl.now", "20260102000000");
         run(project, 0);
@@ -498,7 +501,9 @@ public class DdlMigrationTest {
         System.setProperty(DdlConfig.DATABASES, "h2,postgresql");
         File migration = new File(project, "src/main/resources/db/migration");
         assertTrue(migration.mkdirs());
-        Files.write(new File(migration, "V1__baseline.sql").toPath(), "-- the project's own\n".getBytes(StandardCharsets.UTF_8));
+        Files.write(
+                new File(migration, "V1__baseline.sql").toPath(),
+                "-- the project's own\n".getBytes(StandardCharsets.UTF_8));
         System.setProperty("elasticore.ddl.baseline", "");
         String log;
         try {
@@ -510,5 +515,60 @@ public class DdlMigrationTest {
         assertFalse(new File(migration, "schema-state.json").exists());
         assertFalse(new File(migration, "h2").exists());
         assertFalse(new File(migration, "postgresql").exists());
+    }
+
+    @Test
+    public void aBaselineOverTheDefaultLocationTakesTheNamesOverAndASecondDatabaseIsRefusedLater() throws Exception {
+        // The history in migration/ itself, for one database, built with a key the model names fk_visit_customer.
+        File project = project(V2);
+        System.setProperty(DdlConfig.MIGRATION, "flyway");
+        System.setProperty(DdlConfig.DATABASES, "h2");
+        File migration = new File(project, "src/main/resources/db/migration");
+        File state = new File(migration, "schema-state.json");
+        assertTrue(migration.mkdirs());
+        Files.write(
+                new File(migration, "V1__baseline.sql").toPath(),
+                "-- the project's own\n".getBytes(StandardCharsets.UTF_8));
+        System.setProperty("elasticore.ddl.baseline", "");
+        try {
+            run(project, 0);
+        } finally {
+            System.clearProperty("elasticore.ddl.baseline");
+        }
+        // As for a history in migration/{db}/: the names are taken over, so dropping the key waits for review.
+        assertTrue(read(state).contains("\"fk_visit_customer\""), read(state));
+        String sql = change(project, V2.replace("      customer: Customer @ManyToOne\n", ""), "20260102000000");
+        assertTrue(sql.contains("-- ALTER TABLE visit DROP CONSTRAINT fk_visit_customer;"), sql);
+
+        // A second database after the baseline: its first migration would sit where Flyway reads the other's.
+        System.setProperty(DdlConfig.DATABASES, "h2,postgresql");
+        System.setProperty("elasticore.ddl.now", "20260103000000");
+        String log = run(project, 1);
+        assertTrue(log.contains("Move the history into"), log);
+        assertFalse(new File(migration, "postgresql").exists(), "no init beside the history");
+    }
+
+    @Test
+    public void aHistoryOfTheProjectsOwnIsAnyMigrationFlywayReadsOutsideTheDatabasesFolders() throws Exception {
+        File migration = Files.createTempDirectory("elcore-history").toFile();
+        projects.add(migration);
+        assertFalse(DdlRun.hasOwnHistory(migration));
+        // The databases' own folders are ElastiCORE's.
+        File h2 = new File(migration, "h2");
+        assertTrue(h2.mkdirs());
+        Files.write(new File(h2, "V1__init.sql").toPath(), new byte[0]);
+        Files.write(new File(migration, "schema-state.json").toPath(), new byte[0]);
+        Files.write(new File(migration, "README.sql").toPath(), new byte[0]);
+        assertFalse(DdlRun.hasOwnHistory(migration));
+        // A repeatable migration in migration/ itself.
+        File repeatable = new File(migration, "R__views.sql");
+        Files.write(repeatable.toPath(), new byte[0]);
+        assertTrue(DdlRun.hasOwnHistory(migration));
+        assertTrue(repeatable.delete());
+        // A versioned one in a folder that is not a database's: Flyway reads it too.
+        File common = new File(migration, "common");
+        assertTrue(common.mkdirs());
+        Files.write(new File(common, "V2__seed.sql").toPath(), new byte[0]);
+        assertTrue(DdlRun.hasOwnHistory(migration));
     }
 }
