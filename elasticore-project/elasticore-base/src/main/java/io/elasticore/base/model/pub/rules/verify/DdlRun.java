@@ -269,7 +269,9 @@ final class DdlRun {
             for (Database db : Database.values()) {
                 if (!hasMigrations(new File(dir, db.id))) continue;
                 if (baseline) {
-                    // The project's own history built the tables: the state starts from the model, with no init.
+                    // The project's own history built the tables: the state starts from the model, with no init -
+                    // and its keys and indexes by names the database may not have (SchemaDiff waits on them).
+                    schema.takeOverKeysAndIndexes();
                     writeState(stateFile, schema, g);
                     messages.add(String.format("[elcore3] ddl: %s starts from the model as it is - check that the database"
                             + " matches it; the next change is a migration", relative(stateFile)));
@@ -363,14 +365,25 @@ final class DdlRun {
                 written.add(en.getKey());
                 System.out.println("    migration    " + relative(en.getKey()) + "  WROTE");
             }
+            // A name taken over stays so while the model still has a key or an index by it.
+            schema.keepTakenOver(state);
             writeState(stateFile, schema, g);
         } catch (IOException e) {
             for (File f : written) Files.deleteIfExists(f.toPath());
             throw e;
         }
         for (SchemaDiff.Change c : changes) {
-            if (!c.safe && !planned.isEmpty()) {
+            if (planned.isEmpty()) break;
+            if (!c.safe) {
                 messages.add(String.format("[elcore3] ddl: REVIEW %s/*/V%s: %s", relative(dir), version, c.description));
+                continue;
+            }
+            // Waiting on some databases only (SQL Server's drop-and-make-again of a name taken over).
+            for (Database db : g.databases) {
+                if (!c.safeOn(db)) {
+                    messages.add(String.format(
+                            "[elcore3] ddl: REVIEW %s/%s/V%s: %s", relative(dir), db.id, version, c.description));
+                }
             }
         }
     }

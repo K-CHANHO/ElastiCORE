@@ -38,6 +38,13 @@ public class ElastiCorePlugin implements Plugin<Project> {
     private static final String RULE_ENGINE =
             "io.elasticore.base.model.pub.rules.verify.RulesGenRunner";
 
+    /**
+     * The rule set that writes no code: the opt-in for the Ossie semantic
+     * model, which the 2.x generator exports too (ModelExtractor). A build
+     * that keeps 2.x's code may name it.
+     */
+    private static final String OSSIE_EXPORT = "ossie-export";
+
     /** Where a module keeps its DSL. A subproject with this takes part. */
     private static final String BLUEPRINT = "src/main/resources/blueprint";
 
@@ -201,7 +208,10 @@ public class ElastiCorePlugin implements Plugin<Project> {
         }
         String architecture = extension.getArchitecture().getOrElse("layered").trim();
         String language = extension.getLanguage().getOrElse("java").trim();
-        boolean rules = !extension.getRules().getOrElse(new ArrayList<>()).isEmpty();
+        boolean rules = false;
+        for (String rule : extension.getRules().getOrElse(new ArrayList<>())) {
+            if (!OSSIE_EXPORT.equals(rule.trim())) rules = true;
+        }
         if (!"layered".equals(architecture) || !"java".equals(language) || rules) {
             throw new org.gradle.api.GradleException(
                     "elasticore { output = 'v2' } keeps the code 2.x generates, which is layered Java with no rule sets"

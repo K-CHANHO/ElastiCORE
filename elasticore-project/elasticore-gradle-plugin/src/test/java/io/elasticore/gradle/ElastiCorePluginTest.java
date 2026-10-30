@@ -318,6 +318,28 @@ public class ElastiCorePluginTest {
     }
 
     @Test
+    @DisplayName("a build that keeps 2.x's code may export the Ossie model, and still not add rule sets of its own")
+    public void outputV2KeepsTheOssieExport() throws IOException {
+        writeSettings("single");
+        writeBuild(
+                "plugins { id 'io.elasticore'; id 'java' }",
+                "elasticore { output = 'v2'; rules = ['ossie-export'] }",
+                REPORTER);
+
+        String output = run("compileJava", "--dry-run").getOutput();
+        assertTrue(output.contains(":elcore SKIPPED"), output);
+        String reported = reportOf(run("reportElcore"));
+        assertTrue(reported.contains("elasticore.rules.v2=true"), reported);
+        assertTrue(reported.contains("elasticore.publisher.rules.add=ossie-export"), reported);
+
+        writeBuild(
+                "plugins { id 'io.elasticore'; id 'java' }",
+                "elasticore { output = 'v2'; rules = ['ossie-export', 'com.acme.rules.AcmeRules'] }");
+        String refused = runAndFail("compileJava", "--dry-run").getOutput();
+        assertTrue(refused.contains("output = 'v2'") && refused.contains("and rules"), refused);
+    }
+
+    @Test
     @DisplayName("output = 'v3' is passed as the choice it is")
     public void outputV3IsPassed() throws IOException {
         writeSettings("single");

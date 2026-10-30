@@ -286,6 +286,18 @@ public final class RulesGenRunner {
         return false;
     }
 
+    /**
+     * The rule sets the build adds that write code: all of them but
+     * ossie-export, the opt-in for the semantic model, which the 2.x generator
+     * exports too (ModelExtractor) - a build keeping 2.x's code may name it.
+     */
+    static java.util.List<String> addedCodeRules() {
+        java.util.List<String> added = new ArrayList<String>(RulesConfig.addedRules());
+        added.removeAll(java.util.Collections.singleton(
+                io.elasticore.base.model.pub.ossie.OssieSemanticModelExporter.RULE_SET));
+        return added;
+    }
+
     /** Whether a rule name exists only as a v3 reading (the DDD, hexagonal and clean bundles). */
     static boolean needsV3(String rule) {
         if (rule == null) return false;
@@ -549,10 +561,12 @@ public final class RulesGenRunner {
         // through the 2.x generator the build then runs, not at all.
         if (v2Asked) {
             String asking = domainAskingForV3(loader.allModels());
-            if (asking != null || !RulesConfig.addedRules().isEmpty()) {
+            java.util.List<String> added = addedCodeRules();
+            if (asking != null || !added.isEmpty()) {
                 io.elasticore.base.util.ConsoleLog.printWarn("[elcore3] -Pv2 / output = 'v2' asks for the code 2.x"
-                        + " generates, but " + (asking != null ? asking : "the build adds rule sets of its own "
-                        + RulesConfig.addedRules()) + ", which only the 3.0 code carries - remove one or the other");
+                        + " generates, but "
+                        + (asking != null ? asking : "the build adds rule sets of its own " + added)
+                        + ", which only the 3.0 code carries - remove one or the other");
                 return 1;
             }
         }
@@ -4307,7 +4321,12 @@ public final class RulesGenRunner {
     private String relative(File f) {
         String p = f.getAbsolutePath().replace('\\', '/');
         String root = new File(projectRoot).getAbsolutePath().replace('\\', '/');
-        return p.startsWith(root + "/") ? p.substring(root.length() + 1) : p;
+        if (p.startsWith(root + "/")) return p.substring(root.length() + 1);
+        // A canonical file (stillUsed's) under a root given another way: through
+        // a link, /var for /private/var on macOS, an 8.3 short name on Windows.
+        String c = canonical(f).getPath().replace('\\', '/');
+        String croot = canonical(new File(projectRoot)).getPath().replace('\\', '/');
+        return c.startsWith(croot + "/") ? c.substring(croot.length() + 1) : p;
     }
 
     /** What was generated last (elasticore.merge), or null when the project does not merge. */
