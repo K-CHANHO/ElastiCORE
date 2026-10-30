@@ -491,13 +491,242 @@ public class MyBatisGenerationTest {
         assertTrue(log.contains("the column level is reserved by Oracle, PostgreSQL or SQL Server"), log);
     }
 
+    /** An aggregate with what JPA does for it by itself: members, a one-to-one member, events, a promise, a command. */
+    static final String AGGREGATES = String.join("\n",
+            "entity:",
+            "  Customer:",
+            "    meta: entity @root @expose(20)",
+            "    fields:",
+            "      customerId: long @id @sequence",
+            "      name: string(50)! @search(like)",
+            "      vipProfile: VipProfile @OneToOne @cascade(ALL)",
+            "",
+            "  VipProfile:",
+            "    meta: entity @aggregate(Customer) @service",
+            "    fields:",
+            "      profileId: long @id @sequence",
+            "      tier: string(20)",
+            "      customer: Customer @OneToOne(mappedBy=\"vipProfile\")",
+            "",
+            "  Order:",
+            "    meta: entity @root @expose(20) @behavior @event(Placed(total)) @invariant(items.size > 0, 'an order has a line')",
+            "    fields:",
+            "      orderId: string(36) @id @genid",
+            "      total: long @default(0)",
+            "      customer: Customer @ManyToOne",
+            "      items: List<OrderLine> @OneToMany(mappedBy=\"order\")",
+            "      version: long @jpa:Version",
+            "    commands:",
+            "      cancel:",
+            "",
+            "  OrderLine:",
+            "    meta: entity @aggregate(Order) @service",
+            "    fields:",
+            "      lineId: string(36) @id @genid",
+            "      order: Order @ManyToOne",
+            "      qty: int! @min(1)",
+            "");
+
     @Test
-    public void aHexagonOverMyBatisIsRefused() throws Exception {
-        File project = project(MODEL, "mybatis");
+    public void aHexagonOverMyBatisIsItsPortsAndAnAdapterThatDoesWhatJpaDid() throws Exception {
+        File project = project(AGGREGATES, "mybatis");
         System.setProperty("elasticore.architecture", "hexagonal");
+        run(project, 0);
+
+        // The domain names no store.
+        for (String name : new String[]{"OrderBase.java", "Order.java", "OrderLine.java", "Customer.java",
+                "VipProfile.java", "OrderInvariants.java", "OrderRepositoryPort.java"}) {
+            String text = read(project, name);
+            assertFalse(text.contains("jakarta.persistence"), name + "\n" + text);
+            assertFalse(text.contains("org.springframework.data"), name + "\n" + text);
+            assertFalse(text.contains("@PrePersist") || text.contains("@PostLoad") || text.contains("@PreRemove"),
+                    name + "\n" + text);
+        }
+        // What JPA's callbacks and Spring Data's events marked, the root says through Lifecycle.
+        String base = read(project, "OrderBase.java");
+        assertTrue(base.contains("implements io.elasticore.springboot3.domain.Lifecycle, java.io.Serializable"), base);
+        assertTrue(base.contains("new OrderInvariants().check((Order) this);"), base);
+        assertTrue(base.contains("public java.util.Collection<Object> pendingEvents() {"), base);
+        assertTrue(base.contains("public void afterLoad() {"), base);
+        assertTrue(base.contains("settleOnLoad();"), base);
+        assertTrue(base.contains("markBeingRemoved();"), base);
+
+        String query = read(project, "OrderQueryPort.java");
+        assertFalse(query.contains("Specification"), query);
+        assertTrue(query.contains("Page<Order> findAll(OrderSrchDTO search, Object owner, Pageable pageable);"), query);
+
+        String adapter = read(project, "OrderRepositoryAdapter.java");
+        assertTrue(adapter.contains("implements OrderRepositoryPort, OrderQueryPort, Lookup.Source"), adapter);
+        assertTrue(adapter.contains("life.beforeInsert();"), adapter);
+        assertTrue(adapter.contains("throw new OptimisticLockingFailureException("), adapter);
+        assertTrue(adapter.contains("helper.getOrderLine().findAllByOrderIn(Collections.singletonList(order.getOrderId()))"), adapter);
+        assertTrue(adapter.contains("if (!kept.contains(key)) helper.getOrderLine().deleteById(key);"), adapter);
+        assertTrue(adapter.contains("events.publishEvent(event);"), adapter);
+        assertTrue(adapter.contains("Rows.set(row, \"items\", found.get(row.getOrderId()));"), adapter);
+
+        // The one-to-one member travels with its root.
+        String customers = read(project, "CustomerRepositoryAdapter.java");
+        assertTrue(customers.contains("writeMemberReferences(customer);"), customers);
+        assertTrue(customers.contains("helper.getVipProfile().insert(m);"), customers);
+        assertTrue(customers.contains("dropReplacedMembers(customer, membersBefore);"), customers);
+        String vipXml = new String(Files.readAllBytes(findResource(project, "VipProfileRepository.xml")),
+                StandardCharsets.UTF_8);
+        assertTrue(vipXml.contains("LEFT JOIN customer j1 ON j1.vip_profile_profile_id = t.profile_id"), vipXml);
+        assertFalse(vipXml.substring(vipXml.indexOf("<insert")).contains("customer_customer_id"), vipXml);
+
+        String service = read(project, "OrderCoreService.java");
+        assertFalse(service.contains("EntityManager"), service);
+        assertFalse(service.contains("helper"), service);
+        assertTrue(service.contains("protected final io.elasticore.springboot3.domain.Lookup lookup;"), service);
+        assertTrue(service.contains("return repository.findById(saved.getOrderId()).orElse(saved);"), service);
+        assertTrue(service.contains("public OrderDTO cancel("), service);
+        // A member of a bound aggregate has no service, controller or search of its own.
+        assertNull(find(project, "OrderLineCoreService.java"));
+        assertNull(find(project, "OrderLineController.java"));
+        assertNull(find(project, "VipProfileController.java"));
+        assertTrue(read(project, "OrderUseCase.java").contains("interface OrderUseCase"));
+    }
+
+    /**
+     * Members the model makes - a root's @OneToMany, a cascade - without
+     * @aggregate, each with a @service the domain rules take away: the root
+     * writes them all the same.
+     */
+    private static final String BASKETS = String.join("\n",
+            "entity:",
+            "  Stamped:",
+            "    meta: entity @abstract",
+            "    fields:",
+            "      createdBy: string(50) @updatable(false) @jpa:org.springframework.data.annotation.CreatedBy",
+            "",
+            "  Basket:",
+            "    meta: entity @root @expose(20)",
+            "    fields:",
+            "      basketId: long @id @sequence",
+            "      note: string(50)",
+            "      lines: List<BasketLine> @OneToMany(mappedBy=\"basket\")",
+            "      label: BasketLabel @OneToOne @cascade(ALL)",
+            "      version: long @jpa:Version",
+            "",
+            "  BasketLine:",
+            "    meta: entity @service",
+            "    fields:",
+            "      lineId: long @id @sequence",
+            "      basket: Basket @ManyToOne",
+            "      qty: int",
+            "      version: long @jpa:Version",
+            "",
+            "  BasketLabel:",
+            "    meta: entity @service @extend(Stamped)",
+            "    fields:",
+            "      labelId: long @id @sequence",
+            "      text: string(20)",
+            "",
+            "repository:",
+            "  Basket:",
+            "    methods:",
+            "      - id: deleteByNote",
+            "        params:",
+            "          note: string",
+            "        return: long",
+            "");
+
+    @Test
+    public void membersTheModelMakesAreWrittenByTheirRoot() throws Exception {
+        File project = project(BASKETS, "mybatis");
+        System.setProperty("elasticore.architecture", "ddd");
+        run(project, 0);
+
+        String adapter = read(project, "BasketRepositoryAdapter.java");
+        assertTrue(adapter.contains("helper.getBasketLine().findAllByBasketIn(Collections.singletonList(basket.getBasketId()))"), adapter);
+        assertTrue(adapter.contains("writeMemberReferences(basket);"), adapter);
+        // The stored member, not the one this transaction holds.
+        assertTrue(adapter.contains("helper.getBasket().findStoredById(basket.getBasketId())"), adapter);
+        // A member's version counts up in memory too, and starts at the row's 0.
+        assertTrue(adapter.contains("Rows.set(m, \"version\", m.getVersion() == null ? 1L : m.getVersion() + 1);"), adapter);
+        assertTrue(adapter.contains("if (m.getVersion() == null) Rows.set(m, \"version\", 0L);"), adapter);
+        // Only the member records who wrote it: the adapter asks all the same.
+        assertTrue(adapter.contains("private Object currentAuditor() {"), adapter);
+        assertTrue(adapter.contains("ObjectProvider<AuditorAware<?>> auditorAware"), adapter);
+        // A derived delete deletes each row as delete() does; a stale delete is refused.
+        assertTrue(adapter.contains("List<Basket> rows = loaded(helper.getBasket().deleteByNoteRows(note));"), adapter);
+        assertTrue(adapter.contains("for (Basket row : rows) delete(row);"), adapter);
+        assertTrue(adapter.contains("return (long) rows.size();"), adapter);
+        assertTrue(adapter.contains("if (basket.getVersion() != null && helper.getBasket().lockVersion(basket.getBasketId(), basket.getVersion()) == 0"), adapter);
+        assertTrue(adapter.contains("io.elasticore.springboot3.mybatis.LoadedRows.first(row)"), adapter);
+
+        String xml = new String(Files.readAllBytes(findResource(project, "BasketRepository.xml")), StandardCharsets.UTF_8);
+        assertTrue(xml.contains("<select id=\"findStoredById\" resultMap=\"row\" flushCache=\"true\">"), xml);
+        assertTrue(xml.contains("<select id=\"deleteByNoteRows\" resultMap=\"row\">"), xml);
+        assertFalse(xml.contains("<delete id=\"deleteByNote\""), xml);
+        assertTrue(xml.contains("<update id=\"lockVersion\">"), xml);
+        assertNull(find(project, "BasketLineCoreService.java"));
+        assertNull(find(project, "BasketLabelCoreService.java"));
+    }
+
+    @Test
+    public void domainRuleSetsWithoutMyBatisDddAreRefused() throws Exception {
+        File project = project(MODEL, "mybatis");
+        String env = new String(Files.readAllBytes(envOf(project, "dgshop")), StandardCharsets.UTF_8)
+                .replace("    j2ee: jakarta\n", "    j2ee: jakarta\n    publisher:\n      rules: [mybatis-springboot, ddd-aggregate]\n");
+        Files.write(envOf(project, "dgshop"), env.getBytes(StandardCharsets.UTF_8));
         String log = run(project, 1);
-        assertTrue(log.contains("MyBatis code is layered"), log);
-        assertNull(find(project, "PurchaseOrder.java"), log);
+        assertTrue(log.contains("names ddd-aggregate without mybatis-ddd"), log);
+
+        // The MyBatis bundle holds it: not refused.
+        File bundled = project(MODEL, "mybatis");
+        env = new String(Files.readAllBytes(envOf(bundled, "dgshop")), StandardCharsets.UTF_8)
+                .replace("    j2ee: jakarta\n", "    j2ee: jakarta\n    publisher:\n      rules: [ddd-mybatis-springboot]\n");
+        Files.write(envOf(bundled, "dgshop"), env.getBytes(StandardCharsets.UTF_8));
+        log = run(bundled, 0);
+        assertNotNull(find(bundled, "PurchaseOrderRepositoryAdapter.java"), log);
+    }
+
+    @Test
+    public void whatMyBatisCannotKeepIsRefusedByName() throws Exception {
+        // Envers' history.
+        String log = run(project(MODEL.replace("@expose(20) @access(*=public)", "@expose(20) @access(*=public) @audited"),
+                "mybatis"), 1);
+        assertTrue(log.contains("@audited (the row's history is Hibernate Envers'"), log);
+        // A member held by a to-one relation, which the layered service does not write.
+        log = run(project(String.join("\n",
+                "entity:",
+                "  Account:",
+                "    meta: entity @root @expose(20)",
+                "    fields:",
+                "      accountId: long @id @sequence",
+                "      card: Card @OneToOne @cascade(ALL)",
+                "  Card:",
+                "    meta: entity",
+                "    fields:",
+                "      cardId: long @id @sequence",
+                ""), "mybatis"), 1);
+        assertTrue(log.contains("card: a member of Account's aggregate held by a to-one relation"), log);
+        // A mappedBy naming no relation back.
+        log = run(project(String.join("\n",
+                "entity:",
+                "  Person:",
+                "    meta: entity @expose(20)",
+                "    fields:",
+                "      personId: long @id @sequence",
+                "      passport: Passport @OneToOne(mappedBy=\"holder\")",
+                "  Passport:",
+                "    meta: entity @expose(20)",
+                "    fields:",
+                "      passportId: long @id @sequence",
+                ""), "mybatis"), 1);
+        assertTrue(log.contains("names no relation of Passport back to Person"), log);
+        // A Stream, which a mapper does not return.
+        log = run(project(MODEL + "\n" + String.join("\n",
+                "repository:",
+                "  PurchaseOrder:",
+                "    methods:",
+                "      - id: streamByStatus",
+                "        params:",
+                "          status: OrderStatus",
+                "        return: Stream<PurchaseOrder>",
+                ""), "mybatis"), 1);
+        assertTrue(log.contains("answers a Stream"), log);
     }
 
     @Test
@@ -573,10 +802,10 @@ public class MyBatisGenerationTest {
     public void aDomainBundleOfJpaCodeIsRefusedForMyBatis() throws Exception {
         File project = project(MODEL, "mybatis");
         String env = new String(Files.readAllBytes(envOf(project, "dgshop")), StandardCharsets.UTF_8)
-                .replace("    j2ee: jakarta\n", "    j2ee: jakarta\n    publisher:\n      rules: [hexagonal-springboot]\n");
+                .replace("    j2ee: jakarta\n", "    j2ee: jakarta\n    publisher:\n      rules: [jpa-springboot-kt]\n");
         Files.write(envOf(project, "dgshop"), env.getBytes(StandardCharsets.UTF_8));
         String log = run(project, 1);
-        assertTrue(log.contains("its publisher.rules names hexagonal-springboot"), log);
+        assertTrue(log.contains("its publisher.rules names jpa-springboot-kt"), log);
     }
 
     @Test
@@ -587,11 +816,307 @@ public class MyBatisGenerationTest {
                 "    meta: entity @expose(20)",
                 "    fields:",
                 "      noteId: long @id @sequence(SEQUENCE)",
-                "      author: string(20) @jpa:CreatedBy",
+                "      body: string(20)",
                 ""), "mybatis");
         String log = run(project, 1);
-        assertTrue(log.contains("@jpa:CreatedBy"), log);
         assertTrue(log.contains("@sequence(SEQUENCE)"), log);
+    }
+
+    @Test
+    public void anAbstractParentsColumnsAreTheRows() throws Exception {
+        File project = project(String.join("\n",
+                "entity:",
+                "  AuditEntity:",
+                "    meta: entity @abstract",
+                "    fields:",
+                "      createdBy: string(50) @updatable(false) @jpa:org.springframework.data.annotation.CreatedBy",
+                "      createDate: datetime @updatable(false) @jpa:org.springframework.data.annotation.CreatedDate",
+                "      lastModifiedBy: string(50) @jpa:org.springframework.data.annotation.LastModifiedBy",
+                "      lastModifiedDate: datetime @jpa:org.springframework.data.annotation.LastModifiedDate",
+                "",
+                "  Tracked:",
+                "    meta: entity @abstract @extend(AuditEntity)",
+                "    fields:",
+                "      note: string(100)",
+                "",
+                "  Ticket:",
+                "    meta: entity @expose(20) @extend(Tracked)",
+                "    fields:",
+                "      ticketId: long @id @sequence",
+                "      title: string(100)! @search(like)",
+                ""), "mybatis");
+        run(project, 0);
+
+        String xml = new String(Files.readAllBytes(findResource(project, "TicketRepository.xml")), StandardCharsets.UTF_8);
+        String insert = xml.substring(xml.indexOf("<insert"), xml.indexOf("</insert>"));
+        for (String column : new String[]{"created_by", "create_date", "last_modified_by", "last_modified_date", "note", "title"}) {
+            assertTrue(insert.contains(column), column + " in " + insert);
+        }
+        String update = xml.substring(xml.indexOf("<update"), xml.indexOf("</update>"));
+        assertFalse(update.contains("created_by"), update);
+        assertTrue(update.contains("last_modified_by = "), update);
+        assertTrue(xml.contains("<result property=\"note\" column=\"note\""), xml);
+
+        String entity = read(project, "Ticket.java");
+        assertTrue(entity.contains("class Ticket extends Tracked"), entity);
+        assertTrue(read(project, "AuditEntity.java").contains("public abstract class AuditEntity"));
+
+        // Who wrote, as JPA auditing asks: the application's AuditorAware.
+        String service = read(project, "TicketCoreService.java");
+        assertTrue(service.contains("if (entity.getCreatedBy() == null) entity.setCreatedBy((String) currentAuditor());"), service);
+        assertTrue(service.contains("entity.setLastModifiedBy((String) currentAuditor());"), service);
+        assertTrue(service.contains("protected void setAuditorAware(org.springframework.data.domain.AuditorAware<?> auditorAware)"), service);
+
+        String schema = new String(Files.readAllBytes(new File(project, "src/main/resources/db/dgshop-schema.sql").toPath()),
+                StandardCharsets.UTF_8);
+        assertTrue(schema.contains("created_by"), schema);
+        assertTrue(schema.contains("note"), schema);
+    }
+
+    private static final String QUERIES = String.join("\n",
+            "dto:",
+            "  CustomerCountDTO:",
+            "    fields:",
+            "      customerId: long",
+            "      orderCount: long",
+            "",
+            "repository:",
+            "  PurchaseOrder:",
+            "    methods:",
+            "      - id: findByOrderNo",
+            "        params:",
+            "          orderNo: string",
+            "        return: Optional<PurchaseOrder>",
+            "      - id: findByStatus",
+            "        params:",
+            "          status: OrderStatus",
+            "        return: Page<PurchaseOrder>",
+            "        pageable: true",
+            "      - id: findByAmountBetweenOrderByOrderNoDesc",
+            "        params:",
+            "          low: long",
+            "          high: long",
+            "        return: List<PurchaseOrder>",
+            "      - id: findTop3ByCustomerNameContainingIgnoreCaseOrOwnerIdIsNull",
+            "        params:",
+            "          name: string",
+            "        return: List<PurchaseOrder>",
+            "      - id: countByStatusIn",
+            "        params:",
+            "          statuses: List<OrderStatus>",
+            "        return: long",
+            "      - id: existsByOrderNo",
+            "        params:",
+            "          orderNo: string",
+            "        return: boolean",
+            "      - id: findByCustomer",
+            "        params:",
+            "          customer: Customer",
+            "        return: List<PurchaseOrder>",
+            "      - id: findAllByOrderByOrderNoDesc",
+            "        return: List<PurchaseOrder>",
+            "      - id: findLarge",
+            "        params:",
+            "          min: long",
+            "        return: List<PurchaseOrder>",
+            "        query: \"SELECT * FROM purchase_order WHERE amount >= :min ORDER BY amount DESC\"",
+            "        nativeQuery: true",
+            "      - id: countByCustomerSql",
+            "        return: List<CustomerCountDTO>",
+            "        query: \"SELECT customer_customer_id AS customerId, COUNT(*) AS orderCount FROM purchase_order GROUP BY customer_customer_id\"",
+            "        nativeQuery: true",
+            "      - id: markPaid",
+            "        params:",
+            "          orderNo: string",
+            "        return: int",
+            "        query: \"UPDATE purchase_order SET status = 'P' WHERE order_no = :orderNo\"",
+            "        nativeQuery: true",
+            "");
+
+    @Test
+    public void theDeclaredQueriesAreStatementsOfTheMapper() throws Exception {
+        File project = project(MODEL + "\n" + QUERIES, "mybatis");
+        run(project, 0);
+        String repo = read(project, "PurchaseOrderRepository.java");
+        assertTrue(repo.contains("Optional<PurchaseOrder> findByOrderNo(@Param(\"orderNo\") String orderNo);"), repo);
+        assertTrue(repo.contains("default Page<PurchaseOrder> findByStatus(OrderStatus status, Pageable pageable) {"), repo);
+        assertTrue(repo.contains("long findByStatusCount(@Param(\"status\") OrderStatus status);"), repo);
+        assertTrue(repo.contains("default boolean existsByOrderNo(String orderNo) {"), repo);
+        assertTrue(repo.contains("default List<PurchaseOrder> findLarge(Long min) {"), repo);
+        assertTrue(repo.contains("return whole(findLargeRows(min));"), repo);
+        assertTrue(repo.contains("List<CustomerCountDTO> countByCustomerSql();"), repo);
+        assertTrue(repo.contains("int markPaid(@Param(\"orderNo\") String orderNo);"), repo);
+        assertTrue(repo.contains("import org.springframework.data.domain.PageImpl;"), repo);
+
+        String xml = new String(Files.readAllBytes(findResource(project, "PurchaseOrderRepository.xml")), StandardCharsets.UTF_8);
+        assertTrue(xml.contains("<select id=\"findByOrderNo\" resultMap=\"row\">"), xml);
+        assertTrue(xml.contains("WHERE t.order_no = #{orderNo,jdbcType=VARCHAR}"), xml);
+        assertTrue(xml.contains("t.amount BETWEEN #{low,jdbcType=BIGINT} AND #{high,jdbcType=BIGINT} ORDER BY t.order_no DESC"), xml);
+        // The value's own % and _ match as written, as Spring Data JPA escapes them.
+        assertTrue(xml.contains("(<bind name=\"nameLike\" value=\"@io.elasticore.springboot3.mybatis.Rows@like(name, '%', '%', true, _databaseId)\"/>"
+                + "LOWER(j1.name) LIKE #{nameLike} ESCAPE '!') OR (t.owner_id IS NULL)"), xml);
+        assertTrue(xml.contains("FETCH NEXT 3 ROWS ONLY</when><otherwise>LIMIT 3</otherwise>"), xml);
+        // An empty list is no IN (), which no database reads.
+        assertTrue(xml.contains("<choose><when test=\"statuses == null or statuses.isEmpty()\">1 = 0</when><otherwise>"
+                + "t.status IN <foreach collection=\"statuses\""), xml);
+        // OrderBy right after By: every row, in that order.
+        assertTrue(repo.contains("List<PurchaseOrder> findAllByOrderByOrderNoDesc();"), repo);
+        assertTrue(xml.contains("<include refid=\"from\"/> ORDER BY t.order_no DESC"), xml);
+        assertTrue(xml.contains("WHERE t.customer_customer_id = #{customer.customerId,jdbcType=BIGINT}"), xml);
+        assertTrue(xml.contains("<select id=\"findLargeRows\" resultMap=\"row\">"), xml);
+        assertTrue(xml.contains("<![CDATA[SELECT * FROM purchase_order WHERE amount >= #{min,jdbcType=BIGINT} ORDER BY amount DESC]]>"), xml);
+        assertTrue(xml.contains("<select id=\"countByCustomerSql\" resultType=\"io.acme.dgshop.application.dto.CustomerCountDTO\">"), xml);
+        assertTrue(xml.contains("<update id=\"markPaid\">"), xml);
+        assertTrue(xml.contains("<select id=\"findAllByIdIn\" resultMap=\"row\">"), xml);
+        assertTrue(xml.contains("<select id=\"findByStatusCount\" resultType=\"long\">"), xml);
+        // The XML parses.
+        DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+        f.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        f.newDocumentBuilder().parse(findResource(project, "PurchaseOrderRepository.xml").toFile());
+    }
+
+    @Test
+    public void aJpqlQueryIsRefusedUnderMyBatis() throws Exception {
+        File project = project(MODEL + "\n" + String.join("\n",
+                "repository:",
+                "  PurchaseOrder:",
+                "    methods:",
+                "      - id: findBig",
+                "        return: List<PurchaseOrder>",
+                "        query: \"SELECT o FROM PurchaseOrder o WHERE o.amount > 100\"",
+                ""), "mybatis");
+        String log = run(project, 1);
+        assertTrue(log.contains("PurchaseOrder.findBig is JPQL"), log);
+    }
+
+    private static final String PORT = String.join("\n",
+            "dto:",
+            "  OrderFind:",
+            "    fields:",
+            "      orderNo: string",
+            "      sortCode: string",
+            "  OrderRow:",
+            "    fields:",
+            "      orderNo: string",
+            "      amount: long",
+            "",
+            "port:",
+            "  OrderReport:",
+            "    meta: dbms",
+            "    methods:",
+            "      findRows:",
+            "        meta: method",
+            "        params:",
+            "          input: OrderFind",
+            "        return: Page<OrderRow>",
+            "        nativeQuery: true",
+            "        query: |",
+            "          SELECT order_no as orderNo, amount FROM purchase_order",
+            "          WHERE amount > 0",
+            "          AND order_no = :orderNo /* if:orderNo */",
+            "      countAll:",
+            "        meta: method",
+            "        params:",
+            "          status: string",
+            "        return: long",
+            "        nativeQuery: true",
+            "        query: SELECT COUNT(*) FROM purchase_order WHERE status = :status AND note <> ':notABind'",
+            "      updateAmount:",
+            "        meta: method",
+            "        params:",
+            "          orderNo: string",
+            "          amount: long",
+            "        return: int",
+            "        nativeQuery: true",
+            "        query: UPDATE purchase_order SET amount = :amount WHERE order_no = :orderNo",
+            "      byStatus:",
+            "        meta: method",
+            "        params:",
+            "          status: string",
+            "          pageable: Pageable",
+            "        return: Page<OrderRow>",
+            "        nativeQuery: true",
+            "        query: SELECT order_no as orderNo, amount FROM purchase_order WHERE status = :status",
+            "      orderNos:",
+            "        meta: method",
+            "        return: List<String>",
+            "        nativeQuery: true",
+            "        query: SELECT order_no FROM purchase_order",
+            "      touch:",
+            "        meta: method",
+            "        params:",
+            "          orderNo: string",
+            "        return: void",
+            "        nativeQuery: true",
+            "        query: UPDATE purchase_order SET amount = amount WHERE order_no = :orderNo",
+            "");
+
+    @Test
+    public void aDatabasePortOfAMyBatisDomainIsAMapperAndAnAdapter() throws Exception {
+        File project = project(MODEL + "\n" + PORT, "mybatis");
+        String env = new String(Files.readAllBytes(envOf(project, "dgshop")), StandardCharsets.UTF_8)
+                .replace("    repository: io.acme.dgshop.repository\n",
+                        "    repository: io.acme.dgshop.repository\n    port: io.acme.dgshop.port\n");
+        Files.write(envOf(project, "dgshop"), env.getBytes(StandardCharsets.UTF_8));
+        run(project, 0);
+
+        String xml = new String(Files.readAllBytes(findResource(project, "OrderReportMapper.xml")), StandardCharsets.UTF_8);
+        assertTrue(xml.contains("<if test=\"@io.elasticore.springboot3.bean.PortRows@present(p.orderNo)\">AND order_no = #{p.orderNo}</if>"), xml);
+        assertTrue(xml.contains("<select id=\"findRowsRows\" resultType=\"java.util.LinkedHashMap\">"), xml);
+        assertTrue(xml.contains("<select id=\"findRowsCount\" resultType=\"long\">"), xml);
+        assertTrue(xml.contains("<if test=\"orderBy != null\"> ORDER BY ${orderBy}</if>"), xml);
+        assertTrue(xml.contains("WHERE status = #{status} AND note &lt;&gt; ':notABind'"), xml);
+        assertTrue(xml.contains("<update id=\"updateAmount\">"), xml);
+        DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+        f.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        f.newDocumentBuilder().parse(findResource(project, "OrderReportMapper.xml").toFile());
+
+        String adapter = read(project, "OrderReportAdapter.java");
+        assertTrue(adapter.contains("public class OrderReportAdapter implements OrderReport"), adapter);
+        assertTrue(adapter.contains("return new PageImpl<>(PortRows.list(rows, OrderRow.class), pageable, total);"), adapter);
+        assertTrue(adapter.contains("return mapper.updateAmount(orderNo, amount);"), adapter);
+        assertTrue(read(project, "OrderReportMapper.java").contains("@Mapper"));
+
+        // A page of no order: SQL Server pages only ordered rows.
+        String byStatus = xml.substring(xml.indexOf("<select id=\"byStatusRows\""));
+        assertTrue(byStatus.contains("<if test=\"_databaseId == 'sqlserver'\"> ORDER BY (SELECT NULL)</if>"), byStatus);
+        // One value per row: read from the first column, a NULL as null.
+        assertTrue(xml.contains("<select id=\"orderNos\" resultType=\"string\">"), xml);
+        assertTrue(adapter.contains("return mapper.orderNos();"), adapter);
+        // A method that answers nothing runs its statement.
+        assertTrue(adapter.contains("public void touch(String orderNo) {"), adapter);
+        assertTrue(adapter.contains(" mapper.touch(orderNo);"), adapter);
+        assertFalse(adapter.contains("return mapper.touch("), adapter);
+    }
+
+    @Test
+    public void aPortConditionThatIsAnExpressionIsRefusedUnderMyBatis() throws Exception {
+        File project = project(MODEL + "\n" + PORT.replace("/* if:orderNo */", "/* if:input.orderNo != null */"),
+                "mybatis");
+        String env = new String(Files.readAllBytes(envOf(project, "dgshop")), StandardCharsets.UTF_8)
+                .replace("    repository: io.acme.dgshop.repository\n",
+                        "    repository: io.acme.dgshop.repository\n    port: io.acme.dgshop.port\n");
+        Files.write(envOf(project, "dgshop"), env.getBytes(StandardCharsets.UTF_8));
+        String log = run(project, 1);
+        assertTrue(log.contains("which is the port runtime's (JEXL)"), log);
+    }
+
+    @Test
+    public void aConcreteParentIsStillRefused() throws Exception {
+        File project = project(String.join("\n",
+                "entity:",
+                "  Party:",
+                "    meta: entity @expose(20)",
+                "    fields:",
+                "      partyId: long @id @sequence",
+                "",
+                "  Person:",
+                "    meta: entity @expose(20) @extend(Party)",
+                "    fields:",
+                "      name: string(50)",
+                ""), "mybatis");
+        String log = run(project, 1);
+        assertTrue(log.contains("extends Party, which is not @abstract"), log);
     }
 
     @Test

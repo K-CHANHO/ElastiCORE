@@ -22,7 +22,8 @@ YAML 로 적으면, ElastiCORE 가 그 규칙을 지키게 하는 코드를 생�
   지키면서 모델의 변경을 그대로 반영합니다. 마지막으로 생성한 내용(`.elasticore/cache`, 코드와 함께 커밋)을 기준으로 git 이
   브랜치를 병합하듯 합칩니다. 고친 줄과 모델이 바꾸는 줄이 같을 때만 `<<<<<<<` 표시를 남기고 멈춰, 개발자가 정리합니다.
   그래서 코드가 모델과 어긋나지 않고, 고친 내용과 다음 DSL 변경 중 하나를 버릴 일이 없습니다.
-- **모델 하나에서 원하는 코드로.** Java 나 Kotlin, 레이어드·DDD·헥사고날, Spring Boot 3 이나 4, 그리고 서버와 같은
+- **모델 하나에서 원하는 코드로.** Java 나 Kotlin, 레이어드·DDD·헥사고날을 JPA 나 MyBatis 로(`mode: mybatis` - Java 만,
+  도메인 모델과 헥사고날도. JPA 가 애그리거트에 해 주던 일은 생성된 어댑터가 함), Spring Boot 3 이나 4, 그리고 서버와 같은
   검증 문구를 가진 TypeScript 클라이언트.
 
 **이런 시스템을 위해 만들었습니다**: 주문, 정산, 계약, 백오피스처럼 여러 사람의 손을 거치며 몇 년씩 운영되는 업무
@@ -50,7 +51,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '4.0.8'      // 3.x 도 됩니다 - 버전을 읽어 맞춰 생성
     id 'io.spring.dependency-management' version '1.1.7'
-    id 'io.elasticore' version '3.0.261030-rc5'
+    id 'io.elasticore' version '3.0.261030-rc6'
 }
 
 repositories {
@@ -63,8 +64,8 @@ elasticore {
 }
 
 dependencies {
-    implementation 'io.elasticore:elasticore-base:3.0.261030-rc5'
-    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.261030-rc5'
+    implementation 'io.elasticore:elasticore-base:3.0.261030-rc6'
+    implementation 'io.elasticore.springboot4:elasticore-springboot4:3.0.261030-rc6'
 
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
