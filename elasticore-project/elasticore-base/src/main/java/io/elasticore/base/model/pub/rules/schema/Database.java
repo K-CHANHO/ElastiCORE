@@ -192,6 +192,89 @@ public enum Database {
         }
     }
 
+    /**
+     * What a column holds, said to the database: COMMENT ON COLUMN, which sets
+     * or replaces it, and on SQL Server the MS_Description property - updated
+     * where the column has one, added where it has none.
+     */
+    public String comment(String table, String column, String text) {
+        if (this == SQLSERVER) {
+            // Whether the property is there is the database's to say, not the state's: comments switched off
+            // and on again, a database Hibernate made, a baseline - each can hold one the state does not.
+            String args = "@name = N'MS_Description', @value = N'" + quoted(text) + "', " + levels(table, column);
+            return schemaOf(table) + " IF " + described(table, column) + " EXEC sp_updateextendedproperty " + args
+                    + " ELSE EXEC sp_addextendedproperty " + args;
+        }
+        return "COMMENT ON COLUMN " + table + "." + column + " IS '" + quoted(text) + "'";
+    }
+
+    /** A column that no longer says what it holds. Oracle reads '' as no comment; it has no NULL there. */
+    public String dropComment(String table, String column) {
+        switch (this) {
+            case SQLSERVER:
+                return schemaOf(table) + " IF " + described(table, column)
+                        + " EXEC sp_dropextendedproperty @name = N'MS_Description', " + levels(table, column);
+            case ORACLE:
+                return "COMMENT ON COLUMN " + table + "." + column + " IS ''";
+            default:
+                return "COMMENT ON COLUMN " + table + "." + column + " IS NULL";
+        }
+    }
+
+    /**
+     * The most bytes a comment may have here, or 0 for no limit worth saying: Oracle keeps 4000
+     * (counted in UTF-8), SQL Server's property 7500 (an NVARCHAR, two bytes a character).
+     */
+    public int commentLimit() {
+        switch (this) {
+            case ORACLE:
+                return 4000;
+            case SQLSERVER:
+                return 7500;
+            default:
+                return 0;
+        }
+    }
+
+    /** The bytes the database counts of a comment. */
+    public int commentBytes(String text) {
+        return text.getBytes(
+                        this == SQLSERVER
+                                ? java.nio.charset.StandardCharsets.UTF_16LE
+                                : java.nio.charset.StandardCharsets.UTF_8)
+                .length;
+    }
+
+    private static String quoted(String text) {
+        return text.replace("'", "''");
+    }
+
+    /**
+     * SQL Server's schema of the table, as @s: the one it names, or else the login's default, where
+     * a table made unqualified is - SCHEMA_NAME(), through a variable, since EXEC takes no call.
+     */
+    private static String schemaOf(String table) {
+        int dot = table.lastIndexOf('.');
+        return "DECLARE @s sysname = " + (dot > 0 ? "N'" + table.substring(0, dot) + "'" : "SCHEMA_NAME()");
+    }
+
+    /** Whether the column has an MS_Description, in the schema @s. */
+    private static String described(String table, String column) {
+        String object = "OBJECT_ID(@s + N'." + bareName(table) + "')";
+        return "EXISTS (SELECT 1 FROM sys.extended_properties WHERE name = N'MS_Description' AND major_id = " + object
+                + " AND minor_id = COLUMNPROPERTY(" + object + ", N'" + column + "', 'ColumnId'))";
+    }
+
+    /** SQL Server's three levels of a column: the schema @s, the table, the column. */
+    private static String levels(String table, String column) {
+        return "@level0type = N'SCHEMA', @level0name = @s, @level1type = N'TABLE', @level1name = N'" + bareName(table)
+                + "', @level2type = N'COLUMN', @level2name = N'" + column + "'";
+    }
+
+    private static String bareName(String table) {
+        return table.substring(table.lastIndexOf('.') + 1);
+    }
+
     public String createSequence(Schema.Sequence s) {
         return "CREATE SEQUENCE " + s.name + " START WITH " + s.start + " INCREMENT BY " + s.increment;
     }
