@@ -413,6 +413,7 @@ public final class SpecFactory {
                 io.elasticore.base.model.core.Annotation a = en.getValue();
                 spec.meta(en.getKey(), a == null ? null : a.getValue());
                 if (a != null) spec.metaKeyValues(en.getKey(), keyValues(a));
+                if (a != null) metaPropertiesOf(spec, en.getKey(), a);
 
                 // The loader keeps a second and further occurrence of the same
                 // annotation as siblings of the first. Nothing in 2.x read
@@ -662,6 +663,7 @@ public final class SpecFactory {
                 io.elasticore.base.model.core.Annotation a = en.getValue();
                 spec.meta(en.getKey(), a == null ? null : a.getValue());
                 if (a != null) spec.metaKeyValues(en.getKey(), keyValues(a));
+                if (a != null) metaPropertiesOf(spec, en.getKey(), a);
             }
         }
 
@@ -1937,6 +1939,15 @@ public final class SpecFactory {
     private static java.util.Collection<Field> fieldsOf(Entity entity) {
         io.elasticore.base.model.core.ListMap<String, Field> fields = entity.getAllFieldListMap();
         return fields == null ? java.util.Collections.<Field>emptyList() : fields.values();
+    }
+
+    /** Each key=value parameter of a meta annotation, value as the loader read it (quotes off). */
+    private static void metaPropertiesOf(EntitySpec spec, String name, io.elasticore.base.model.core.Annotation a) {
+        java.util.Properties p = a.getProperties();
+        if (p == null) return;
+        for (String key : new java.util.TreeSet<String>(p.stringPropertyNames())) {
+            spec.metaProperty(name, key, p.getProperty(key));
+        }
     }
 
     /** An annotation's key=value pairs as written, joined: "read=public, ship=admin"; null when it has none. */

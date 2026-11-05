@@ -2551,11 +2551,19 @@ public final class RulesGenRunner {
 
         System.out.println("  " + name);
 
-        if (v3 && spec.isAbstractEntity() && !hasPk) {
+        if ((v3 || kotlin) && !typescript && spec.isAbstractEntity() && !hasPk) {
             io.elasticore.base.model.pub.rules.ModelCheck.fail(String.format(
                     "[elcore3] %s.%s: @abstract(entity) is the root of a hierarchy, and a root has the key - give it"
                             + " one, or use plain @abstract for a frame with no table",
                     spec.domainClassName(), name));
+        }
+
+        // @expose(methods="...") and the @restExclude it replaces, said once per
+        // entity by the server's run - the client's run reads the same DSL.
+        if ((v3 || kotlin) && !typescript && exposed) {
+            for (String problem : io.elasticore.base.model.pub.rules.base.ControllerBaseRules.exposeProblems(spec)) {
+                io.elasticore.base.util.ConsoleLog.storeLog("DSL_WARN", problem);
+            }
         }
 
         // Over MyBatis the artifacts a rule set contributes - the repository
@@ -3358,6 +3366,39 @@ public final class RulesGenRunner {
         io.elasticore.base.util.ConsoleLog.storeLog("DSL_WARN", out.relativePath() + " is yours and does not serve "
                 + String.join(", ", missing) + ", which the DSL gives it - add them as the generator would write"
                 + " them (delete the file and build to see that), or the TypeScript client calls endpoints that do not exist");
+    }
+
+    /**
+     * A controller of the developer's, kept because the DSL's changes to it
+     * do not merge, that still serves endpoints the DSL has since taken away -
+     * {@code @expose(methods)}, {@code @readonly}, {@code @restExclude}. The TypeScript client, which
+     * is regenerated, no longer calls them, and nothing says the API is wider
+     * than the model. Only what the generator wrote last and writes no more is
+     * named: an endpoint the developer added was never in what it wrote.
+     */
+    private void warnIfEndpointsDropped(ArtifactTarget out, String disk, String base, String generated) {
+        if (!(v3 || kotlin)) return;
+        if (out.fileName() == null || !out.fileName().endsWith("Controller")) return;
+        java.util.List<String> dropped = droppedEndpoints(disk, base, generated, out.fileName());
+        if (dropped.isEmpty()) return;
+        io.elasticore.base.util.ConsoleLog.storeLog(
+                "DSL_WARN",
+                out.relativePath() + " is yours and still serves "
+                        + String.join(", ", dropped)
+                        + ", which the DSL no longer generates (for example @expose(methods)"
+                        + " or @readonly took them away) - remove them by hand, or give them back in the DSL");
+    }
+
+    /** What the generator wrote last and no longer writes, that the developer's file still maps, as written. */
+    static java.util.List<String> droppedEndpoints(String disk, String base, String generated, String className) {
+        Endpoints was = Endpoints.of(base, className);
+        Endpoints now = Endpoints.of(generated, className);
+        Endpoints have = Endpoints.of(disk, className);
+        java.util.List<String> dropped = new java.util.ArrayList<String>();
+        for (java.util.Map.Entry<String, String> en : was.mapped.entrySet()) {
+            if (!now.serves(en.getKey()) && have.serves(en.getKey())) dropped.add(en.getValue());
+        }
+        return dropped;
     }
 
     /**
@@ -4574,6 +4615,7 @@ public final class RulesGenRunner {
             System.out.println(label + "  KEPT(yours - the DSL's changes to it do not merge)");
             notes.add("[elcore3] " + key + ": the DSL changes this file of yours where you changed it too ("
                     + merged.conflicts() + " place(s)) - it is left as it is; take the changes over by hand");
+            warnIfEndpointsDropped(out, disk, base, generated);
             warnIfEndpointsMissing(out, file, content);
             if ((v3 || kotlin) && !typescript) warnIfSignInLeft(out, file, content);
             warnIfConstructorDrifted(out, file, content);

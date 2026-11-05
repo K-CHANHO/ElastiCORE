@@ -8,7 +8,7 @@ entity:
   StatusCode:
     meta: entity @extend(Code) -- A status a case can be in
     fields:
-      terminal: boolean
+      phase: string(10)
 
   RegionCode:
     meta: entity @extend(Code) -- A region a case can be in
