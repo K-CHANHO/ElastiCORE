@@ -98,10 +98,12 @@ StatusCode:
   meta: entity @extend(Code)
 ```
 - `@Entity` 와 `@Table` 이 붙고, 적어 둔 `@jpa:Inheritance` 는 유지됩니다. 리포지토리, Q 클래스, 읽기·검색·수정·삭제를 하는 서비스가 생깁니다.
-- 생성은 없습니다. `save`, POST, `toEntity`, TypeScript 클라이언트의 `create`, `ddd`·`hexagonal` 의 생성 유스케이스가 없고, 생성된 Kotlin 서비스 테스트도 인스턴스를 만들지 않습니다. 이 루트를 가리키는 관계는 `em.getReference` 로 씁니다.
-- `TABLE_PER_CLASS` 에서는 추상 클래스에 테이블이 없고, 각 하위 클래스의 테이블이 그 컬럼을 갖습니다. 행이 여러 테이블에 있으므로 이 루트를 가리키는 관계에는 외래키가 없습니다. Hibernate 가 여기서 identity 컬럼을 거부하므로 키에 `@sequence` 를 쓸 수 없습니다.
-- 키를 상속받는 하위 클래스에는 리포지토리와 서비스가 생기지 않습니다. 그 행은 직접 만든 리포지토리로 씁니다.
+- 생성은 없습니다. `save`, POST, `toEntity`, TypeScript 클라이언트의 `create`, `hexagonal` 의 생성 유스케이스가 없고, 생성된 Kotlin 서비스 테스트도 인스턴스를 만들지 않습니다. 이 루트를 가리키는 관계는 `em.getReference` 로 쓰고, `EntityManager` 를 받지 않는 매퍼 오버로드는 DTO 에 그 값이 있으면 예외를 던집니다.
+- `@jpa:Inheritance` 에는 `TABLE_PER_CLASS` 나 `JOINED` 를 적어야 합니다. 하위 클래스마다 자기 테이블을 전제로 생성하는데, 기본값인 `SINGLE_TABLE` 은 그 테이블을 주지 않기 때문입니다.
+- `TABLE_PER_CLASS` 에서는 추상 클래스에 테이블이 없고, 각 하위 클래스의 테이블이 그 컬럼을 갖습니다. 행이 여러 테이블에 있으므로 이 루트를 가리키는 관계에는 외래키가 없습니다. 키는 모든 하위 테이블에 걸쳐 유일해야 하며, 데이터베이스가 이를 강제하지는 않습니다. Hibernate 가 여기서 identity 컬럼을 거부하므로 키를 identity 로 둘 수 없습니다. `IDENTITY` 를 뜻하는 `@sequence` 는 생성을 멈추고, `@sequence(SEQUENCE)` 는 동작합니다.
+- 키를 상속받는 하위 클래스에는 리포지토리와 서비스가 생기지 않고, 거기에 `@expose` 나 `@service` 를 적으면 경고가 나옵니다. 그 행은 직접 만든 리포지토리로 씁니다.
 - 키가 없는 루트와 `mode: mybatis` 는 생성을 멈춥니다. 2.x 생성기와 `output = 'v2'` 는 일반 `@abstract` 로 읽습니다. Ossie 내보내기에는 일반 `@abstract` 처럼 이 루트의 dataset 이 없습니다.
+- Oracle 23 에서는 하위 클래스를 포함해 어떤 엔티티든 boolean 컬럼이 있으면 `ddl-auto=validate` 가 실패합니다. 프로젝트 DDL 은 `NUMBER(1)` 을 쓰는데, Hibernate 는 이 버전부터 `BOOLEAN` 을 기대합니다.
 
 ### @extend(ParentEntity)
 부모 엔티티 상속. `extends ParentEntity` 생성.
