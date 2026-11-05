@@ -45,7 +45,7 @@ public class QBaseRules implements CodeRules {
         SourceCode c = ctx(d);
 
         for (EntitySpec e : d.entities()) {
-            if (e.hasMeta("abstract")) continue;
+            if (e.isMappedSuperclass()) continue;
             entityMeta(c, d, e);
         }
 

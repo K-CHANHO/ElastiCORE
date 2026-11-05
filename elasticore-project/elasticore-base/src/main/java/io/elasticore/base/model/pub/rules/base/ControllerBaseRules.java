@@ -194,6 +194,8 @@ public class ControllerBaseRules implements CodeRules {
                 if (!id.isEmpty()) out.add(id);
             }
         }
+        // An abstract entity is never made as itself: its rows are its subclasses'.
+        if (clean && e.isAbstractEntity()) out.add("save");
         return clean ? io.elasticore.base.model.pub.rules.SourceCode.withCallers(out) : out;
     }
 }

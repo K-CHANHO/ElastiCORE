@@ -3,7 +3,7 @@
 # regenerate with the ossie-export rule set.
 version: 0.2.0.dev0
 name: petstore
-description: "Domain model of petstore, as its ElastiCORE DSL declares it"
+description: "Domain model of petstore, refdata, as its ElastiCORE DSL declares it"
 ai_context:
   instructions: "Each dataset is a table the generated application owns. An enumeration column holds a code; the field's ai_context lists every code and its label. Amounts (money) are decimals with their scale; a quantity is a count that is never negative. Password and write-only columns are left out on purpose. Lifecycles, access rules and derived values are in the ELASTICORE custom extensions."
 datasets:
@@ -347,6 +347,46 @@ datasets:
     custom_extensions:
       - vendor_name: ELASTICORE
         data: "{\"entity\": \"OrderLine\", \"domain\": \"petstore\"}"
+  - name: StatusCode
+    source: ref_status_code
+    primary_key: [code]
+    description: "A status a case can be in"
+    fields:
+      - name: terminal
+        expression:
+          sql: "terminal"
+        datatype: Boolean
+      - name: code
+        expression:
+          sql: "code"
+        datatype: String
+      - name: name
+        expression:
+          sql: "name"
+        datatype: String
+    custom_extensions:
+      - vendor_name: ELASTICORE
+        data: "{\"entity\": \"StatusCode\", \"domain\": \"refdata\"}"
+  - name: RegionCode
+    source: ref_region_code
+    primary_key: [code]
+    description: "A region a case can be in"
+    fields:
+      - name: country
+        expression:
+          sql: "country"
+        datatype: String
+      - name: code
+        expression:
+          sql: "code"
+        datatype: String
+      - name: name
+        expression:
+          sql: "name"
+        datatype: String
+    custom_extensions:
+      - vendor_name: ELASTICORE
+        data: "{\"entity\": \"RegionCode\", \"domain\": \"refdata\"}"
 relationships:
   - name: Product_category
     from: Product
@@ -432,4 +472,4 @@ metrics:
         data: "{\"domain\": \"petstore\", \"declared\": \"count(Customer) where role = USER @terms(members, 회원 수) -- 고객 수 (관리자 제외)\"}"
 custom_extensions:
   - vendor_name: ELASTICORE
-    data: "{\"generator\": \"ElastiCORE\", \"domains\": [\"petstore\"]}"
+    data: "{\"generator\": \"ElastiCORE\", \"domains\": [\"petstore\", \"refdata\"]}"

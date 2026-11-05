@@ -25,6 +25,8 @@ elasticore {
 	springBoot = '4'
 	// The model as an Apache Ossie semantic model too: blueprint/semantic_model.yml
 	rules = ['ossie-export']
+	// The name of that model: without it, every domain's joined.
+	ossieName = 'petstore'
 	// The tables Hibernate maps, for each database (db/schema-{db}.sql) - checked
 	// by SchemaValidateTest with ddl-auto=validate.
 	ddl {

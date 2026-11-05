@@ -136,6 +136,8 @@ public class MapperAssembleRules implements CodeRules {
         code.line(rev, "    }")
             .line(rev, SEP).line(rev, SEP);
         }
+        // An abstract entity has no instance to make: a DTO can only update a row that is there.
+        if (!code.compatible() && e.isKnownAbstractEntity(en)) return;
         code.line(rev, "    public static %s toEntity(%s from){", en, dto)
             .line(rev, "        return toEntity(from,MappingContext.withGuard(2,null));")
             .line(rev, "    }")

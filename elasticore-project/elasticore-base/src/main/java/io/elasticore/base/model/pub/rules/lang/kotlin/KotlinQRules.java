@@ -37,7 +37,7 @@ public class KotlinQRules implements CodeRules {
         if (!d.qImports().isEmpty()) c.varLines("importList", d.qImports());
 
         for (EntitySpec e : d.entities()) {
-            if (e.hasMeta("abstract")) continue;
+            if (e.isMappedSuperclass()) continue;
             entityMeta(c, d, e);
         }
         if (!c.hasVarLines(MEMBERS)) c.dontMake();

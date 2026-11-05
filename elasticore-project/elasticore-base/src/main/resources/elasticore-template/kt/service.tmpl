@@ -113,6 +113,7 @@ open class ${className}(
                 .map { ${mapperName}.toDTO(it, MappingContext.withGuard(2)) }
     }
 
+/*-- print-elseif:${isAbstractEntity} --*/
     /**
      * Saves a new ${entityClassName} from the given DTO.
      */
@@ -131,6 +132,7 @@ open class ${className}(
         return ${mapperName}.toDTO(result)
     }
 
+/*-- print-if:end --*/
     /**
      * Called with each ${entityClassName} a request has just written, before it
      * is saved - on create, update, batch update and update by condition.

@@ -67,6 +67,22 @@ AuditEntity:
   meta: entity @abstract
 ```
 
+**`@abstract(entity)` - 계층의 루트.** 키가 있는 추상 `@Entity` 입니다. 그 자체로는 저장되지 않고, 하위 클래스들을 리포지토리 하나와 서비스 하나로 함께 읽습니다:
+```yaml
+Code:
+  meta: entity @abstract(entity) @expose(20) @jpa:Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
+  fields:
+    code: string(10) @id
+    name: string(50)!
+StatusCode:
+  meta: entity @extend(Code)
+```
+- `@Entity` 와 `@Table` 이 붙고, 적어 둔 `@jpa:Inheritance` 는 유지됩니다. 리포지토리, Q 클래스, 읽기·검색·수정·삭제를 하는 서비스가 생깁니다.
+- 생성은 없습니다. `save`, POST, `toEntity`, TypeScript 클라이언트의 `create`, `ddd`·`hexagonal` 의 생성 유스케이스가 없고, 생성된 Kotlin 서비스 테스트도 인스턴스를 만들지 않습니다. 이 루트를 가리키는 관계는 `em.getReference` 로 씁니다.
+- `TABLE_PER_CLASS` 에서는 추상 클래스에 테이블이 없고, 각 하위 클래스의 테이블이 그 컬럼을 갖습니다. 행이 여러 테이블에 있으므로 이 루트를 가리키는 관계에는 외래키가 없습니다. Hibernate 가 여기서 identity 컬럼을 거부하므로 키에 `@sequence` 를 쓸 수 없습니다.
+- 키를 상속받는 하위 클래스에는 리포지토리와 서비스가 생기지 않습니다. 그 행은 직접 만든 리포지토리로 씁니다.
+- 키가 없는 루트와 `mode: mybatis` 는 생성을 멈춥니다. 2.x 생성기와 `output = 'v2'` 는 일반 `@abstract` 로 읽습니다. Ossie 내보내기에는 일반 `@abstract` 처럼 이 루트의 dataset 이 없습니다.
+
 ### @extend(ParentEntity)
 부모 엔티티 상속. `extends ParentEntity` 생성.
 ```yaml

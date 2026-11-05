@@ -340,6 +340,15 @@ entities:
       assignDate: Date @Column(name = "assign_date")
       hoursAllocated: Integer @Column(name = "hours_allocated")
 
+  RegionCode:
+    meta: entity @extend(Code) @java(io.elasticore.blueprint.domain.refdata.entity.RegionCode) -- A region a case can be in
+    table: ref_region_code
+    java: io.elasticore.blueprint.domain.refdata.entity.RegionCode
+    fields:
+      code: string(10) @Column(name = "code", length = 10) @Id
+      name: string(50) @Column(name = "name", length = 50)
+      country: string(2) @Column(name = "country", length = 2)
+
   Skill:
     meta: entity @extend(SkillBase) @java(io.elasticore.blueprint.domain.hr.entity.Skill)
     table: hr_skill
@@ -349,6 +358,15 @@ entities:
       proficiency: Integer @Column(name = "proficiency")
       skillId: Long @Column(name = "skill_id") @Id @GeneratedValue
       category: string(50) @Column(name = "category", length = 50)
+
+  StatusCode:
+    meta: entity @extend(Code) @java(io.elasticore.blueprint.domain.refdata.entity.StatusCode) -- A status a case can be in
+    table: ref_status_code
+    java: io.elasticore.blueprint.domain.refdata.entity.StatusCode
+    fields:
+      code: string(10) @Column(name = "code", length = 10) @Id
+      name: string(50) @Column(name = "name", length = 50)
+      terminal: Boolean @Column(name = "terminal")
 
   SyncRecord:
     meta: entity @java(io.elasticore.blueprint.domain.integration.entity.SyncRecord)

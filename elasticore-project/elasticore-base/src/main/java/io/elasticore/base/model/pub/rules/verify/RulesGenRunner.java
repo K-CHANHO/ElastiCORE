@@ -2551,6 +2551,13 @@ public final class RulesGenRunner {
 
         System.out.println("  " + name);
 
+        if (v3 && spec.isAbstractEntity() && !hasPk) {
+            io.elasticore.base.model.pub.rules.ModelCheck.fail(String.format(
+                    "[elcore3] %s.%s: @abstract(entity) is the root of a hierarchy, and a root has the key - give it"
+                            + " one, or use plain @abstract for a frame with no table",
+                    spec.domainClassName(), name));
+        }
+
         // Over MyBatis the artifacts a rule set contributes - the repository
         // adapter writing the aggregate's members - read the related entities.
         if (v3 && !kotlin && !typescript && persistence() == RulesConfig.Persistence.MYBATIS) {
@@ -2637,7 +2644,7 @@ public final class RulesGenRunner {
             relateMyBatisEarly(spec);
             java.util.List<String> unsupported =
                     io.elasticore.base.model.pub.rules.mybatis.MyBatisSql.unsupported(spec);
-            if (!unsupported.isEmpty() && !spec.hasMeta("embeddable") && !spec.hasMeta("abstract")) {
+            if (!unsupported.isEmpty() && !spec.hasMeta("embeddable") && !spec.isMappedSuperclass()) {
                 io.elasticore.base.model.pub.rules.ModelCheck.fail(String.format(
                         "[elcore3] %s.%s: mode: mybatis does not write %s yet - model it otherwise,"
                                 + " or keep this domain on JPA", spec.domainClassName(), name,

@@ -273,6 +273,20 @@ CREATE TABLE member (
     PRIMARY KEY (id)
 );
 
+CREATE TABLE ref_region_code (
+    code NVARCHAR(10) NOT NULL,
+    name NVARCHAR(50) NOT NULL,
+    country NVARCHAR(2),
+    PRIMARY KEY (code)
+);
+
+CREATE TABLE ref_status_code (
+    code NVARCHAR(10) NOT NULL,
+    name NVARCHAR(50) NOT NULL,
+    terminal BIT,
+    PRIMARY KEY (code)
+);
+
 CREATE TABLE shop_agent (
     agent_id BIGINT IDENTITY(1,1) NOT NULL,
     login NVARCHAR(20) NOT NULL,

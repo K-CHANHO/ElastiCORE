@@ -52,6 +52,20 @@ CREATE TABLE cat_reading (
     PRIMARY KEY (reading_id)
 );
 
+CREATE TABLE cat_region_code (
+    code VARCHAR(10) NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    country VARCHAR(2),
+    PRIMARY KEY (code)
+);
+
+CREATE TABLE cat_status_code (
+    code VARCHAR(10) NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    terminal BOOLEAN,
+    PRIMARY KEY (code)
+);
+
 CREATE TABLE shop_category (
     created_by VARCHAR(50),
     create_date TIMESTAMP,

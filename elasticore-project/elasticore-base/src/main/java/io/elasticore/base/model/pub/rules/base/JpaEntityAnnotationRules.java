@@ -52,7 +52,7 @@ public class JpaEntityAnnotationRules implements CodeRules {
             c.ensureClassAnnotation(AnnoCode.of("jakarta.persistence.Embeddable"));
             return;
         }
-        if (e.hasMeta("abstract")) {
+        if (e.isMappedSuperclass()) {
             c.ensureClassAnnotation(AnnoCode.of("jakarta.persistence.MappedSuperclass"));
             return;
         }

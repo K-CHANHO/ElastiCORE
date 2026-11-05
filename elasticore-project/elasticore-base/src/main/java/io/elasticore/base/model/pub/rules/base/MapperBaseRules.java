@@ -265,8 +265,10 @@ public class MapperBaseRules implements CodeRules {
                     }
                 }
             } else if (pk != null && pk.equals(childField)) {
-                pkRefWriteBack(code, REV_TAIL, f, relField, childField, relType, false);
-                pkRefWriteBack(code, REV_TAIL_EM, f, relField, childField, relType, true);
+                // An abstract entity cannot be made to hold the key: only a real proxy points at one.
+                boolean noStub = !code.compatible() && abstractEntityNamed(e, relType);
+                if (!noStub) pkRefWriteBack(code, REV_TAIL, f, relField, childField, relType, false, false);
+                pkRefWriteBack(code, REV_TAIL_EM, f, relField, childField, relType, true, noStub);
             } else {
                 // Not the relation's key, so this would edit the related row
                 // rather than point at it. A rule may decline that; nothing
@@ -288,9 +290,15 @@ public class MapperBaseRules implements CodeRules {
      * editing one, so the reverse direction attaches a reference instead of
      * writing through. With an EntityManager at hand that is a real proxy.
      */
-    private void pkRefWriteBack(SourceCode code, String block, FieldSpec f,
-                                String relField, String childField, String relType,
-                                boolean withEntityManager) {
+    private void pkRefWriteBack(
+            SourceCode code,
+            String block,
+            FieldSpec f,
+            String relField,
+            String childField,
+            String relType,
+            boolean withEntityManager,
+            boolean noStub) {
         Syntax syntax = code.syntax();
         String read = syntax.getter("from", f.name());
         String make = syntax.localVar(relType, "t", syntax.newInstance(relType, ""));
@@ -306,12 +314,14 @@ public class MapperBaseRules implements CodeRules {
                 .line(block, "                %s", syntax.statement(syntax.setter(target, relField,
                         String.format("em.getReference(%s, %s)",
                                 syntax.javaClassLiteral(relType), read))))
-                .line(block, "            }")
-                .line(block, "            else{")
-                .line(block, "                %s", make)
-                .line(block, "                %s", assign)
-                .line(block, "                %s", attach)
                 .line(block, "            }");
+            if (!noStub) {
+                code.line(block, "            else{")
+                        .line(block, "                %s", make)
+                        .line(block, "                %s", assign)
+                        .line(block, "                %s", attach)
+                        .line(block, "            }");
+            }
         } else {
             code.line(block, "            %s", make)
                 .line(block, "            %s", assign)
@@ -414,6 +424,10 @@ public class MapperBaseRules implements CodeRules {
             checkType = isList ? f.coreItemType() : f.typeName();
         }
 
+        // A nested DTO of an abstract entity cannot be made back into one.
+        if (!toDto && !ctx(e).compatible() && e.isKnownAbstractEntity(e.dtoTemplateEntity(checkType))) {
+            return Conversion.SKIP;
+        }
         String mapper = e.isKnownDto(checkType) ? "" : foreignMapperOf(checkType, e);
         if (e.isKnownDto(checkType) || mapper != null) {
             if (mapper == null) mapper = "";
@@ -480,6 +494,25 @@ public class MapperBaseRules implements CodeRules {
     }
 
     /** The primary key field of an entity, resolved globally as 2.x does. */
+    /** Whether a relation's type is an abstract entity, of this domain or, through the context, of another. */
+    private static boolean abstractEntityNamed(EntitySpec e, String entityName) {
+        if (entityName == null) return false;
+        if (e.isKnownAbstractEntity(entityName)) return true;
+        try {
+            io.elasticore.base.ECoreModelContext ctx = io.elasticore.base.model.core.BaseECoreModelContext.getContext();
+            io.elasticore.base.model.entity.Entity entity = ctx == null
+                    ? null
+                    : ctx.findModelComponent(entityName, io.elasticore.base.model.entity.Entity.class);
+            return entity != null
+                    && "entity"
+                            .equalsIgnoreCase(
+                                    String.valueOf(entity.getMetaInfo().getMetaAnnotationValue("abstract"))
+                                            .trim());
+        } catch (RuntimeException notFound) {
+            return false;
+        }
+    }
+
     private static String globalPkOf(String entityName) {
         if (entityName == null) return null;
         try {

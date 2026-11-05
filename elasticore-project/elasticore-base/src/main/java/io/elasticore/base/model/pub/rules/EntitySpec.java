@@ -1183,6 +1183,33 @@ public final class EntitySpec {
     }
 
     /**
+     * {@code @abstract(entity)}: an abstract {@code @Entity}, the root of a hierarchy that is
+     * never stored as itself. Its rows are its subclasses', read together through its repository.
+     */
+    public boolean isAbstractEntity() {
+        return hasMeta("abstract")
+                && "entity"
+                        .equalsIgnoreCase(String.valueOf(metaValue("abstract")).trim());
+    }
+
+    /** Plain {@code @abstract}: a frame for inheritance, with no table and nothing to query. */
+    public boolean isMappedSuperclass() {
+        return hasMeta("abstract") && !isAbstractEntity();
+    }
+
+    private final java.util.Set<String> abstractEntities = new java.util.HashSet<String>();
+
+    public EntitySpec knownAbstractEntity(String entityName) {
+        abstractEntities.add(entityName);
+        return this;
+    }
+
+    /** For a DTO's or a mapper's spec, which carries the DTO's meta and cannot read the entity's. */
+    public boolean isKnownAbstractEntity(String entityName) {
+        return abstractEntities.contains(entityName);
+    }
+
+    /**
      * The entities this one's to-one relations point at, whole - for code
      * that reads their rows in the same statement (a MyBatis mapper's join),
      * which needs their table and columns rather than their name.

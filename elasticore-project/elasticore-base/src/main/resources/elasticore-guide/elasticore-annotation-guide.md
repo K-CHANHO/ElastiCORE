@@ -67,6 +67,22 @@ AuditEntity:
   meta: entity @abstract
 ```
 
+**`@abstract(entity)` - the root of a hierarchy.** An abstract `@Entity` with a key, never stored as itself, whose subclasses one repository and one service read together:
+```yaml
+Code:
+  meta: entity @abstract(entity) @expose(20) @jpa:Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
+  fields:
+    code: string(10) @id
+    name: string(50)!
+StatusCode:
+  meta: entity @extend(Code)
+```
+- It gets `@Entity` and `@Table`, keeps the `@jpa:Inheritance` you write, and has a repository, a Q class and a service that reads, searches, updates and deletes.
+- There is no create: no `save`, no POST, no `toEntity`, no `create` in the TypeScript client, no create use case under `ddd` and `hexagonal`, and the generated Kotlin service test makes no instance. A relation to it is written with `em.getReference`.
+- Under `TABLE_PER_CLASS` the abstract class has no table, each subclass's table has its columns, and a relation to it has no foreign key, as its rows are in several tables. Hibernate refuses an identity column there, so the key cannot be `@sequence`.
+- A subclass, whose key is inherited, gets no repository or service of its own: write its rows through a repository of your own.
+- Generation stops on a root without a key, and on `mode: mybatis`. The 2.x generator and `output = 'v2'` read it as plain `@abstract`. The Ossie export has no dataset for it, as for plain `@abstract`.
+
 ### @extend(ParentEntity)
 Inherits a parent entity. Generates `extends ParentEntity`.
 ```yaml

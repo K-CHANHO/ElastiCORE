@@ -202,6 +202,11 @@ public final class SpecFactory {
             // shared, and walking it here would leave it spent for the spec
             // that is built from the same entity next.
             String entityName = entity.getIdentity().getName();
+            if ("entity"
+                    .equalsIgnoreCase(String.valueOf(entity.getMetaInfo().getMetaAnnotationValue("abstract"))
+                            .trim())) {
+                spec.knownAbstractEntity(entityName);
+            }
             // A root: it is its own aggregate, which aggregateOf answers with
             // null or its own name.
             String holder = aggregateOf(entityName, model);
@@ -1525,7 +1530,7 @@ public final class SpecFactory {
         java.util.Set<String> qImports = new java.util.HashSet<String>();
         String qPackage = model.getNamespace("entity");
         for (io.elasticore.base.model.pub.rules.EntitySpec e : entitySpecs) {
-            if (e.hasMeta("abstract")) continue;
+            if (e.isMappedSuperclass()) continue;
             for (io.elasticore.base.model.pub.rules.FieldSpec f : e.allFields()) {
                 if (f.isBaseType()) continue;
                 String type = f.coreItemType();

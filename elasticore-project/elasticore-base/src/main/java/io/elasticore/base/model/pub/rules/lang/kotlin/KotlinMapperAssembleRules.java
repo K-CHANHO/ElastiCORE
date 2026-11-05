@@ -107,6 +107,8 @@ public class KotlinMapperAssembleRules implements CodeRules {
         code.line(rev, "    }")
             .line(rev, SEP).line(rev, SEP);
 
+        // An abstract entity has no instance to make: a DTO can only update a row that is there.
+        if (e.isKnownAbstractEntity(en)) return;
         toOne(code, rev, "toEntity", dto, en, false);
         toOne(code, rev, "toEntity", dto, en, true);
         toList(code, rev, mapper, "toEntity", dto, en, String.format("to%sList", revList), false);

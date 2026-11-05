@@ -27,9 +27,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.sql.init.data-locations=optional:classpath:none.sql",
         "spring.sql.init.continue-on-error=false"})
 @AutoConfigureMockMvc
+@org.springframework.context.annotation.Import(AbstractEntityCheck.class)
 abstract class SchemaValidateOnDatabase {
 
     @Autowired MockMvc mvc;
+    @Autowired AbstractEntityCheck codes;
 
     @Test
     void hibernateValidatesTheSchemaAndTheShopRunsOnIt() throws Exception {
@@ -38,6 +40,12 @@ abstract class SchemaValidateOnDatabase {
         mvc.perform(post("/api/petstore/customer/signin").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"login\":\"user\",\"password\":\"user\"}"))
                 .andExpect(status().isOk());
+    }
+
+    /** An abstract entity's rows are in its subclasses' tables, and one repository reads them together. */
+    @Test
+    void anAbstractEntityReadsItsSubclassesTogether() throws Exception {
+        codes.readsEveryTable();
     }
 
     static void database(DynamicPropertyRegistry r, String vendor) {

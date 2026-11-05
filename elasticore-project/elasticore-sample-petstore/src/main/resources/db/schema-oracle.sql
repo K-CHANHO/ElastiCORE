@@ -75,7 +75,7 @@ CREATE TABLE ps_purchase_order (
     zipcode VARCHAR2(10 CHAR),
     country_code VARCHAR2(2 CHAR),
     credit_card_number VARCHAR2(30 CHAR) NOT NULL,
-    credit_card_type VARCHAR2(255 CHAR) NOT NULL,
+    credit_card_type VARCHAR2(4 CHAR) NOT NULL,
     credit_card_exp_date VARCHAR2(5 CHAR) NOT NULL,
     total_without_vat NUMBER(12,2),
     vat_rate NUMBER(5,2),
@@ -85,6 +85,20 @@ CREATE TABLE ps_purchase_order (
     total NUMBER(12,2),
     version NUMBER(19),
     PRIMARY KEY (order_id)
+);
+
+CREATE TABLE ref_region_code (
+    code VARCHAR2(10 CHAR) NOT NULL,
+    name VARCHAR2(50 CHAR) NOT NULL,
+    country VARCHAR2(2 CHAR),
+    PRIMARY KEY (code)
+);
+
+CREATE TABLE ref_status_code (
+    code VARCHAR2(10 CHAR) NOT NULL,
+    name VARCHAR2(50 CHAR) NOT NULL,
+    terminal NUMBER(1),
+    PRIMARY KEY (code)
 );
 
 ALTER TABLE ps_item ADD CONSTRAINT fk_ps_item_product FOREIGN KEY (product_id) REFERENCES ps_product (product_id);

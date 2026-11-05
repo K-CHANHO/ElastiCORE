@@ -120,25 +120,30 @@ public class JpaServiceFileRules implements CodeRules {
         boolean isSkipNull = !"false".equals(e.metaValue("dynamicupdate"));
 
         c.var("packageName", e.pkg("service"))
-         .var("entityPackageName", e.pkg("entity"))
-         .var("dtoPackageName", e.pkg("dto"))
-         .var("repositoryPackageName", e.pkg("repository"))
-         .var("j2eePkgName", "jakarta")
-         .var("entityClassName", e.getName())
-         .var("className", "%sCoreService", e.getName())
-         .var("domainName", e.domainClassName())
-         .var("mapperName", "%sMapper", e.domainClassName())
-         .var("dtoClassName", "%sDTO", e.getName())
-         .var("keyDtoClassName", "%sKeyDTO", e.getName())
-         .var("searchDTOClassName", e.searchDtoClassName())
-         .var("searchResultDTOClassName", searchResultDto)
-         .var("toSearchListMappingName", toSearchListMappingName)
-         .var("isSkipNull", String.valueOf(isSkipNull))
-         // The helper holds its repositories as fields with generated
-         // accessors in Java and as properties in Kotlin, so how the service
-         // reaches one is the language's business.
-         .var("repositoryRef", c.syntax().getter("helper",
-                 io.elasticore.base.model.pub.rules.base.RuleText.uncapital(e.getName())));
+                .var("entityPackageName", e.pkg("entity"))
+                .var("dtoPackageName", e.pkg("dto"))
+                .var("repositoryPackageName", e.pkg("repository"))
+                .var("j2eePkgName", "jakarta")
+                .var("entityClassName", e.getName())
+                .var("isAbstractEntity", String.valueOf(e.isAbstractEntity()))
+                .var("className", "%sCoreService", e.getName())
+                .var("domainName", e.domainClassName())
+                .var("mapperName", "%sMapper", e.domainClassName())
+                .var("dtoClassName", "%sDTO", e.getName())
+                .var("keyDtoClassName", "%sKeyDTO", e.getName())
+                .var("searchDTOClassName", e.searchDtoClassName())
+                .var("searchResultDTOClassName", searchResultDto)
+                .var("toSearchListMappingName", toSearchListMappingName)
+                .var("isSkipNull", String.valueOf(isSkipNull))
+                // The helper holds its repositories as fields with generated
+                // accessors in Java and as properties in Kotlin, so how the service
+                // reaches one is the language's business.
+                .var(
+                        "repositoryRef",
+                        c.syntax()
+                                .getter(
+                                        "helper",
+                                        io.elasticore.base.model.pub.rules.base.RuleText.uncapital(e.getName())));
 
         String pkFromDto = pkVars(c, e);
         dependencyVars(c, e);
