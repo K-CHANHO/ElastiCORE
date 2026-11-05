@@ -1,5 +1,6 @@
 package io.elasticore.sample.petstore;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -7,6 +8,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import io.elasticore.sample.petstore.refdata.application.dto.RefdataMapper;
+import io.elasticore.sample.petstore.refdata.application.dto.CaseNoteDTO;
+import io.elasticore.sample.petstore.refdata.domain.model.CaseNote;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -58,5 +62,34 @@ class AbstractEntityTest {
 
         mvc.perform(delete(CODES + "/BUS")).andExpect(status().isOk());
         mvc.perform(get(CODES + "/BUS")).andExpect(status().isNotFound());
+    }
+
+    /** A relation to the root holds a proxy, and its column reads back through whichever table has the row. */
+    @Test
+    void aRelationToTheRootIsWrittenByItsKey() throws Exception {
+        jdbc.update("INSERT INTO ref_region_code (code, name, country) VALUES (?, ?, ?)", "PUS", "Pusan", "KR");
+
+        mvc.perform(post("/api/refdata/caseNote")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Lost\",\"statusCode\":\"PUS\"}"))
+                .andExpect(status().isOk());
+
+        Integer rows = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM ref_case_note WHERE title = ? AND status_code = ?", Integer.class, "Lost", "PUS");
+        org.assertj.core.api.Assertions.assertThat(rows).isEqualTo(1);
+    }
+
+    /** Without an EntityManager there is no proxy and no stub to make, and it is not left unset without a word. */
+    @Test
+    void writingTheRelationWithoutAnEntityManagerSaysSo() {
+        CaseNoteDTO dto = new CaseNoteDTO();
+        dto.setStatusCode("PUS");
+
+        assertThatThrownBy(() -> RefdataMapper.mapping(dto, new CaseNote()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("needs an EntityManager");
+        assertThatThrownBy(() -> RefdataMapper.toEntity(dto))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("needs an EntityManager");
     }
 }

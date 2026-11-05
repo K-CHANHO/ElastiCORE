@@ -87,6 +87,13 @@ CREATE TABLE ps_purchase_order (
     PRIMARY KEY (order_id)
 );
 
+CREATE TABLE ref_case_note (
+    note_id BIGINT IDENTITY(1,1) NOT NULL,
+    title NVARCHAR(50),
+    status_code NVARCHAR(10),
+    PRIMARY KEY (note_id)
+);
+
 CREATE TABLE ref_region_code (
     code NVARCHAR(10) NOT NULL,
     name NVARCHAR(50) NOT NULL,

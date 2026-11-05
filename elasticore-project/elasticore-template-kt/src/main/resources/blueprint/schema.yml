@@ -106,6 +106,15 @@ entities:
       memo: string(200) @Column(name = "memo", length = 200)
       article: Article @relation(mappedBy="bookmark_id") @foreignKey(article_article_id) -- Article entity relationship
 
+  CaseNote:
+    meta: entity @java(io.elasticore.blueprint.domain.refdata.entity.CaseNote) -- A note on a case, in a status of any kind of code
+    table: ref_case_note
+    java: io.elasticore.blueprint.domain.refdata.entity.CaseNote
+    fields:
+      noteId: Long @Column(name = "note_id") @Id @GeneratedValue
+      title: string(50) @Column(name = "title", length = 50)
+      status: Code @relation(mappedBy="case_note_id") @foreignKey(status_code) -- Code entity relationship
+
   Category:
     meta: entity @extend(AuditEntity) @java(io.elasticore.blueprint.domain.shop.entity.Category)
     table: shop_category

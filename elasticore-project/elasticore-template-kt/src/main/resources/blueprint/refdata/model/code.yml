@@ -14,3 +14,10 @@ entity:
     meta: entity @extend(Code) -- A region a case can be in
     fields:
       country: string(2)
+
+  CaseNote:
+    meta: entity @expose(20) -- A note on a case, in a status of any kind of code
+    fields:
+      noteId: long @id @sequence
+      title: string(50)
+      status: Code @ManyToOne

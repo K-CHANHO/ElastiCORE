@@ -267,7 +267,7 @@ public class MapperBaseRules implements CodeRules {
             } else if (pk != null && pk.equals(childField)) {
                 // An abstract entity cannot be made to hold the key: only a real proxy points at one.
                 boolean noStub = !code.compatible() && abstractEntityNamed(e, relType);
-                if (!noStub) pkRefWriteBack(code, REV_TAIL, f, relField, childField, relType, false, false);
+                pkRefWriteBack(code, REV_TAIL, f, relField, childField, relType, false, noStub);
                 pkRefWriteBack(code, REV_TAIL_EM, f, relField, childField, relType, true, noStub);
             } else {
                 // Not the relation's key, so this would edit the related row
@@ -305,23 +305,37 @@ public class MapperBaseRules implements CodeRules {
         String assign = syntax.statement(syntax.setter("t", childField, read));
         String target = code.mapperTarget(relField);
         String attach = syntax.statement(syntax.setter(target, relField, "t"));
+        // Nothing to make a stub of, and leaving it unset would lose the relation without a word.
+        String refuse = syntax.statement("throw "
+                + syntax.newInstance(
+                        "IllegalStateException",
+                        "\"" + relField + " is the abstract entity " + relType
+                                + ": writing it needs an EntityManager\""));
 
         code.line(block, "        ").line(block, "        ")
             .line(block, "        if(hasValue(%s)){", read);
 
         if (withEntityManager) {
             code.line(block, "            if(em != null){")
-                .line(block, "                %s", syntax.statement(syntax.setter(target, relField,
-                        String.format("em.getReference(%s, %s)",
-                                syntax.javaClassLiteral(relType), read))))
-                .line(block, "            }");
-            if (!noStub) {
-                code.line(block, "            else{")
-                        .line(block, "                %s", make)
+                    .line(
+                            block,
+                            "                %s",
+                            syntax.statement(syntax.setter(
+                                    target,
+                                    relField,
+                                    String.format("em.getReference(%s, %s)", syntax.javaClassLiteral(relType), read))))
+                    .line(block, "            }")
+                    .line(block, "            else{");
+            if (noStub) {
+                code.line(block, "                %s", refuse);
+            } else {
+                code.line(block, "                %s", make)
                         .line(block, "                %s", assign)
-                        .line(block, "                %s", attach)
-                        .line(block, "            }");
+                        .line(block, "                %s", attach);
             }
+            code.line(block, "            }");
+        } else if (noStub) {
+            code.line(block, "            %s", refuse);
         } else {
             code.line(block, "            %s", make)
                 .line(block, "            %s", assign)

@@ -387,6 +387,22 @@ datasets:
     custom_extensions:
       - vendor_name: ELASTICORE
         data: "{\"entity\": \"RegionCode\", \"domain\": \"refdata\"}"
+  - name: CaseNote
+    source: ref_case_note
+    primary_key: [note_id]
+    description: "A note on a case, in a status of any kind of code"
+    fields:
+      - name: note_id
+        expression:
+          sql: "note_id"
+        datatype: Integer
+      - name: title
+        expression:
+          sql: "title"
+        datatype: String
+    custom_extensions:
+      - vendor_name: ELASTICORE
+        data: "{\"entity\": \"CaseNote\", \"domain\": \"refdata\"}"
 relationships:
   - name: Product_category
     from: Product

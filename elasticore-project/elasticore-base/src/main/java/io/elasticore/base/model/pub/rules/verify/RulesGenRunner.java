@@ -2543,6 +2543,49 @@ public final class RulesGenRunner {
         return named;
     }
 
+    /** What the root of a hierarchy cannot be generated as, said before its code is written. */
+    private static void checkAbstractEntity(EntitySpec spec, String name) {
+        String at = String.format("[elcore3] %s.%s: @abstract(entity) ", spec.domainClassName(), name);
+        io.elasticore.base.model.pub.rules.FieldSpec key = spec.pkField();
+        if (key == null) {
+            io.elasticore.base.model.pub.rules.ModelCheck.fail(at + "is the root of a hierarchy, and a root has the key"
+                    + " - give it one, or use plain @abstract for a frame with no table");
+            return;
+        }
+        // Every subclass is written with a table of its own. SINGLE_TABLE, which is also what
+        // no strategy means, has none of them: the schema and the Ossie export would name tables that are not there.
+        String inheritance = String.join(" ", spec.nativeEntityAnnotationLines());
+        boolean perClass = inheritance.contains("TABLE_PER_CLASS");
+        if (!perClass && !inheritance.contains("JOINED")) {
+            io.elasticore.base.model.pub.rules.ModelCheck.fail(at
+                    + "needs @jpa:Inheritance(strategy = InheritanceType.TABLE_PER_CLASS) or JOINED: each subclass"
+                    + " is written with a table of its own, which SINGLE_TABLE, the default, does not give it");
+            return;
+        }
+        String generation = key.dslValue("sequence");
+        if (perClass
+                && key.hasDsl("sequence")
+                && (generation == null || generation.isEmpty() || "IDENTITY".equalsIgnoreCase(generation.trim()))) {
+            io.elasticore.base.model.pub.rules.ModelCheck.fail(at
+                    + "under TABLE_PER_CLASS cannot have an identity key, and @sequence means IDENTITY: Hibernate"
+                    + " refuses it at startup. Write @sequence(SEQUENCE), or a key the application sets");
+        }
+    }
+
+    /** The @abstract(entity) above an entity, through its @extend; null when there is none. */
+    private static String abstractEntityAbove(Entity entity, ECoreModel model) {
+        java.util.Set<String> seen = new java.util.HashSet<String>();
+        String parent = entity.getMetaInfo().getMetaAnnotationValue("extend");
+        while (parent != null && seen.add(parent)) {
+            Entity above = model.getEntityModels().findByName(parent);
+            if (above == null) return null;
+            String kind = above.getMetaInfo().getMetaAnnotationValue("abstract");
+            if (kind != null && "entity".equalsIgnoreCase(kind.trim())) return parent;
+            parent = above.getMetaInfo().getMetaAnnotationValue("extend");
+        }
+        return null;
+    }
+
     private void generateEntityArtifacts(Entity entity, EntitySpec spec, ECoreModel model) {
         String name = entity.getIdentity().getName();
         boolean exposed = entity.getMetaInfo().hasMetaAnnotation("expose");
@@ -2551,11 +2594,17 @@ public final class RulesGenRunner {
 
         System.out.println("  " + name);
 
-        if ((v3 || kotlin) && !typescript && spec.isAbstractEntity() && !hasPk) {
-            io.elasticore.base.model.pub.rules.ModelCheck.fail(String.format(
-                    "[elcore3] %s.%s: @abstract(entity) is the root of a hierarchy, and a root has the key - give it"
-                            + " one, or use plain @abstract for a frame with no table",
-                    spec.domainClassName(), name));
+        if ((v3 || kotlin) && !typescript && spec.isAbstractEntity()) checkAbstractEntity(spec, name);
+        if ((v3 || kotlin) && !typescript && serviced && !hasPk) {
+            String root = abstractEntityAbove(entity, model);
+            if (root != null) {
+                io.elasticore.base.util.ConsoleLog.storeLog(
+                        "DSL_WARN",
+                        String.format(
+                                "[%s] @%s gives a subclass of the @abstract(entity) %s no repository, service or controller:"
+                                        + " its key is %s's, and its rows are served through %s.",
+                                name, exposed ? "expose" : "service", root, root, root));
+            }
         }
 
         // @expose(methods="...") and the @restExclude it replaces, said once per

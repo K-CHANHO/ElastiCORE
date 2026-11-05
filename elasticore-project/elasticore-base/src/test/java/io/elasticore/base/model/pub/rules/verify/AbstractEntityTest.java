@@ -68,6 +68,7 @@ public class AbstractEntityTest {
 
     private static File layered;
     private static File hexagonal;
+    private static File ddd;
     private static File kotlin;
     private static File typescript;
 
@@ -75,6 +76,7 @@ public class AbstractEntityTest {
     static void generate() throws Exception {
         layered = run("elcore-abstract-layered", "layered", "java", "jpa", MODEL, 0);
         hexagonal = run("elcore-abstract-hex", "hexagonal", "java", "jpa", MODEL, 0);
+        ddd = run("elcore-abstract-ddd", "ddd", "java", "jpa", MODEL, 0);
         kotlin = run("elcore-abstract-kt", "layered", "kotlin", "jpa", MODEL, 0);
         typescript = run("elcore-abstract-ts", "layered", "typescript", "jpa", MODEL, 0);
     }
@@ -91,7 +93,7 @@ public class AbstractEntityTest {
 
     @Test
     public void itIsAnAbstractEntity() throws Exception {
-        for (File project : new File[] {layered, hexagonal}) {
+        for (File project : new File[] {layered, hexagonal, ddd}) {
             String entity = found(project, "AeCode.java");
             assertTrue(entity.contains("@Entity\n"), entity);
             assertFalse(entity.contains("@MappedSuperclass"), entity);
@@ -105,7 +107,7 @@ public class AbstractEntityTest {
 
     @Test
     public void plainAbstractStaysAMappedSuperclass() throws Exception {
-        for (File project : new File[] {layered, hexagonal}) {
+        for (File project : new File[] {layered, hexagonal, ddd}) {
             String entity = found(project, "AeStamped.java");
             assertTrue(entity.contains("@MappedSuperclass"), entity);
             assertFalse(entity.contains("@Entity\n"), entity);
@@ -119,7 +121,7 @@ public class AbstractEntityTest {
 
     @Test
     public void itHasARepositoryAndAQClass() throws Exception {
-        for (File project : new File[] {layered, hexagonal}) {
+        for (File project : new File[] {layered, hexagonal, ddd}) {
             String repository = found(project, "AeCodeRepository.java");
             assertTrue(repository.contains("AeCode"), repository);
             assertTrue(found(project, "Q.java").contains("$AeCode<"), "the Q class of AeCode");
@@ -129,7 +131,7 @@ public class AbstractEntityTest {
 
     @Test
     public void theServiceReadsSearchesUpdatesAndDeletesButDoesNotCreate() throws Exception {
-        for (File project : new File[] {layered, hexagonal}) {
+        for (File project : new File[] {layered, hexagonal, ddd}) {
             String service = found(project, "AeCodeCoreService.java");
             assertFalse(service.contains(" save("), service);
             assertFalse(service.contains("toEntity"), service);
@@ -145,7 +147,7 @@ public class AbstractEntityTest {
 
     @Test
     public void theControllerHasNoPost() throws Exception {
-        for (File project : new File[] {layered, hexagonal}) {
+        for (File project : new File[] {layered, hexagonal, ddd}) {
             String controller = found(project, "AeCodeController.java");
             assertFalse(
                     controller.contains("@PostMapping\n") || controller.contains("@PostMapping(" + "\"\")"),
@@ -159,7 +161,7 @@ public class AbstractEntityTest {
 
     @Test
     public void theMapperDoesNotMakeOne() throws Exception {
-        for (File project : new File[] {layered, hexagonal}) {
+        for (File project : new File[] {layered, hexagonal, ddd}) {
             String mapper = found(project, "RefdataMapper.java");
             assertFalse(mapper.contains("new AeCode()"), mapper);
             assertFalse(mapper.contains("AeCode toEntity("), mapper);
@@ -184,6 +186,126 @@ public class AbstractEntityTest {
         assertFalse(useCase.contains(" create("), useCase);
         assertTrue(useCase.contains(" update("), useCase);
         assertTrue(useCase.contains(" findById("), useCase);
+        // ddd has no use cases: its service and controller, with the others above, are all there is.
+        assertFalse(exists(ddd, "AeCodeUseCase.java"));
+    }
+
+    /** Leaving it unset would lose the relation without a word, so the overloads without an EntityManager say so. */
+    @Test
+    public void aRelationToItNeedsAnEntityManager() throws Exception {
+        String says = "\"status is the abstract entity AeCode: writing it needs an EntityManager\"";
+        for (File project : new File[] {layered, hexagonal, ddd}) {
+            String mapper = found(project, "RefdataMapper.java");
+            assertTrue(mapper.contains("throw new IllegalStateException(" + says + ");"), mapper);
+            assertEquals(2, mapper.split(java.util.regex.Pattern.quote(says), -1).length - 1, mapper);
+        }
+        String mapper = found(kotlin, "RefdataMapper.kt");
+        assertTrue(mapper.contains("throw IllegalStateException(" + says + ")"), mapper);
+        assertEquals(2, mapper.split(java.util.regex.Pattern.quote(says), -1).length - 1, mapper);
+    }
+
+    /** It has a table of its own only under these two; a subclass's own table is what is generated. */
+    @Test
+    public void aRootWithoutAStrategyThatGivesASubclassATableIsRefused() throws Exception {
+        String said =
+                "AeCode: @abstract(entity) needs @jpa:Inheritance(strategy = InheritanceType.TABLE_PER_CLASS) or JOINED";
+        File none = run(
+                "elcore-abstract-nostrategy",
+                "layered",
+                "java",
+                "jpa",
+                MODEL.replace(" @jpa:Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)", ""),
+                1);
+        String log = read(new File(none, "elcore.log"));
+        assertTrue(log.contains(said), log);
+        File single = run(
+                "elcore-abstract-single",
+                "layered",
+                "java",
+                "jpa",
+                MODEL.replace("TABLE_PER_CLASS", "SINGLE_TABLE"),
+                1);
+        log = read(new File(single, "elcore.log"));
+        assertTrue(log.contains(said), log);
+    }
+
+    private static String keyed(String key, String strategy) {
+        return String.join(
+                "\n",
+                "entity:",
+                "  AeKeyed:",
+                "    meta: entity @abstract(entity) @jpa:Inheritance(strategy = InheritanceType." + strategy + ")",
+                "    fields:",
+                "      keyId: " + key,
+                "  AeKeyedChild:",
+                "    meta: entity @extend(AeKeyed)",
+                "    fields:",
+                "      name: string(50)",
+                "");
+    }
+
+    /** Hibernate refuses an identity column under TABLE_PER_CLASS at startup, and @sequence alone means one. */
+    @Test
+    public void anIdentityKeyUnderTablePerClassIsRefused() throws Exception {
+        for (String key : new String[] {"long @id @sequence", "long @id @sequence(IDENTITY)"}) {
+            File project = run("elcore-abstract-identity", "layered", "java", "jpa", keyed(key, "TABLE_PER_CLASS"), 1);
+            String log = read(new File(project, "elcore.log"));
+            assertTrue(
+                    log.contains("AeKeyed: @abstract(entity) under TABLE_PER_CLASS cannot have an identity key"), log);
+        }
+        File sequence = run(
+                "elcore-abstract-sequence",
+                "layered",
+                "java",
+                "jpa",
+                keyed("long @id @sequence(SEQUENCE)", "TABLE_PER_CLASS"),
+                0);
+        assertTrue(found(sequence, "AeKeyed.java").contains("GenerationType.SEQUENCE"));
+        File joined =
+                run("elcore-abstract-joined-id", "layered", "java", "jpa", keyed("long @id @sequence", "JOINED"), 0);
+        assertTrue(found(joined, "AeKeyed.java").contains("GenerationType.IDENTITY"));
+    }
+
+    /** The model of this test asks for AeStatusCode's service, and what it gets must not be silence. */
+    @Test
+    public void aSubclassThatAsksForAServiceIsToldItHasNone() throws Exception {
+        String log = read(new File(layered, "elcore.log"));
+        assertTrue(
+                log.contains("[AeStatusCode] @expose gives a subclass of the @abstract(entity) AeCode no repository,"
+                        + " service or controller: its key is AeCode's, and its rows are served through AeCode."),
+                log);
+        for (String none : new String[] {
+            "AeStatusCodeRepository.java", "AeStatusCodeCoreService.java", "AeStatusCodeController.java"
+        }) {
+            assertFalse(exists(layered, none), none);
+        }
+        File serviced = run(
+                "elcore-abstract-subservice",
+                "layered",
+                "java",
+                "jpa",
+                MODEL.replace("meta: entity @extend(AeCode) @expose(20)", "meta: entity @extend(AeCode) @service"),
+                0);
+        assertTrue(read(new File(serviced, "elcore.log")).contains("[AeStatusCode] @service gives a subclass"));
+        // One level further down it is the same.
+        File below = run(
+                "elcore-abstract-below",
+                "layered",
+                "java",
+                "jpa",
+                MODEL.replace(
+                        "  AeTicket:",
+                        String.join(
+                                "\n",
+                                "  AeClosedCode:",
+                                "    meta: entity @extend(AeStatusCode) @expose(20)",
+                                "    fields:",
+                                "      closedBy: string(10)",
+                                "  AeTicket:")),
+                0);
+        assertTrue(read(new File(below, "elcore.log")).contains("[AeClosedCode] @expose gives a subclass"));
+        // Plain @abstract keeps its own way: a subclass there has its key and its service.
+        assertFalse(read(new File(layered, "elcore.log")).contains("[AeStampedNote]"));
     }
 
     @Test
@@ -209,7 +331,7 @@ public class AbstractEntityTest {
     /** Under TABLE_PER_CLASS an abstract class has no table, and so no foreign key can point at one. */
     @Test
     public void theSchemaHasNoTableForItAndNoForeignKeyToIt() throws Exception {
-        for (File project : new File[] {layered, hexagonal, kotlin}) {
+        for (File project : new File[] {layered, hexagonal, ddd, kotlin}) {
             String ddl = read(new File(project, "src/main/resources/db/schema-postgresql.sql"));
             assertFalse(ddl.contains("CREATE TABLE ae_code "), ddl);
             assertTrue(ddl.contains("CREATE TABLE ae_status_code "), ddl);
@@ -343,6 +465,12 @@ public class AbstractEntityTest {
     private static String read(File file) throws IOException {
         assertTrue(file.isFile(), file + " was not written");
         return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8).replace("\r\n", "\n");
+    }
+
+    private static boolean exists(File project, String fileName) {
+        List<File> hits = new ArrayList<File>();
+        collect(project, fileName, hits);
+        return !hits.isEmpty();
     }
 
     private static String found(File project, String fileName) throws IOException {
