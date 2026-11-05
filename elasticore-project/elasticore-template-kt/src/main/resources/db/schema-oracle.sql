@@ -283,7 +283,7 @@ CREATE TABLE ref_region_code (
 CREATE TABLE ref_status_code (
     code VARCHAR2(10 CHAR) NOT NULL,
     name VARCHAR2(50 CHAR) NOT NULL,
-    terminal NUMBER(1),
+    phase VARCHAR2(10 CHAR),
     PRIMARY KEY (code)
 );
 

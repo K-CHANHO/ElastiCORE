@@ -62,7 +62,7 @@ CREATE TABLE cat_region_code (
 CREATE TABLE cat_status_code (
     code VARCHAR(10) NOT NULL,
     name VARCHAR(50) NOT NULL,
-    terminal BOOLEAN,
+    phase VARCHAR(10),
     PRIMARY KEY (code)
 );
 

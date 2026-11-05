@@ -198,7 +198,7 @@ entities:
     fields:
       code: string(10) @Column(name = "code", length = 10) @Id
       name: string(50) @Column(name = "name", length = 50)
-      terminal: Boolean @Column(name = "terminal")
+      phase: string(10) @Column(name = "phase", length = 10)
 
   VipProfile:
     meta: entity @java(io.elasticore.sample.ddd.shop.domain.model.VipProfile)

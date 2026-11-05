@@ -35,10 +35,10 @@ datasets:
     primary_key: [code]
     description: "A status a case can be in"
     fields:
-      - name: terminal
+      - name: phase
         expression:
-          sql: "terminal"
-        datatype: Boolean
+          sql: "phase"
+        datatype: String
       - name: code
         expression:
           sql: "code"
