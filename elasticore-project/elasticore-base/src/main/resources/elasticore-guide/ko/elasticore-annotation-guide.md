@@ -2189,7 +2189,7 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
   (`repository.yml`)로 두면 됩니다.
 - 직접 선언한 쿼리(`repository.yml` 의 `@query` 나 파생 finder, dbms 포트, 네이티브 SQL)는 바뀌지 않습니다: 거기에 `<컬럼> IS NULL` 을 넣으세요.
 - unique 컬럼은 지운 행의 값을 그대로 가지므로 새 행이 그 값을 쓸 수 없습니다.
-- 복합 키, `@rollup` 엔티티, 단일 테이블 상속(`@discriminator`), 테이블을 가진 부모에서 물려받은 `@deleted` 는
+- 복합 키, `@rollup` 엔티티, 단일 테이블 상속(`@discriminator`), `@abstract(entity)` 계층(루트와 그 하위 엔티티 전부), 테이블을 가진 부모에서 물려받은 `@deleted` 는
   빌드가 멈춥니다. JPA 에서 요청이 키를 주는 엔티티는 버전(`@jpa:Version`)이 있어야 합니다 - 없으면 빌드가 멈춥니다.
 - layered MyBatis 서비스는 수정할 때 컬렉션을 갈아 끼웁니다: 이때 `@deleted` 멤버의 예전 살아 있는 행은 아예 지워집니다.
 

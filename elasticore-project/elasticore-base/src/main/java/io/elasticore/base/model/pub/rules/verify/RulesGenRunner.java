@@ -2581,20 +2581,6 @@ public final class RulesGenRunner {
         }
     }
 
-    /** The @abstract(entity) above an entity, through its @extend; null when there is none. */
-    private static String abstractEntityAbove(Entity entity, ECoreModel model) {
-        java.util.Set<String> seen = new java.util.HashSet<String>();
-        String parent = entity.getMetaInfo().getMetaAnnotationValue("extend");
-        while (parent != null && seen.add(parent)) {
-            Entity above = model.getEntityModels().findByName(parent);
-            if (above == null) return null;
-            String kind = above.getMetaInfo().getMetaAnnotationValue("abstract");
-            if (kind != null && "entity".equalsIgnoreCase(kind.trim())) return parent;
-            parent = above.getMetaInfo().getMetaAnnotationValue("extend");
-        }
-        return null;
-    }
-
     private void generateEntityArtifacts(Entity entity, EntitySpec spec, ECoreModel model) {
         String name = entity.getIdentity().getName();
         boolean exposed = entity.getMetaInfo().hasMetaAnnotation("expose");
@@ -2605,7 +2591,7 @@ public final class RulesGenRunner {
 
         if ((v3 || kotlin) && !typescript && spec.isAbstractEntity()) checkAbstractEntity(spec, name);
         if ((v3 || kotlin) && !typescript && serviced && !hasPk) {
-            String root = abstractEntityAbove(entity, model);
+            String root = spec.abstractEntityAbove();
             if (root != null) {
                 io.elasticore.base.util.ConsoleLog.storeLog(
                         "DSL_WARN",

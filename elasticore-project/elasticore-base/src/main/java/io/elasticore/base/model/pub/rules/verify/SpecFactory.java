@@ -374,6 +374,7 @@ public final class SpecFactory {
         String parent = entity.getMetaInfo().getMetaAnnotationValue("extend");
         if (parent != null && !parent.isEmpty()) {
             spec.parent(parent);
+            spec.abstractEntityAbove(abstractEntityAbove(entity, model));
         }
 
         // Annotations the DSL hands to the class as written: "@jpa:..." first,
@@ -2157,6 +2158,21 @@ public final class SpecFactory {
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    /** The @abstract(entity) above an entity, through its @extend, of this domain or another; null when there is none. */
+    private static String abstractEntityAbove(Entity entity, ECoreModel model) {
+        java.util.Set<String> seen = new java.util.HashSet<String>();
+        String parent = entity.getMetaInfo().getMetaAnnotationValue("extend");
+        while (parent != null && seen.add(parent)) {
+            Entity above = model.getEntityModels().findByName(parent);
+            if (above == null) above = globalEntity(parent);
+            if (above == null) return null;
+            String kind = above.getMetaInfo().getMetaAnnotationValue("abstract");
+            if (kind != null && "entity".equalsIgnoreCase(kind.trim())) return parent;
+            parent = above.getMetaInfo().getMetaAnnotationValue("extend");
+        }
+        return null;
     }
 
     /** Copies the entity's id onto the DTO as "<relation><Id>", searchable by equality. */

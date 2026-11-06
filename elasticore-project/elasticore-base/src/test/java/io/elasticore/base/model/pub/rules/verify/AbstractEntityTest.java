@@ -266,6 +266,117 @@ public class AbstractEntityTest {
         assertTrue(found(joined, "AeKeyed.java").contains("GenerationType.IDENTITY"));
     }
 
+    private static final String KEPT = "      deletedAt: timestamp @deleted";
+    private static final String NOT_YET = " @deleted in an @abstract(entity) hierarchy is not supported yet";
+
+    private static String hierarchy(String strategy, String onRoot, String onSubclass) {
+        return String.join(
+                "\n",
+                "entity:",
+                "  AeGone:",
+                "    meta: entity @abstract(entity) @jpa:Inheritance(strategy = InheritanceType." + strategy + ")",
+                "    fields:",
+                "      goneId: long @id @sequence(SEQUENCE)",
+                onRoot,
+                "  AeGoneChild:",
+                "    meta: entity @extend(AeGone)",
+                "    fields:",
+                "      name: string(50)",
+                onSubclass,
+                "");
+    }
+
+    private static String refusal(String architecture, String language, String model) throws Exception {
+        return read(new File(run("elcore-abstract-deleted", architecture, language, "jpa", model, 1), "elcore.log"));
+    }
+
+    /**
+     * Through the root a deleted subclass row would still be found, and under JOINED the
+     * column is in the root's table, while the subclass's delete updates its own.
+     */
+    @Test
+    public void deletedOnTheRootOrASubclassIsRefused() throws Exception {
+        for (String strategy : new String[] {"TABLE_PER_CLASS", "JOINED"}) {
+            String onRoot = refusal("layered", "java", hierarchy(strategy, KEPT, ""));
+            assertTrue(onRoot.contains("AeGone" + NOT_YET), onRoot);
+            assertTrue(onRoot.contains("AeGoneChild" + NOT_YET), onRoot);
+
+            String onSubclass = refusal("layered", "java", hierarchy(strategy, "", KEPT));
+            assertTrue(onSubclass.contains("AeGoneChild" + NOT_YET), onSubclass);
+            assertFalse(onSubclass.contains("AeGone" + NOT_YET), onSubclass);
+        }
+    }
+
+    @Test
+    public void deletedInTheHierarchyIsRefusedInEveryOutput() throws Exception {
+        for (String[] output : new String[][] {{"hexagonal", "java"}, {"ddd", "java"}, {"layered", "kotlin"}}) {
+            String log = refusal(output[0], output[1], hierarchy("TABLE_PER_CLASS", KEPT, ""));
+            assertTrue(log.contains("AeGone" + NOT_YET), output[0] + " " + output[1] + ": " + log);
+        }
+    }
+
+    @Test
+    public void deletedBelowAFrameUnderTheRootIsRefused() throws Exception {
+        String log = refusal(
+                "layered",
+                "java",
+                String.join(
+                        "\n",
+                        "entity:",
+                        "  AeGone:",
+                        "    meta: entity @abstract(entity) @jpa:Inheritance(strategy = InheritanceType.JOINED)",
+                        "    fields:",
+                        "      goneId: long @id @sequence(SEQUENCE)",
+                        "  AeGoneFrame:",
+                        "    meta: entity @abstract @extend(AeGone)",
+                        "    fields:",
+                        "      note: string(50)",
+                        "  AeGoneLeaf:",
+                        "    meta: entity @extend(AeGoneFrame)",
+                        "    fields:",
+                        KEPT,
+                        ""));
+        assertTrue(log.contains("AeGoneLeaf" + NOT_YET), log);
+    }
+
+    @Test
+    public void deletedOnAFrameAboveTheRootIsRefused() throws Exception {
+        String log = refusal(
+                "layered",
+                "java",
+                String.join(
+                        "\n",
+                        "entity:",
+                        "  AeGoneBase:",
+                        "    meta: entity @abstract",
+                        "    fields:",
+                        KEPT,
+                        "  AeGone:",
+                        "    meta: entity @abstract(entity) @extend(AeGoneBase)"
+                                + " @jpa:Inheritance(strategy = InheritanceType.JOINED)",
+                        "    fields:",
+                        "      goneId: long @id @sequence(SEQUENCE)",
+                        ""));
+        assertTrue(log.contains("AeGone" + NOT_YET), log);
+    }
+
+    @Test
+    public void deletedOnASubclassInAnotherDomainIsRefused() throws Exception {
+        String other = String.join(
+                "\n", "entity:", "  AeGoneElsewhere:", "    meta: entity @extend(AeGone)", "    fields:", KEPT, "");
+        File project = run(
+                "elcore-abstract-deleted-domains",
+                "layered",
+                "java",
+                "jpa",
+                hierarchy("JOINED", "", ""),
+                other,
+                1,
+                "elasticore.rules.v3");
+        String log = read(new File(project, "elcore.log"));
+        assertTrue(log.contains("AeGoneElsewhere" + NOT_YET), log);
+    }
+
     /** The model of this test asks for AeStatusCode's service, and what it gets must not be silence. */
     @Test
     public void aSubclassThatAsksForAServiceIsToldItHasNone() throws Exception {
@@ -401,9 +512,11 @@ public class AbstractEntityTest {
     private static File run(
             String name, String architecture, String language, String mode, String model, int expected, String rules)
             throws Exception {
-        File project = Files.createTempDirectory(name).toFile();
-        projects.add(project);
-        File dir = new File(project, "src/main/resources/blueprint/refdata");
+        return run(name, architecture, language, mode, model, null, expected, rules);
+    }
+
+    private static void writeDomain(File project, String domain, String mode, String model) throws IOException {
+        File dir = new File(project, "src/main/resources/blueprint/" + domain);
         assertTrue(new File(dir, "model").mkdirs());
         Files.write(
                 new File(dir, "env.yml").toPath(),
@@ -412,16 +525,32 @@ public class AbstractEntityTest {
                                 "elasticore:",
                                 "  enable: true",
                                 "  config:",
-                                "    domainName: refdata",
+                                "    domainName: " + domain,
                                 "    framework: springboot",
                                 "    mode: " + mode,
                                 "    j2ee: jakarta",
                                 "    testCode: \"true\"",
                                 "  namespace:",
-                                "    base: io.acme.refdata",
+                                "    base: io.acme." + domain,
                                 "")
                         .getBytes(StandardCharsets.UTF_8));
         Files.write(new File(dir, "model/model.yml").toPath(), model.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static File run(
+            String name,
+            String architecture,
+            String language,
+            String mode,
+            String model,
+            String otherDomain,
+            int expected,
+            String rules)
+            throws Exception {
+        File project = Files.createTempDirectory(name).toFile();
+        projects.add(project);
+        writeDomain(project, "refdata", mode, model);
+        if (otherDomain != null) writeDomain(project, "billing", mode, otherDomain);
 
         String[] keys = {
             "elasticore.base.path",

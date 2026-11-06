@@ -122,6 +122,26 @@ public class SoftDeleteRulesTest {
     }
 
     @Test
+    public void anAbstractEntityHierarchyIsNotSupportedYet() {
+        String notYet = " @deleted in an @abstract(entity) hierarchy is not supported yet";
+        EntitySpec root = product("deletedAt", "timestamp @deleted").meta("abstract", "entity");
+        assertEquals(notYet, SoftDelete.problem(root));
+        assertFalse(SoftDelete.applies(root));
+        assertNull(SoftDelete.field(root));
+        EntitySpec subclass = product("deletedAt", "timestamp @deleted").abstractEntityAbove("Code");
+        assertEquals(notYet, SoftDelete.problem(subclass));
+        assertFalse(SoftDelete.applies(subclass));
+        assertNull(SoftDelete.field(subclass));
+        // Nothing to refuse without the annotation.
+        assertNull(SoftDelete.problem(product().meta("abstract", "entity")));
+        assertNull(SoftDelete.problem(product().abstractEntityAbove("Code")));
+        // A plain @abstract stays what it was: checked in what extends it.
+        assertNull(SoftDelete.problem(product("deletedAt", "timestamp @deleted").meta("abstract", "")));
+        SoftDelete.check(root);
+        assertEquals(java.util.Collections.singletonList("[elcore3] Product" + notYet + "."), ModelCheck.failures());
+    }
+
+    @Test
     public void theBuildStopsOnWhatCannotBeHonoured() {
         SoftDelete.check(product("flag", "boolean @deleted"));
         assertEquals(1, ModelCheck.failures().size());

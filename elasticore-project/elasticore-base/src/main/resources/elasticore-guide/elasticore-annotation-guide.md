@@ -2189,7 +2189,7 @@ and `findById`, `countById`, `findAll` and the search have `AND t.discontinued_a
   (`repository.yml`) does it.
 - A query you declare yourself (`repository.yml` `@query` or a derived finder, a dbms port, native SQL) is not changed: add `<column> IS NULL` there.
 - A unique column keeps the deleted row's value, so a new row cannot take it.
-- A composite key, a `@rollup` entity, a single-table hierarchy (`@discriminator`) and a `@deleted` inherited from a parent with a table
+- A composite key, a `@rollup` entity, a single-table hierarchy (`@discriminator`), an `@abstract(entity)` hierarchy (the root, or anything that extends it) and a `@deleted` inherited from a parent with a table
   of its own stop the build. Under JPA, an entity whose key the request gives needs a version (`@jpa:Version`) - otherwise the build stops.
 - The layered MyBatis service replaces a collection on update: the old live rows of `@deleted` members are removed outright then.
 

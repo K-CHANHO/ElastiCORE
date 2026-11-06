@@ -22,7 +22,9 @@
 - Refused: a root without a key; a root whose `@jpa:Inheritance` does not say `TABLE_PER_CLASS` or `JOINED`, as each
   subclass is written with a table of its own, which `SINGLE_TABLE`, the default, does not give it; an identity key under
   `TABLE_PER_CLASS`, which Hibernate refuses at startup, and `@sequence` alone means one (`@sequence(SEQUENCE)` is taken);
-  and `mode: mybatis` ("does not write an abstract entity"). The 2.x generator and `output = 'v2'` read it as plain
+  `@deleted` on a root or on anything that extends one, its own or inherited ("is not supported yet"), as the root has no
+  delete that keeps a row and no read that leaves one out; and `mode: mybatis` ("does not write an abstract entity"). The
+  2.x generator and `output = 'v2'` read it as plain
   `@abstract`, as they did; the compatible output is unchanged.
 - Limits, said in the guide:
   - A subclass, whose key is inherited, gets no repository or service of its own, as under a keyed `@abstract`; its rows
@@ -48,8 +50,8 @@
 - The pet store's build sets `ossieName = 'petstore'`, so its semantic model keeps its name beside a second domain.
 - Files: `EntitySpec.java`, `SpecFactory.java`, `JpaEntityAnnotationRules.java`, `QBaseRules.java`, `KotlinQRules.java`,
   `ControllerBaseRules.java`, `MapperAssembleRules.java`, `KotlinMapperAssembleRules.java`, `MapperBaseRules.java`,
-  `ServiceTestBaseRules.java`, `JpaServiceFileRules.java`, `MyBatisSql.java`, `RulesGenRunner.java`,
+  `ServiceTestBaseRules.java`, `JpaServiceFileRules.java`, `MyBatisSql.java`, `RulesGenRunner.java`, `SoftDelete.java`,
   `JpaSchemaReader.java`, `kt/service.tmpl`, `kt/service_test.tmpl`, `AbstractEntityTest.java`,
-  `JpaSchemaReaderTest.java`, the three samples and
+  `SoftDeleteRulesTest.java`, `JpaSchemaReaderTest.java`, the three samples and
   their regenerated schemas, `elasticore-annotation-guide.md` `@abstract`, `elasticore-dsl-guide.md` and
   `elasticore-migration-guide.md` (en, ko)

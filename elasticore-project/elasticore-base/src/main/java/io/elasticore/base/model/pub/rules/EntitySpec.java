@@ -1232,6 +1232,18 @@ public final class EntitySpec {
         return hasMeta("abstract") && !isAbstractEntity();
     }
 
+    /** The {@code @abstract(entity)} this entity extends, through any number of {@code @extend}, or null. */
+    private String abstractEntityAbove;
+
+    public EntitySpec abstractEntityAbove(String rootName) {
+        this.abstractEntityAbove = rootName;
+        return this;
+    }
+
+    public String abstractEntityAbove() {
+        return abstractEntityAbove;
+    }
+
     private final java.util.Set<String> abstractEntities = new java.util.HashSet<String>();
 
     public EntitySpec knownAbstractEntity(String entityName) {
