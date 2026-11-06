@@ -7,7 +7,7 @@ as they are.
 
 ```gradle
 - implementation      'io.elasticore:elasticore-base:2.2.260703'
-+ implementation      'io.elasticore:elasticore-base:3.0.261105-rc10'
++ implementation      'io.elasticore:elasticore-base:3.0.261106-rc11'
 ```
 
 **The generated source code does not change** - only a few places where a 2.x defect was fixed differ, and the list is in
@@ -170,7 +170,7 @@ show up at compile or test time. They are what actually came up when moving a pr
 
 The service tests that 2.x generated (`*ServiceTest`) pin with mocks the repository methods that the 2.x CoreService calls.
 The v3 CoreService calls other methods (`deleteById` is `findById` then `delete`, `delete(searchDTO)` is `findAll` then
-`delete`), so those tests do not fit - delete them and generate them again (`testCode: "true"` in `env.yml`), or fix them to match the new calls.
+`delete`), so those tests do not fit - fix them to match the new calls, or delete them (`testCode: "true"` does not generate them for v3 Java code).
 
 ### How to roll back
 

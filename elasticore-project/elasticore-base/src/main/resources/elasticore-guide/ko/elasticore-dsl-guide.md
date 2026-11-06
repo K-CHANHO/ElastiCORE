@@ -5,6 +5,7 @@
 ElastiCORE DSL은 YAML 기반의 도메인 모델 정의 언어입니다.
 Entity, DTO, Enumeration, Repository, Transaction Port, Domain Service를 선언적으로
 정의하면 빌드 시 Java 또는 Kotlin 코드가 자동 생성됩니다.
+**동작:** 표시가 있는 절은 거기서만 동작합니다. **안 됨:** 은 그 밖에서 무엇이 되는지 적습니다 - 빌드 중단, 경고, 또는 생성 안 됨.
 
 | 최상위 키 | 뜻 | 이 문서의 장 |
 |---|---|---|
@@ -217,6 +218,7 @@ entity:
 ```
 
 ### 업무 명령 (`commands:`) - DDD 번들
+> **동작:** ddd, hexagonal · **안 됨:** layered (생성 안 됨)
 
 CRUD 는 "이 필드들을 바꿔라" 이고, 도메인은 "이 수주를 확정해라" 라고 요청받습니다. 엔티티에
 `commands:` 를 쓰면 명령 하나가 **엔드포인트부터 규칙까지 한 길**로 생성됩니다.
@@ -253,6 +255,7 @@ SalesOrder:
   생성·조회·삭제와 명령입니다.
 
 ### 생명주기 (`states:`) - DDD 번들
+> **동작:** ddd, hexagonal · **안 됨:** layered (경고)
 
 "주문은 접수(PLACED)로 시작해서, 배송하면 SHIPPED, 취소하면 CANCELLED" 처럼 **상태가 어디서 어디로만
 바뀌는 규칙**은 코드 대신 DSL 에 씁니다. 명령 메서드(`ship()`, `cancel()`)의 본문까지 생성되므로
@@ -476,9 +479,10 @@ HTTP/1.1 409
   불변식 쪽 `markBeingRemoved()` 안에서 먼저 불립니다. 동작은 같습니다.
 
 #### 7. 상태에 들어간 시각 (`@stamp`)
+> **동작:** ddd, hexagonal · **안 됨:** layered (경고)
 
 "언제 발송됐나", "언제 취소됐나" - 시간 필드에 상태 이름을 적으면, 행을 그 상태로 옮기는 명령이
-시각을 기록합니다. Since: 3.0 (3.0.261105-rc10 다음)
+시각을 기록합니다. Since: 3.0 (3.0.261106-rc11)
 
 ```yaml
     fields:
@@ -594,9 +598,9 @@ metrics:
 |---|---|---|
 | `sum(엔티티.필드)` / `avg` / `min` / `max` | 한 엔티티의 필드 집계 | `SUM(PurchaseOrder.total)` |
 | `count(엔티티)` / `count(엔티티.필드)` | 행 수 / 값 있는 행 수 | `COUNT(PurchaseOrder.order_id)` (키 컬럼 - BI 도구가 어느 dataset 을 세는지 알도록) / `COUNT(PurchaseOrder.total)` |
-| `count(distinct 엔티티.필드)` | 서로 다른 값의 수 (null 제외). `distinct` 는 `count` 에만, 필드와 함께 씁니다. `sum(distinct …)` 은 거부 | `COUNT(DISTINCT Login.user_id)`, `where` 가 있으면 `COUNT(DISTINCT CASE WHEN … THEN Login.user_id END)` |
+| `count(distinct 엔티티.필드)` | 서로 다른 값의 수 (null 제외). `distinct` 는 `count` 에만, 필드와 함께 씁니다. `sum(distinct …)` 은 거부 | `COUNT(DISTINCT PurchaseOrder.customer_id)`, `where` 가 있으면 `COUNT(DISTINCT CASE WHEN … THEN PurchaseOrder.customer_id END)` |
 | `… where 필드 != 값 and 필드 >= 값` | 조건 (`=`, `!=`, `<`, `<=`, `>`, `>=`). `and` 로 이음 | `SUM(CASE WHEN … THEN … END)` |
-| `… where 필드 in (A, B)` / `not in (A, B)` | 값 목록. 값 하나하나를 단일 값과 똑같이 읽음 | `Offer.status IN ('PND', 'AWD')` |
+| `… where 필드 in (A, B)` / `not in (A, B)` | 값 목록. 값 하나하나를 단일 값과 똑같이 읽음 | `PurchaseOrder.status IN ('PLC', 'SHP')` |
 | `… where a = 1 or b = 2`, `(a = 1 or b = 2) and c = 3`, `not (a = 1)` | `or`. SQL 처럼 `and` 가 먼저 묶임. 괄호로 묶고, `not` 은 괄호 앞에 씀 | `(… OR …) AND …`, `NOT (…)` |
 | 값 | 숫자, `'글자'`(안의 `'` 는 `''`), `true`/`false`, **enum 상수 이름** (저장된 값으로 바뀜: `@db` 코드 `'CAN'`, `@jpa:Enumerated(STRING)` 면 이름, 둘 다 없으면 순번 `2`) | |
 | `지표A / 지표B` (`+ - * /`) | 앞에서 선언한 지표끼리 계산. 나누기는 0 으로 나누지 않고, 개수 / 개수는 소수로 | `(…) / NULLIF((…), 0)` |
@@ -605,7 +609,7 @@ metrics:
 
 - 데이터 타입: `count` 는 `Integer`, `sum`·`min`·`max` 는 그 필드의 타입, `avg`·나누기는 `Decimal`(`Float` 필드면 `Float`),
   `+ - *` 는 둘 다 `Integer` 면 `Integer`, 아니면 `Decimal`. `sum`·`avg` 는 숫자 필드에만.
-- SQL 과 같이 `!=` 와 `not in` 은 필드가 null 인 행을 세지 않습니다.
+- SQL 과 같이 `!=`, `not in`, `not (…)` 은 필드가 null 인 행을 세지 않습니다. `status` 가 null 일 수 있으면 위의 `unfinished` 는 `finishedOrders` 의 나머지가 아닙니다.
 - 줄에 ` #` 나 `: ` 가 들어가면 YAML 이 줄을 자르거나 파일을 못 읽으므로 줄 전체를 따옴표로 감쌉니다:
   `ratio: "shippedOrders / orderCount -- 배송 비율: 배송 / 전체"`.
 - 못 읽는 줄(없는 엔티티·필드, enum 에 없는 상수, 뒤에 선언된 지표, enum 이 아닌 필드에 따옴표 없는 값, 짝이 맞지 않는 괄호, 빈 `in ()`, 한쪽이 빈 `or`·`and`, `sum(distinct …)`)은 생성할 때
@@ -724,6 +728,7 @@ stock.setOnHand(stock.getOnHand().minus(qty));   // 모자라면 422
 - 3.0 규칙 엔진(elcore3) 전용입니다. 2.x 생성기(elcore)에는 변환기가 붙지 않습니다.
 
 ### 컬렉션/배열 타입
+> **동작:** JPA, MyBatis (mode: mybatis) · **안 됨:** MyBatis (mode: mybatis) 에서 값 컬렉션(`List<String>`, `int[]`, `string[]`), `Map`, `HashMap` - `mappedBy` 가 있는 엔티티 컬렉션만 (빌드 중단)
 
 | DSL 타입 | Java 타입 | 비고 |
 |---------|----------|------|
@@ -734,6 +739,7 @@ stock.setOnHand(stock.getOnHand().minus(qty));   // 모자라면 422
 | `int[]` / `string[]` | Array | 배열 타입 |
 
 ### 참조/기타 타입
+> **동작:** JPA, MyBatis (mode: mybatis) · **안 됨:** MyBatis (mode: mybatis) 에서 JDBC 타입이 없는 `Object` (빌드 중단)
 
 | DSL 타입 | Java 타입 | 비고 |
 |---------|----------|------|
@@ -857,6 +863,7 @@ enumeration:
 ---
 
 ## 6. Repository 정의
+> **동작:** JPA, MyBatis (mode: mybatis) · **안 됨:** MyBatis (mode: mybatis) 에서 JPQL, `Stream` 반환, 쿼리로 읽히지 않는 이름, 멤버가 있는 layered 루트의 `deleteBy...` (빌드 중단)
 
 엔티티의 Spring Data 리포지터리에 쿼리 메서드를 추가합니다. **키는 엔티티 이름**이고,
 메서드는 `methods` **목록**으로 적습니다.
@@ -953,6 +960,7 @@ port:
 ---
 
 ## 8. Domain Service 정의
+> **동작:** ddd, hexagonal · **안 됨:** layered (생성 안 됨)
 
 어느 애그리거트에도 속하지 않는 연산입니다. **엔티티가 아니라 도메인에 선언**하는
 것이 이 섹션의 요점입니다 — 다른 모든 어노테이션은 엔티티에 쓰는데, 도메인 서비스는
@@ -1017,6 +1025,7 @@ public class PricingDomainService extends PricingDomainServiceBase {   // 개발
 ---
 
 ### 프로세스 매니저 (`processManager:`)
+> **동작:** ddd, hexagonal · **안 됨:** layered (생성 안 됨)
 
 도메인 서비스와 같은 파일에 선언합니다. 이벤트에 반응해 다음 단계를 진행하는 자리입니다.
 
@@ -1088,6 +1097,7 @@ processManager:
 ## 9. 고급 기능
 
 ### 복합 키
+> **동작:** JPA · **안 됨:** MyBatis (mode: mybatis) (빌드 중단)
 여러 `@id` 필드 정의 시 자동으로 KeyDTO 클래스가 생성됩니다.
 ```yaml
 entity:
@@ -1100,6 +1110,7 @@ entity:
 ```
 
 ### 임베디드 엔티티
+> **동작:** JPA, MyBatis (mode: mybatis) · **안 됨:** MyBatis (mode: mybatis) 에서 다른 값 객체, 관계 또는 컬렉션을 담은 값 객체 (빌드 중단)
 ```yaml
 entity:
   Address:
@@ -1116,6 +1127,7 @@ entity:
 ```
 
 ### 상속
+> **동작:** JPA; MyBatis (mode: mybatis) 는 `@abstract` 부모만 · **안 됨:** MyBatis (mode: mybatis) 에서 `@abstract` 가 아닌 부모, `@rollup`, `@discriminator` (빌드 중단)
 ```yaml
 entity:
   Vehicle:

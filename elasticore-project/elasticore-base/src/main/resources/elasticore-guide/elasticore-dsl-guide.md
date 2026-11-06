@@ -5,6 +5,7 @@
 The ElastiCORE DSL is a YAML-based domain model definition language.
 You declare Entity, DTO, Enumeration, Repository, Transaction Port and Domain Service,
 and Java or Kotlin code is generated at build time.
+A section marked **Works in:** works only there; **Not in:** says what happens elsewhere - the build stops, a warning, or nothing is generated.
 
 | Top-level key | Meaning | Chapter in this document |
 |---|---|---|
@@ -217,6 +218,7 @@ entity:
 ```
 
 ### Business commands (`commands:`) - DDD bundle
+> **Works in:** ddd, hexagonal · **Not in:** layered (not generated)
 
 CRUD is "change these fields"; a domain is asked "confirm this sales order". On an entity,
 if you write `commands:`, each command is generated as **one path, from the endpoint to the rule**.
@@ -253,6 +255,7 @@ SalesOrder:
   create, read, delete and commands.
 
 ### Lifecycle (`states:`) - DDD bundle
+> **Works in:** ddd, hexagonal · **Not in:** layered (warning)
 
 A **rule that a state changes only from
 here to there** - "an order starts as PLACED, becomes SHIPPED when shipped and CANCELLED when cancelled" - is written in the DSL instead of in code. The bodies of the command methods (`ship()`, `cancel()`) are generated too, so
@@ -476,9 +479,10 @@ HTTP/1.1 409
   called first inside the invariant side's `markBeingRemoved()`. The behavior is the same.
 
 #### 7. When a state was entered (`@stamp`)
+> **Works in:** ddd, hexagonal · **Not in:** layered (warning)
 
 "When was it sent?", "when was it cancelled?" - write the state on a time field, and the command that moves the row into that
-state records the time. Since: 3.0 (after 3.0.261105-rc10)
+state records the time. Since: 3.0 (3.0.261106-rc11)
 
 ```yaml
     fields:
@@ -594,9 +598,9 @@ metrics:
 |---|---|---|
 | `sum(Entity.field)` / `avg` / `min` / `max` | Aggregate a field of one entity | `SUM(PurchaseOrder.total)` |
 | `count(Entity)` / `count(Entity.field)` | Number of rows / number of rows with a value | `COUNT(PurchaseOrder.order_id)` (the key column - so that BI tools know which dataset is counted) / `COUNT(PurchaseOrder.total)` |
-| `count(distinct Entity.field)` | Number of different values, nulls not counted. `distinct` goes only with `count` and needs a field; `sum(distinct …)` is refused | `COUNT(DISTINCT Login.user_id)`, with `where` `COUNT(DISTINCT CASE WHEN … THEN Login.user_id END)` |
+| `count(distinct Entity.field)` | Number of different values, nulls not counted. `distinct` goes only with `count` and needs a field; `sum(distinct …)` is refused | `COUNT(DISTINCT PurchaseOrder.customer_id)`, with `where` `COUNT(DISTINCT CASE WHEN … THEN PurchaseOrder.customer_id END)` |
 | `… where field != value and field >= value` | Conditions (`=`, `!=`, `<`, `<=`, `>`, `>=`), joined with `and` | `SUM(CASE WHEN … THEN … END)` |
-| `… where field in (A, B)` / `not in (A, B)` | A list of values, each read as a single value is | `Offer.status IN ('PND', 'AWD')` |
+| `… where field in (A, B)` / `not in (A, B)` | A list of values, each read as a single value is | `PurchaseOrder.status IN ('PLC', 'SHP')` |
 | `… where a = 1 or b = 2`, `(a = 1 or b = 2) and c = 3`, `not (a = 1)` | `or`, with `and` binding tighter as in SQL. Parentheses group, and `not` goes before a parenthesis | `(… OR …) AND …`, `NOT (…)` |
 | Value | A number, `'text'` (a `'` inside is `''`), `true`/`false`, **an enum constant name** (converted to the stored value: the `@db` code `'CAN'`, the name if `@jpa:Enumerated(STRING)`, the ordinal `2` if neither) | |
 | `metricA / metricB` (`+ - * /`) | Calculate between metrics declared earlier. Division never divides by 0, and count / count gives a decimal | `(…) / NULLIF((…), 0)` |
@@ -605,7 +609,7 @@ metrics:
 
 - Data types: `count` is `Integer`, `sum`, `min` and `max` take the type of that field, `avg` and division are `Decimal` (`Float` for a `Float` field),
   `+ - *` is `Integer` if both are `Integer`, otherwise `Decimal`. `sum` and `avg` work only on numeric fields.
-- As in SQL, `!=` and `not in` do not count a row whose field is null.
+- As in SQL, `!=`, `not in` and `not (…)` do not count a row whose field is null: where `status` may be null, `unfinished` above is not what `finishedOrders` leaves.
 - If a line contains ` #` or `: `, YAML cuts the line or cannot read the file, so wrap the whole line in quotes:
   `ratio: "shippedOrders / orderCount -- Shipped ratio: shipped / total"`.
 - A line that cannot be read (an entity or field that does not exist, a constant the enum does not have, a metric declared later, an unquoted value on a field that is not an enum, parentheses that do not balance, an empty `in ()`, an `or` or `and` with nothing on one side, `sum(distinct …)`) is dropped at generation
@@ -724,6 +728,7 @@ stock.setOnHand(stock.getOnHand().minus(qty));   // 422 if it runs short
 - It is only for the 3.0 rule engine (elcore3). The 2.x generator (elcore) does not attach the converters.
 
 ### Collection/array types
+> **Works in:** JPA, MyBatis (mode: mybatis) · **Not in:** MyBatis (mode: mybatis) for a collection of values (`List<String>`, `int[]`, `string[]`), `Map` and `HashMap` - only an entity collection with `mappedBy` (stops the build)
 
 | DSL type | Java type | Note |
 |---------|----------|------|
@@ -734,6 +739,7 @@ stock.setOnHand(stock.getOnHand().minus(qty));   // 422 if it runs short
 | `int[]` / `string[]` | Array | Array type |
 
 ### Reference and other types
+> **Works in:** JPA, MyBatis (mode: mybatis) · **Not in:** MyBatis (mode: mybatis) for `Object`, which has no JDBC type (stops the build)
 
 | DSL type | Java type | Note |
 |---------|----------|------|
@@ -857,6 +863,7 @@ enumeration:
 ---
 
 ## 6. Repository definition
+> **Works in:** JPA, MyBatis (mode: mybatis) · **Not in:** MyBatis (mode: mybatis) for JPQL, a `Stream` return, a name that does not read as a query, `deleteBy...` on a layered root with members (stops the build)
 
 Adds query methods to an entity's Spring Data repository. **The key is the entity name**, and
 you write the methods as a `methods` **list**.
@@ -953,6 +960,7 @@ For the detailed syntax and examples, see `elasticore-dsl-port-guide.md`.
 ---
 
 ## 8. Domain service definition
+> **Works in:** ddd, hexagonal · **Not in:** layered (not generated)
 
 An operation that belongs to no aggregate. The point of this section is that you **declare it on the domain, not on an entity** -
 every other annotation goes on an entity, but a domain service is defined as "belonging to no one".
@@ -1017,6 +1025,7 @@ not the behavior but the place to write the behavior and its wiring. If you have
 ---
 
 ### Process manager (`processManager:`)
+> **Works in:** ddd, hexagonal · **Not in:** layered (not generated)
 
 You declare it in the same file as the domain service. It is the place that reacts to events and moves on to the next step.
 
@@ -1088,6 +1097,7 @@ processManager:
 ## 9. Advanced features
 
 ### Composite key
+> **Works in:** JPA · **Not in:** MyBatis (mode: mybatis) (stops the build)
 When you define several `@id` fields, a KeyDTO class is generated automatically.
 ```yaml
 entity:
@@ -1100,6 +1110,7 @@ entity:
 ```
 
 ### Embedded entity
+> **Works in:** JPA, MyBatis (mode: mybatis) · **Not in:** MyBatis (mode: mybatis) for a value object that holds another value object, a relation or a collection (stops the build)
 ```yaml
 entity:
   Address:
@@ -1116,6 +1127,7 @@ entity:
 ```
 
 ### Inheritance
+> **Works in:** JPA; MyBatis (mode: mybatis) with an `@abstract` parent · **Not in:** MyBatis (mode: mybatis) with a parent that is not `@abstract`, `@rollup` or `@discriminator` (stops the build)
 ```yaml
 entity:
   Vehicle:

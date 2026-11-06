@@ -1,6 +1,7 @@
 # ElastiCORE Annotation Guide
 
 > **Version notation**: An annotation marked `Since: x.x` is available only from that version on. An annotation without a mark is available from ElastiCORE 1.0.
+A section marked **Works in:** works only there; **Not in:** says what happens elsewhere - the build stops, a warning, or nothing is generated.
 
 ## 1. Entity Meta Annotations
 
@@ -15,6 +16,7 @@ Product:
 
 #### @expose(methods="...") - the endpoints the Controller serves
 > **Since: 3.0** (3.0.261105-rc10. 3.0 rule engine. The 2.x generator does not read it)
+> **Works in:** v3, Kotlin, TypeScript client · **Not in:** 2.x-compatible output (output = 'v2'), 2.x generator (not generated)
 
 Lists what the Controller serves; anything not listed is not generated. The names are `create`, `read`, `search`, `update` and
 `delete` - `update` is `PUT /` and `PUT /batch`, `delete` is `DELETE /{id}` and `POST /delete`. `GET /schema/info` stays.
@@ -41,6 +43,7 @@ InternalData:
 
 ### @readonly (entity)
 > **Since: 3.0** (3.0 rule engine. The 2.x generator does not read it)
+> **Works in:** v3, Kotlin, TypeScript client · **Not in:** 2.x generator (not generated)
 
 An entity that is only read. The Controller gets only the read endpoints (`read`, `search`, `schemaInfo`); create, update, batch update and delete are left out.
 The v3 Java Service, the TypeScript client and the tools of the AI extension service also keep only reads.
@@ -53,6 +56,7 @@ CommonCode:
 ### @restExclude(method, ...) - deprecated
 > **Since: 3.0** (3.0 rule engine. The 2.x generator does not read it). **Deprecated** in favour of `@expose(methods="...")`:
 > it still applies, and the build names the `methods` list with the same endpoints - or, where none has them (`update` without `batchUpdate`), the nearest and what it changes.
+> **Works in:** v3, Kotlin · **Not in:** 2.x generator (not generated)
 
 Excludes only the methods you name. The names are Service methods (`save`, `update`, `batchUpdate`, `delete`, `deleteById`, `updateBySpecification`) and
 Controller endpoints (`create`, `read`, `search`, `update`, `batchUpdate`, `deleteBatch`, `deleteById`, `schemaInfo`). In v3 output, the
@@ -67,6 +71,7 @@ Notice:
 > read them and generates every method.
 
 ### @audited
+> **Works in:** JPA · **Not in:** MyBatis (mode: mybatis) (stops the build)
 Adds the JPA Envers `@Audited` annotation. For tracking data change history (a dependency setting is required).
 ```yaml
 Order:
@@ -106,6 +111,7 @@ StatusCode:
 - On Oracle 23 a boolean column, of a subclass as of any entity, fails `ddl-auto=validate`: the project DDL writes `NUMBER(1)`, and Hibernate expects `BOOLEAN` from that version.
 
 ### @extend(ParentEntity)
+> **Works in:** JPA; MyBatis (mode: mybatis) with an `@abstract` parent · **Not in:** MyBatis (mode: mybatis) with a parent that is not `@abstract` (stops the build)
 Inherits a parent entity. Generates `extends ParentEntity`.
 ```yaml
 User:
@@ -113,13 +119,14 @@ User:
 ```
 
 ### @embeddable
+> **Works in:** JPA, MyBatis (mode: mybatis) · **Not in:** MyBatis (mode: mybatis) for a value object that holds another value object, a relation or a collection (stops the build)
 JPA `@Embeddable` value object. Used for addresses, coordinates and so on.
 ```yaml
 Address:
   meta: entity @embeddable
 ```
 
-In v3 (DDD, hexagonal), the DTO holds the value object **as a class**, so the rules that apply to a DTO field
+In v3 DDD and hexagonal, and in layered MyBatis (`mode: mybatis`), the DTO holds the value object **as a class**, so the rules that apply to a DTO field
 apply to the fields of the value object (`jpa-value-object-boundary`):
 
 ```yaml
@@ -197,6 +204,7 @@ Message:
 ```
 
 ### @rollup
+> **Works in:** JPA · **Not in:** MyBatis (mode: mybatis) (stops the build)
 Merges columns into the parent table. Creates no table of its own. Use it with `@extend` of a parent entity that has an `@id`.
 ```yaml
 Item:
@@ -240,6 +248,7 @@ userId: long @id
 ```
 
 #### @sequence
+> **Works in:** JPA; MyBatis (mode: mybatis) with IDENTITY on the key · **Not in:** MyBatis (mode: mybatis) with another strategy (`@sequence(SEQUENCE)` ...) or on a field that is not the key (stops the build)
 Auto increment. Generates `@GeneratedValue(strategy = GenerationType.IDENTITY)`.
 ```yaml
 id: long @id @sequence
@@ -311,6 +320,7 @@ In the DDD and hexagonal bundles, a reference to another root is written as an i
 request sends a different `itemId`, the stored value and the response stay with the first item.
 
 #### @readonly / @noinput - a field the server decides
+> **Works in:** v3, Kotlin · **Not in:** 2.x-compatible output (output = 'v2'), 2.x generator - only `READ_ONLY` in the JSON; the mapper still writes the field (not generated)
 A field that goes out in the response and is **not received from the request**. Use it for fields whose value server code decides, such as a join date, a grade or a processing number.
 `@noinput` is an alias with the same meaning.
 
@@ -401,6 +411,7 @@ making the stock negative, is blocked too. So for a rule about a single field, w
 **rules that compare two or more fields**.
 
 #### @minsize(n, 'message') / @maxsize(n, 'message') - number of collection elements
+> **Works in:** v3, Kotlin, TypeScript client · **Not in:** 2.x-compatible output (output = 'v2'), 2.x generator - `@maxsize` and the messages are dropped, `@minsize` is a bare `@Size(min=n)` (not generated)
 The number of members a collection holds. On the DTO it becomes `@Size(min=n, message=...)` (and `@NotNull` too if n is 1 or more - 400 even if the list is not sent at all), and on the DDD root a check at save time (422).
 A minimum count is violated also when the collection is absent (null). If n is 1 or more, the `validate...()` of the TypeScript client
 also checks first with the same message - `if (!partial && (value.lines == null || value.lines.length < 1)) errors.lines = "..."`
@@ -412,6 +423,7 @@ If you declare the DTO directly in `dto.yml` and re-declare the same field, that
 check, write it on the DTO field too. The save-time check (422) always applies from the entity's declaration alone.
 
 #### @pattern('regex', 'message') / @pattern(regexp="...", message="...")
+> **Works in:** v3, Kotlin, TypeScript client · **Not in:** 2.x-compatible output (output = 'v2') - the positional form is ignored, and the named form with a message does not compile (not generated)
 A rule that the string must match the regex **in full**. The DTO gets Bean Validation `@Pattern` (request check, 400),
 and the `validate...()` of the TypeScript client checks with the same regex and message.
 As with `@min`, write the message after the value (the regex). The named form works the same way.
@@ -576,6 +588,7 @@ articles: List<Article> @dtype(List<ArticleDTO>)
 ```
 
 #### @fetchjoin
+> **Works in:** JPA · **Not in:** MyBatis (mode: mybatis) - every to-one relation is joined one level anyway (not generated)
 JOIN FETCH to avoid N+1. Applied in the Service's `withJoinFetches()` - used by the page search (`findBySearch`). Automatically excluded from the count query.
 Both 2.x code and the v3 bundles (from 3.0.261029-rc4).
 ```yaml
@@ -584,6 +597,7 @@ category: Category @fetchjoin
 ```
 
 #### @formula(expression)
+> **Works in:** JPA · **Not in:** MyBatis (mode: mybatis) - the value is null and the field is left out of the search (warning)
 Read-only SQL expression mapping. A computed value, not a DB column.
 ```yaml
 dtype: string @formula("dtype")
@@ -594,7 +608,7 @@ createdByNm: string(100) @formula("coalesce((select u.name from system_user u wh
   as part of the expression as they are (from 2.2.261012 and 3.0). You cannot use a double quote (`"`) inside the expression.
   Example: `activeCount: long @formula("(select count(*) from member m where m.team_id = team_id and m.use_yn = 'Y')")`
 - The DB computes the value when it reads, so the Mapper does not put the value in the DTO->Entity direction (`toEntity`, `mapping(dto, entity)`).
-  It is included like a normal field in the Entity->DTO direction and in search conditions. In the TypeScript client's
+  It is included like a normal field in the Entity->DTO direction and in search conditions (under `mode: mybatis`, not in search conditions). In the TypeScript client's
   `XxxFields` it is `readOnly: true` and `validateXxx` does not check it.
 - If you declare it on an `@abstract` parent entity, it is generated in the parent class, and an inheriting entity inherits the field.
 - The Entity gets a field but no table column. The field gets `@Formula` and
@@ -610,6 +624,7 @@ createdByNm: string(100) @formula("coalesce((select u.name from system_user u wh
 - In `schema.yml` it is shown as `@Formula` instead of `@Column`.
 
 ### 2.5 JPA relations
+> **Works in:** JPA, MyBatis (mode: mybatis) · **Not in:** MyBatis (mode: mybatis) for `@ManyToMany`, a collection without `mappedBy`, a collection inside a member or of another domain's entity, and, in layered, a member held by a to-one `@cascade` without a service of its own (stops the build)
 
 An Entity-typed field gets **`@ManyToOne` applied automatically by default**. You only need to specify it explicitly when you use `@OneToOne` or `@ManyToMany`.
 
@@ -823,6 +838,7 @@ private String forceLong;
 - On the DB side, PostgreSQL `jsonb` / `json` columns are the most common use, and Hibernate 6.2+ handles the mapping without a separate library.
 
 ### 2.7 Custom functions
+> **Works in:** 2.x generator · **Not in:** v3, Kotlin, TypeScript client (not generated)
 
 ```yaml
 fullName: string @function.get("getFullName")       # custom getter
@@ -830,6 +846,7 @@ password: string @function.set("setEncryptedPassword")  # custom setter
 ```
 
 ### 2.8 Spring Data JPA auditing
+> **Works in:** JPA; MyBatis (mode: mybatis) on time fields · **Not in:** MyBatis (mode: mybatis) for a `@jpa:CreatedDate` or `@jpa:LastModifiedDate` that is not a time type (stops the build)
 
 ```yaml
 createDate: datetime @jpa:org.springframework.data.annotation.CreatedDate
@@ -866,6 +883,7 @@ customName: string @search(like,comName)   # like search on the comName field
 ```
 
 ### 3.2 Full list of implemented operators (18)
+> **Works in:** JPA, MyBatis (mode: mybatis) · **Not in:** MyBatis (mode: mybatis) on a large value (`text`, `clob`, `blob`, a string over 4000) - only `like`, prefix and suffix; any other condition is left out (warning)
 
 | DSL syntax | JPA Criteria | Ignore case | Description |
 |----------|-------------|:---:|------|
@@ -924,6 +942,7 @@ else
 ```
 
 ### 3.4 between special behavior
+> **Works in:** JPA · **Not in:** MyBatis (mode: mybatis) - `col >= from AND col <= to`, no To+1 day on a LocalDate (not generated)
 
 Two fields, `fieldNameFrom` and `fieldNameTo`, are generated in the SearchDTO automatically.
 
@@ -944,6 +963,7 @@ registDate: localDate @search(between)
 ```
 
 ### 3.4.1 isnull - search by empty value
+> **Works in:** v3, Kotlin, TypeScript client · **Not in:** 2.x-compatible output (output = 'v2'), 2.x generator - an exact match on the field (not generated)
 
 Use it to search by **whether a value is empty**, as in "loans not yet returned" or "products never received into stock".
 The search DTO gets one `Boolean` property named `<field>Empty` instead of a field value, and that value decides the condition.
@@ -1041,6 +1061,7 @@ return join.in(items);
 ```
 
 ### 3.7 @ref combined with a search condition
+> **Works in:** JPA, MyBatis (mode: mybatis) · **Not in:** MyBatis (mode: mybatis) for a path farther than a joined row (`@ref(shop.region.name)`) (stops the build)
 
 With `@ref(parentEntity.childField)`, a nested get is generated:
 ```yaml
@@ -1107,7 +1128,7 @@ dto:
 ```
 - Only the copied fields are filtered. A field declared in the DTO is always kept, and with a listed name it overrides the copied one. A field added to the entity later is not in the DTO until it is listed. A model of another domain: `shop:Order[note]`.
 - A field the model inherits through its own `@extend` can be listed. A relation's name keeps the field that holds its id: `customer` keeps the `customerId` of a DDD reference, and `customerId` itself is refused, as the list is checked before the reference is rewritten.
-- A name that would give the DTO nothing is refused: a relation with no field that holds its id (declare the id instead, `orderId: long @ref(order.orderId)`), a collection, and a value object where the DTO does not carry one.
+- A name that would give the DTO nothing is refused: a relation with no field that holds its id (declare the id instead, `orderId: long @ref(order.orderId)`), a collection, and a value object where the DTO does not carry one (it carries one whole in `ddd` and `hexagonal`, and in layered MyBatis; not in layered JPA, the compatible output or 2.x).
 - Generation stops on a name the model does not have, a model no domain has, the same model twice (`Order[note], Order[total]` or `Order, Order[note]`), the same field twice (`Order[note, note]`), empty brackets (`Order[]`), `--` on a listed field, a list together with `@extend`, and a list on an entity.
 - Beside a list, a name more than one domain has must say which: `shop:Order[note]`. A DTO without brackets stays as free as it was.
 - `@searchable` and `@searchResult` take no list, and generation stops on one: a search DTO already takes only the fields with a search condition.
@@ -1123,6 +1144,7 @@ dto:
 With pageSize set, it implements the `PageableObject` interface. Generated fields: `pageNumber` (default 0), `pageSize` (the set value), `sortCode`.
 
 ### 4.2.1 @sort - default order
+> **Works in:** v3, Kotlin · **Not in:** 2.x generator (not generated)
 The order when the request does not send `sortCode`. Written in the entity meta, it applies to all search DTOs of that entity; written in a search DTO meta,
 it applies only to that DTO (the search DTO side wins). The format is the same as `sortCode`: property + direction (`+` ascending, `-` descending,
 ascending if omitted), several separated by commas.
@@ -1149,7 +1171,7 @@ internalId: string @searchBypass
 
 ```yaml
 userName: string @json("user_name")            # @JsonProperty("user_name")
-amount: BigDecimal @jsonSerialize(using=com.example.MoneySerializer)
+amount: BigDecimal @jsonSerialize(using=com.example.MoneySerializer)   # not generated yet: no output writes @JsonSerialize
 optionalField: string @jsoninclude             # @JsonInclude
 ```
 Aliases: `@json` = `@jsonproperty`, `@jsoninclude` = `@includejson`
@@ -1584,6 +1606,7 @@ fields:
 4. If one is missing, regenerate from the YAML or edit the Java code by hand
 
 ### 8.5 Comparison keywords and not equal (depend on the mode)
+> **Works in:** v3, Kotlin · **Not in:** 2.x-compatible output (output = 'v2'), 2.x generator - an exact match (not generated)
 
 **Only** the operators in section 3.2 are available. The comparison keywords and `!=` behave differently depending on the mode.
 
@@ -1605,6 +1628,7 @@ fields:
 If you want the same result in every mode, use the symbols.
 
 ### 8.6 between search and the LocalDate +1 day behavior
+> **Works in:** JPA · **Not in:** MyBatis (mode: mybatis) - `col >= from AND col <= to`, no To+1 day on a LocalDate (not generated)
 
 In `@search(between)`, **only the LocalDate type** is handled specially. It adds +1 day to the To value automatically, so the whole last day is included.
 
@@ -1646,6 +1670,7 @@ if(createDateTimeFrom != null && createDateTimeTo != null) {
 7. **Verify after generation**: Always compile and check for errors
 
 ## @root / @aggregate - aggregate boundary (DDD rule set)
+> **Works in:** ddd, hexagonal · **Not in:** layered (not generated)
 
 In a project that uses the `ddd-aggregate` rule, you state whether an entity is an **aggregate root or a member**.
 If you add neither, it is inferred from the model.
@@ -1696,6 +1721,7 @@ A value object has no separate annotation - **`@embeddable` already means that**
 see `elasticore-rule-guide.md`.
 
 ## domainService - domain service (DDD rule set)
+> **Works in:** ddd, hexagonal · **Not in:** layered (not generated)
 
 **This is a DSL section, not an annotation.** The operation belongs to no entity,
 so there is no place for it on an entity's meta line.
@@ -1741,6 +1767,7 @@ If you add an aggregate to `uses`, the Base gets a port, and you use it without 
 package as the entities.
 
 ## @behavior - entity behavior (DDD rule set)
+> **Works in:** ddd, hexagonal · **Not in:** layered (not generated)
 
 Creates **a place for business methods** on an entity. The `ddd-behavior` rule (included in the `ddd-springboot` /
 `hexagonal-springboot` and Kotlin bundles) handles it. In the DDD bundles, **a root is split by default
@@ -1756,6 +1783,7 @@ it leaves only a DSL warning and the field can still be used as is in a request.
 on any entity, use `@readonly` ([§2.2 @readonly / @noinput](#readonly--noinput---a-field-the-server-decides)).
 
 ## @editable - fields and roots edited by a request (DDD rule set)
+> **Works in:** ddd, hexagonal · **Not in:** layered (not generated)
 
 In the DDD bundles, the fields of a root are **locked** by default: a request gives values only when it creates the root, and after that
 the root's methods change them (a PUT that tries to change a locked value gets 422). `@editable` opens this.
@@ -1815,6 +1843,7 @@ Use cases:
 - **A slimmer service**: the application service only reads, saves and handles transactions, and the rules live in the entity
 
 ## @invariant - invariant (DDD rule set)
+> **Works in:** ddd, hexagonal, TypeScript client · **Not in:** layered (not generated)
 
 > **Where to use it?** Write a rule about a single field on the field - `unitPrice: money(12.2)! @min(0.01, 'unit price must be greater than 0')`,
 > and a collection size as `lines: ... @minsize(1, '...')`. In the DDD bundles, the field rules of a root become invariants that are also checked at save time.
@@ -1874,6 +1903,7 @@ allowed because it is already filled at flush time, and deleting the root itself
 cannot be made and the build raises a DSL warning - map the relationship as two-way (`mappedBy`).
 
 ## @factory - factory (DDD rule set)
+> **Works in:** ddd, hexagonal · **Not in:** layered (not generated)
 
 Declares **the place that creates** an aggregate. A root with invariants
 cannot be created by setting its fields one by one.
@@ -1901,6 +1931,7 @@ a factory that is handed the identifier before creating anything has created not
 through the root's add method.
 
 ## @specification - specification (DDD rule set)
+> **Works in:** ddd, hexagonal, TypeScript client · **Not in:** layered (not generated)
 
 Declares a domain rule worth a name.
 
@@ -1964,6 +1995,7 @@ one typo does not block the generation of the whole domain - if the generated fi
 check your condition.
 
 ## @access / @owner - who can do what (v3)
+> **Works in:** v3, Kotlin, TypeScript client · **Not in:** 2.x-compatible output (output = 'v2') (warning); 2.x generator (not generated); MyBatis (mode: mybatis) with an `@owner` field that is not a column of the row (stops the build)
 
 In the entity meta, write the allowed level per operation and the field that holds the owner.
 
@@ -2013,7 +2045,7 @@ the application does not start. In the rule engine (`elcore3`), with a bundle th
 using `@access`, `@owner` or `@password` checks and hashes nothing, so the build warns.
 **The 2.x generator (`elcore`, the annotation processor) does not handle these annotations** - use the 3.0 rule engine.
 
-The generated service test (`testCode: true`) adds `RunAsSystemExtension` to an entity that has access rules, so it runs
+The generated service test (`testCode: true`, Kotlin - v3 Java writes none) adds `RunAsSystemExtension` to an entity that has access rules, so it runs
 as the application itself. A test that checks the permissions themselves signs in as a user and does not use this extension.
 
 Put `@access(admin)` on a field and it is a **field only the admin writes**. A value sent by anyone else is replaced by the entity
@@ -2107,6 +2139,7 @@ If you use Spring Security, register an `io.elasticore.springboot3.security.Curr
 (`authenticate` stays).
 
 ## @password / @login - credentials (v3)
+> **Works in:** v3, Kotlin, TypeScript client · **Not in:** 2.x-compatible output (output = 'v2') (warning); 2.x generator (not generated)
 
 ```yaml
 login:    string(10)! @login @unique
@@ -2125,6 +2158,7 @@ password: string(255)! @password      # long enough for the hash (PBKDF2 is abou
   the unique constraint on the login column (the unique constraint is added by `@signin` alone, even if the sign-in API is refused).
 
 ## @snapshot / @compute - derived values (DDD rule set)
+> **Works in:** ddd, hexagonal · **Not in:** layered (warning)
 
 ```yaml
 OrderLine:
@@ -2146,8 +2180,9 @@ PurchaseOrder:
 - **It is different from `@formula`**: `@formula("...")` is a Hibernate SQL expression that the database calculates.
 
 ## @deleted - a delete keeps the row (v3)
+> **Works in:** v3 (JPA, MyBatis), Kotlin · **Not in:** 2.x-compatible output (output = 'v2') - a delete removes the row (warning); 2.x generator (not generated); mapping: xml on Spring Boot 3 (stops the build)
 
-A delete writes **when the row was deleted** instead of removing it, and no read of the API finds the row again. Since: 3.0 (after 3.0.261105-rc10)
+A delete writes **when the row was deleted** instead of removing it, and no read of the API finds the row again. Since: 3.0 (3.0.261106-rc11)
 
 ```yaml
 Product:
@@ -2194,7 +2229,7 @@ and `findById`, `countById`, `findAll` and the search have `AND t.discontinued_a
   `@cascade` or `orphanRemoval` - those entities must be `@deleted` as well. Otherwise the build stops:
   `Order @deleted keeps its rows, but a delete would remove lines (OrderLine) outright with it - mark that entity @deleted too.`
   A delete of a ticket then keeps the ticket and its entries (Kotlin sample `ticket.yml`).
-- JPA (Java, Kotlin, Spring Boot 3.2 and later, and 4) and MyBatis (layered, DDD, hexagonal). Checked over HTTP and in the table on the pet store
+- JPA (Java, Kotlin, Spring Boot 3 and 4; the `@SQLRestriction` it writes is Hibernate 6.3's, so Spring Boot 3.2 or later - the build does not check the version) and MyBatis (layered, DDD, hexagonal). Checked over HTTP and in the table on the pet store
   (Hibernate 7), `elasticore-template-mybatis`, `elasticore-template-ddd-mybatis` (H2, Oracle, PostgreSQL, SQL Server) and
   `elasticore-template-kt`.
 
@@ -2216,6 +2251,7 @@ and `findById`, `countById`, `findAll` and the search have `AND t.discontinued_a
 | A category retired while products still point at it | `retiredAt: datetime @deleted` |
 
 ## @event - domain events (DDD rule set)
+> **Works in:** ddd, hexagonal · **Not in:** layered (not generated)
 
 It declares **what can happen** to an aggregate root. It works in a project that has the `ddd-event` rule
 (included in the `ddd-springboot` / `hexagonal-springboot` bundles).
