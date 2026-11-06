@@ -67,7 +67,7 @@ public final class MyBatisSql {
         String name = e.parentName();
         if (name == null || name.trim().isEmpty() || name.trim().equals(e.getName())) return null;
         EntitySpec parent = e.related(name.trim());
-        return parent != null && parent.hasMeta("abstract") ? parent : null;
+        return parent != null && parent.isMappedSuperclass() ? parent : null;
     }
 
     /** The table, with its schema when the entity names one. */
@@ -541,6 +541,7 @@ public final class MyBatisSql {
      */
     public static List<String> unsupported(EntitySpec e) {
         List<String> out = new ArrayList<String>();
+        if (e.isAbstractEntity()) out.add("an abstract entity (@abstract(entity), a polymorphic root)");
         if (e.pkCount() > 1) out.add("a key of " + e.pkCount() + " fields (@IdClass)");
         if (e.parentName() != null && !e.parentName().trim().isEmpty() && abstractParent(e) == null) {
             // An @abstract parent is a mapped superclass: its columns are the

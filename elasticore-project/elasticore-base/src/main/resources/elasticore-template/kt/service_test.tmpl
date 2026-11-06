@@ -63,9 +63,9 @@ ${mockSetUp}
     private fun createMock${entityClassName}(): ${entityClassName} {
 /*-- print-if:${isCompositeKey} --*/
         ${idVariableCreation}
-        val entity = ${entityClassName}()
+        val entity = ${newEntity}
 /*-- print-elseif:${isCompositeKey} --*/
-        val entity = ${entityClassName}()
+        val entity = ${newEntity}
 /*-- print-if:end --*/
 ${testDataCreation}        return entity
     }
@@ -134,6 +134,7 @@ ${testDtoDataCreation}        return dto
         verify(repository).findById(${anyId})
     }
 
+/*-- print-elseif:${isAbstractEntity} --*/
     @Test
     @DisplayName("save - should save and return new entity")
     fun save_ShouldSaveAndReturnNewEntity() {
@@ -145,6 +146,7 @@ ${testDtoDataCreation}        return dto
         verify(repository).save(${anyEntity})
     }
 
+/*-- print-if:end --*/
     @Test
     @DisplayName("update - should throw exception when entity not found")
     fun update_ShouldThrowExceptionWhenEntityNotFound() {

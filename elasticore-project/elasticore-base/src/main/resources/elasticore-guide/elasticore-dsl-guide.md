@@ -104,6 +104,7 @@ entity:
 | Annotation | Description |
 |-----------|------|
 | `@abstract` | Abstract entity (for inheritance only, no table is created) |
+| `@abstract(entity)` | Abstract `@Entity`, the root of a hierarchy: one repository and one service read its subclasses together, with no create |
 | `@extend(Parent)` | Inherits a parent entity |
 | `@expose(n)` | Generates REST Controller + Service + SearchDTO. n = page size |
 | `@service(n)` | Generates Service + SearchDTO (no Controller). n = page size |

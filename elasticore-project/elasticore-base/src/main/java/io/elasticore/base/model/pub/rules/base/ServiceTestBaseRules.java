@@ -30,30 +30,39 @@ public class ServiceTestBaseRules implements CodeRules {
         String name = e.getName();
 
         c.var("packageName", e.pkg("service"))
-         .var("entityPackageName", e.pkg("entity"))
-         .var("dtoPackageName", e.pkg("dto"))
-         .var("repositoryPackageName", e.pkg("repository"))
-         .var("j2eePkgName", "jakarta")
-         .var("className", "%sService", name)
-         .var("testClassName", "%sServiceTest", name)
-         .var("domainName", e.domainClassName())
-         .var("entityClassName", name)
-         .var("orgEntityClassName", name)
-         .var("dtoClassName", "%sDTO", name)
-         .var("mapperName", "%sMapper", e.domainClassName())
-         .var("searchDTOClassName", e.searchDtoClassName())
-         .var("searchResultDTOClassName", searchResultDto(e))
-         // 2.x tests the extended service of an exposed entity and asserts
-         // nothing about the shape of its search result; only the CoreService
-         // of an unexposed one gets a list or page section, chosen by whether
-         // the search DTO names a page size.
-         .var("isExposeOutput", String.valueOf(exposed(e)))
-         .var("isPageOutput", String.valueOf(!exposed(e) && e.searchPageable()))
-         .var("isListOutput", String.valueOf(!exposed(e) && !e.searchPageable()))
-         // The helper holds its repositories as fields with accessors in Java
-         // and as properties in Kotlin, as the service itself does.
-         .var("repositoryRef", c.syntax().getter("helper", RuleText.uncapital(name)))
-         .var("entityFieldName", RuleText.uncapital(name));
+                .var("entityPackageName", e.pkg("entity"))
+                .var("dtoPackageName", e.pkg("dto"))
+                .var("repositoryPackageName", e.pkg("repository"))
+                .var("j2eePkgName", "jakarta")
+                .var("className", "%sService", name)
+                .var("testClassName", "%sServiceTest", name)
+                .var("domainName", e.domainClassName())
+                .var("entityClassName", name)
+                .var("isAbstractEntity", String.valueOf(e.isAbstractEntity()))
+                // An abstract entity has no instance to make, so the fixture is a mock that keeps its accessors.
+                .var(
+                        "newEntity",
+                        e.isAbstractEntity()
+                                ? String.format(
+                                        "org.mockito.Mockito.mock(%s::class.java, org.mockito.Mockito.CALLS_REAL_METHODS)",
+                                        name)
+                                : String.format("%s()", name))
+                .var("orgEntityClassName", name)
+                .var("dtoClassName", "%sDTO", name)
+                .var("mapperName", "%sMapper", e.domainClassName())
+                .var("searchDTOClassName", e.searchDtoClassName())
+                .var("searchResultDTOClassName", searchResultDto(e))
+                // 2.x tests the extended service of an exposed entity and asserts
+                // nothing about the shape of its search result; only the CoreService
+                // of an unexposed one gets a list or page section, chosen by whether
+                // the search DTO names a page size.
+                .var("isExposeOutput", String.valueOf(exposed(e)))
+                .var("isPageOutput", String.valueOf(!exposed(e) && e.searchPageable()))
+                .var("isListOutput", String.valueOf(!exposed(e) && !e.searchPageable()))
+                // The helper holds its repositories as fields with accessors in Java
+                // and as properties in Kotlin, as the service itself does.
+                .var("repositoryRef", c.syntax().getter("helper", RuleText.uncapital(name)))
+                .var("entityFieldName", RuleText.uncapital(name));
 
         // An entity with @access is tested as the application itself: these
         // tests are of what the service does, and nobody signs in to them.

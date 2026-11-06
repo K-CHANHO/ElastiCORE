@@ -1,0 +1,16 @@
+entity:
+  Code:
+    meta: entity @abstract(entity) @expose(20) @jpa:Inheritance(strategy = InheritanceType.TABLE_PER_CLASS) -- A code of any kind
+    fields:
+      code: string(10) @id
+      name: string(50)! @search(like)
+
+  StatusCode:
+    meta: entity @extend(Code) -- A status a case can be in
+    fields:
+      phase: string(10)
+
+  RegionCode:
+    meta: entity @extend(Code) -- A region a case can be in
+    fields:
+      country: string(2)

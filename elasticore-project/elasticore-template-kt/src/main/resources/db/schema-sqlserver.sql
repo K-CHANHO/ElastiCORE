@@ -273,6 +273,27 @@ CREATE TABLE member (
     PRIMARY KEY (id)
 );
 
+CREATE TABLE ref_case_note (
+    note_id BIGINT IDENTITY(1,1) NOT NULL,
+    title NVARCHAR(50),
+    status_code NVARCHAR(10),
+    PRIMARY KEY (note_id)
+);
+
+CREATE TABLE ref_region_code (
+    code NVARCHAR(10) NOT NULL,
+    name NVARCHAR(50) NOT NULL,
+    country NVARCHAR(2),
+    PRIMARY KEY (code)
+);
+
+CREATE TABLE ref_status_code (
+    code NVARCHAR(10) NOT NULL,
+    name NVARCHAR(50) NOT NULL,
+    phase NVARCHAR(10),
+    PRIMARY KEY (code)
+);
+
 CREATE TABLE shop_agent (
     agent_id BIGINT IDENTITY(1,1) NOT NULL,
     login NVARCHAR(20) NOT NULL,

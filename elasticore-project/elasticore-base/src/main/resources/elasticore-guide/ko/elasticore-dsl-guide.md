@@ -104,6 +104,7 @@ entity:
 | 어노테이션 | 설명 |
 |-----------|------|
 | `@abstract` | 추상 엔티티 (상속 전용, 테이블 생성 안됨) |
+| `@abstract(entity)` | 추상 `@Entity`, 계층의 루트: 리포지토리 하나와 서비스 하나로 하위 클래스를 함께 읽음, 생성 없음 |
 | `@extend(Parent)` | 부모 엔티티 상속 |
 | `@expose(n)` | REST Controller + Service + SearchDTO 생성. n = 페이지 크기 |
 | `@service(n)` | Service + SearchDTO 생성 (Controller 제외). n = 페이지 크기 |

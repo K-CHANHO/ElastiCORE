@@ -88,6 +88,27 @@ CREATE TABLE ps_purchase_order (
     PRIMARY KEY (order_id)
 );
 
+CREATE TABLE ref_case_note (
+    note_id BIGINT IDENTITY(1,1) NOT NULL,
+    title NVARCHAR(50),
+    status_code NVARCHAR(10),
+    PRIMARY KEY (note_id)
+);
+
+CREATE TABLE ref_region_code (
+    code NVARCHAR(10) NOT NULL,
+    name NVARCHAR(50) NOT NULL,
+    country NVARCHAR(2),
+    PRIMARY KEY (code)
+);
+
+CREATE TABLE ref_status_code (
+    code NVARCHAR(10) NOT NULL,
+    name NVARCHAR(50) NOT NULL,
+    phase NVARCHAR(10),
+    PRIMARY KEY (code)
+);
+
 ALTER TABLE ps_item ADD CONSTRAINT fk_ps_item_product FOREIGN KEY (product_id) REFERENCES ps_product (product_id);
 ALTER TABLE ps_order_line ADD CONSTRAINT fk_ps_order_line_order FOREIGN KEY (order_order_id) REFERENCES ps_purchase_order (order_id);
 ALTER TABLE ps_order_line ADD CONSTRAINT fk_ps_order_line_item FOREIGN KEY (item_id) REFERENCES ps_item (item_id);

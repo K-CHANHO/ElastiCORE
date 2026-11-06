@@ -52,6 +52,20 @@ CREATE TABLE cat_reading (
     PRIMARY KEY (reading_id)
 );
 
+CREATE TABLE cat_region_code (
+    code VARCHAR2(10 CHAR) NOT NULL,
+    name VARCHAR2(50 CHAR) NOT NULL,
+    country VARCHAR2(2 CHAR),
+    PRIMARY KEY (code)
+);
+
+CREATE TABLE cat_status_code (
+    code VARCHAR2(10 CHAR) NOT NULL,
+    name VARCHAR2(50 CHAR) NOT NULL,
+    phase VARCHAR2(10 CHAR),
+    PRIMARY KEY (code)
+);
+
 CREATE TABLE shop_category (
     created_by VARCHAR2(50 CHAR),
     create_date TIMESTAMP(6),

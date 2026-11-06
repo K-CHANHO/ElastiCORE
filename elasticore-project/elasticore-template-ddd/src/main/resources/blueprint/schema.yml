@@ -172,6 +172,15 @@ entities:
       orderId: string(36) @Column(name = "order_id", length = 36) -- 주문 ID (shop 의 주문)
       amount: java.math.BigDecimal @relation(mappedBy="amount_id") @foreignKey(amount_id) -- java.math.BigDecimal entity relationship -- 청구 금액
 
+  RegionCode:
+    meta: entity @extend(Code) @java(io.elasticore.sample.ddd.catalog.entity.RegionCode) -- A region a case can be in
+    table: cat_region_code
+    java: io.elasticore.sample.ddd.catalog.entity.RegionCode
+    fields:
+      code: string(10) @Column(name = "code", length = 10) @Id
+      name: string(50) @Column(name = "name", length = 50)
+      country: string(2) @Column(name = "country", length = 2)
+
   Shipment:
     meta: entity @java(io.elasticore.sample.ddd.shop.domain.model.Shipment) -- 배송
     table: shop_shipment
@@ -184,6 +193,15 @@ entities:
       sentAt: java.time.Instant @relation(mappedBy="sent_at_id") @foreignKey(sent_at_id) -- java.time.Instant entity relationship
       cancelledAt: Date @Column(name = "cancelled_at")
       refundedOn: Date @Column(name = "refunded_on")
+
+  StatusCode:
+    meta: entity @extend(Code) @java(io.elasticore.sample.ddd.catalog.entity.StatusCode) -- A status a case can be in
+    table: cat_status_code
+    java: io.elasticore.sample.ddd.catalog.entity.StatusCode
+    fields:
+      code: string(10) @Column(name = "code", length = 10) @Id
+      name: string(50) @Column(name = "name", length = 50)
+      phase: string(10) @Column(name = "phase", length = 10)
 
   VipProfile:
     meta: entity @java(io.elasticore.sample.ddd.shop.domain.model.VipProfile)

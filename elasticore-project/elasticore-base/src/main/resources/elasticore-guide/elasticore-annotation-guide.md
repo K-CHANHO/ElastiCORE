@@ -92,6 +92,27 @@ AuditEntity:
   meta: entity @abstract
 ```
 
+**`@abstract(entity)` - the root of a hierarchy.**
+> **Works in:** v3 (JPA), Kotlin · **Not in:** MyBatis (mode: mybatis) (stops the build); 2.x-compatible output (output = 'v2') and 2.x generator (read as plain `@abstract`)
+
+An abstract `@Entity` with a key, never stored as itself, whose subclasses one repository and one service read together:
+```yaml
+Code:
+  meta: entity @abstract(entity) @expose(20) @jpa:Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
+  fields:
+    code: string(10) @id
+    name: string(50)!
+StatusCode:
+  meta: entity @extend(Code)
+```
+- It gets `@Entity` and `@Table`, keeps the `@jpa:Inheritance` you write, and has a repository, a Q class and a service that reads, searches, updates and deletes.
+- There is no create: no `save`, no POST, no `toEntity`, no `create` in the TypeScript client, no create use case under `hexagonal`, and the generated Kotlin service test makes no instance. A relation to it is written with `em.getReference`, and the mapper's overloads without an `EntityManager` throw when the DTO names one.
+- `@jpa:Inheritance` must say `TABLE_PER_CLASS` or `JOINED`. Each subclass is written with a table of its own, which `SINGLE_TABLE`, the default, does not give it.
+- Under `TABLE_PER_CLASS` the abstract class has no table, each subclass's table has its columns, and a relation to it has no foreign key, as its rows are in several tables. A key must be unique across all the subclass tables, and nothing in the database enforces that. Hibernate refuses an identity column there, so the key cannot be an identity: a plain `@sequence`, which means `IDENTITY`, stops generation, and `@sequence(SEQUENCE)` works.
+- A subclass, whose key is inherited, gets no repository or service of its own, and `@expose` or `@service` on it gets a warning: write its rows through a repository of your own.
+- Generation stops on a root without a key, and on `mode: mybatis`. The 2.x generator and `output = 'v2'` read it as plain `@abstract`. The Ossie export has no dataset for it, as for plain `@abstract`.
+- On Oracle 23 a boolean column, of a subclass as of any entity, fails `ddl-auto=validate`: the project DDL writes `NUMBER(1)`, and Hibernate expects `BOOLEAN` from that version.
+
 ### @extend(ParentEntity)
 > **Works in:** JPA; MyBatis (mode: mybatis) with an `@abstract` parent · **Not in:** MyBatis (mode: mybatis) with a parent that is not `@abstract` (stops the build)
 Inherits a parent entity. Generates `extends ParentEntity`.
@@ -2222,7 +2243,7 @@ and `findById`, `countById`, `findAll` and the search have `AND t.discontinued_a
   (`repository.yml`) does it.
 - A query you declare yourself (`repository.yml` `@query` or a derived finder, a dbms port, native SQL) is not changed: add `<column> IS NULL` there.
 - A unique column keeps the deleted row's value, so a new row cannot take it.
-- A composite key, a `@rollup` entity, a single-table hierarchy (`@discriminator`) and a `@deleted` inherited from a parent with a table
+- A composite key, a `@rollup` entity, a single-table hierarchy (`@discriminator`), an `@abstract(entity)` hierarchy (the root, or anything that extends it) and a `@deleted` inherited from a parent with a table
   of its own stop the build. Under JPA, an entity whose key the request gives needs a version (`@jpa:Version`) - otherwise the build stops.
 - The layered MyBatis service replaces a collection on update: the old live rows of `@deleted` members are removed outright then.
 

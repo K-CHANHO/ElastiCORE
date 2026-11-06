@@ -30,6 +30,46 @@ datasets:
     custom_extensions:
       - vendor_name: ELASTICORE
         data: "{\"entity\": \"Receipt\", \"domain\": \"billing\"}"
+  - name: StatusCode
+    source: cat_status_code
+    primary_key: [code]
+    description: "A status a case can be in"
+    fields:
+      - name: phase
+        expression:
+          sql: "phase"
+        datatype: String
+      - name: code
+        expression:
+          sql: "code"
+        datatype: String
+      - name: name
+        expression:
+          sql: "name"
+        datatype: String
+    custom_extensions:
+      - vendor_name: ELASTICORE
+        data: "{\"entity\": \"StatusCode\", \"domain\": \"catalog\"}"
+  - name: RegionCode
+    source: cat_region_code
+    primary_key: [code]
+    description: "A region a case can be in"
+    fields:
+      - name: country
+        expression:
+          sql: "country"
+        datatype: String
+      - name: code
+        expression:
+          sql: "code"
+        datatype: String
+      - name: name
+        expression:
+          sql: "name"
+        datatype: String
+    custom_extensions:
+      - vendor_name: ELASTICORE
+        data: "{\"entity\": \"RegionCode\", \"domain\": \"catalog\"}"
   - name: Author
     source: cat_author
     primary_key: [author_id]

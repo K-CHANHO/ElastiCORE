@@ -2568,6 +2568,35 @@ public final class RulesGenRunner {
         return named;
     }
 
+    /** What the root of a hierarchy cannot be generated as, said before its code is written. */
+    private static void checkAbstractEntity(EntitySpec spec, String name) {
+        String at = String.format("[elcore3] %s.%s: @abstract(entity) ", spec.domainClassName(), name);
+        io.elasticore.base.model.pub.rules.FieldSpec key = spec.pkField();
+        if (key == null) {
+            io.elasticore.base.model.pub.rules.ModelCheck.fail(at + "is the root of a hierarchy, and a root has the key"
+                    + " - give it one, or use plain @abstract for a frame with no table");
+            return;
+        }
+        // Every subclass is written with a table of its own. SINGLE_TABLE, which is also what
+        // no strategy means, has none of them: the schema and the Ossie export would name tables that are not there.
+        String inheritance = String.join(" ", spec.nativeEntityAnnotationLines());
+        boolean perClass = inheritance.contains("TABLE_PER_CLASS");
+        if (!perClass && !inheritance.contains("JOINED")) {
+            io.elasticore.base.model.pub.rules.ModelCheck.fail(at
+                    + "needs @jpa:Inheritance(strategy = InheritanceType.TABLE_PER_CLASS) or JOINED: each subclass"
+                    + " is written with a table of its own, which SINGLE_TABLE, the default, does not give it");
+            return;
+        }
+        String generation = key.dslValue("sequence");
+        if (perClass
+                && key.hasDsl("sequence")
+                && (generation == null || generation.isEmpty() || "IDENTITY".equalsIgnoreCase(generation.trim()))) {
+            io.elasticore.base.model.pub.rules.ModelCheck.fail(at
+                    + "under TABLE_PER_CLASS cannot have an identity key, and @sequence means IDENTITY: Hibernate"
+                    + " refuses it at startup. Write @sequence(SEQUENCE), or a key the application sets");
+        }
+    }
+
     private void generateEntityArtifacts(Entity entity, EntitySpec spec, ECoreModel model) {
         String name = entity.getIdentity().getName();
         boolean exposed = entity.getMetaInfo().hasMetaAnnotation("expose");
@@ -2575,6 +2604,19 @@ public final class RulesGenRunner {
         boolean hasPk = spec.pkField() != null;
 
         System.out.println("  " + name);
+
+        if ((v3 || kotlin) && !typescript && spec.isAbstractEntity()) checkAbstractEntity(spec, name);
+        if ((v3 || kotlin) && !typescript && serviced && !hasPk) {
+            String root = spec.abstractEntityAbove();
+            if (root != null) {
+                io.elasticore.base.util.ConsoleLog.storeLog(
+                        "DSL_WARN",
+                        String.format(
+                                "[%s] @%s gives a subclass of the @abstract(entity) %s no repository, service or controller:"
+                                        + " its key is %s's, and its rows are served through %s.",
+                                name, exposed ? "expose" : "service", root, root, root));
+            }
+        }
 
         // @expose(methods="...") and the @restExclude it replaces, said once per
         // entity by the server's run - the client's run reads the same DSL.
@@ -2670,7 +2712,7 @@ public final class RulesGenRunner {
             relateMyBatisEarly(spec);
             java.util.List<String> unsupported =
                     io.elasticore.base.model.pub.rules.mybatis.MyBatisSql.unsupported(spec);
-            if (!unsupported.isEmpty() && !spec.hasMeta("embeddable") && !spec.hasMeta("abstract")) {
+            if (!unsupported.isEmpty() && !spec.hasMeta("embeddable") && !spec.isMappedSuperclass()) {
                 io.elasticore.base.model.pub.rules.ModelCheck.fail(String.format(
                         "[elcore3] %s.%s: mode: mybatis does not write %s yet - model it otherwise,"
                                 + " or keep this domain on JPA", spec.domainClassName(), name,

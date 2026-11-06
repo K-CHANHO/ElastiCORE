@@ -58,11 +58,18 @@ public final class SoftDelete {
     /**
      * Why the entity's @deleted cannot be honoured, or null when it can (or
      * there is none): one field, a time, not the key, a single key, a table of
-     * its own. An abstract parent is checked in each entity that extends it.
+     * its own, no @abstract(entity) above or at it. A plain @abstract parent is
+     * checked in each entity that extends it.
      */
     public static String problem(EntitySpec e) {
         List<FieldSpec> marked = marked(e);
-        if (marked.isEmpty() || e.hasMeta("abstract")) return null;
+        if (marked.isEmpty()) return null;
+        // The root reads its subclasses' rows and has no delete of its own to keep them, and
+        // under JOINED the column is in the root's table, not the one a subclass's delete updates.
+        if (e.isAbstractEntity() || e.abstractEntityAbove() != null) {
+            return " @deleted in an @abstract(entity) hierarchy is not supported yet";
+        }
+        if (e.hasMeta("abstract")) return null;
         if (e.hasMeta("embeddable"))
             return " @deleted: a value (@embeddable) is kept or removed with its row - mark the entity";
         if (e.hasMeta("rollup")) return " @deleted on a @rollup entity is not supported yet";

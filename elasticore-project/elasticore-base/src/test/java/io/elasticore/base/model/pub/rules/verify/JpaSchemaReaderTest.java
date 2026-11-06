@@ -289,6 +289,73 @@ public class JpaSchemaReaderTest {
                 && fk.table.equals("person")));
     }
 
+    /** Whoever wrote it: an abstract class under TABLE_PER_CLASS has no rows of its own, and Hibernate makes no table. */
+    @Test
+    public void aHandWrittenAbstractRootHasNoTableAndNoForeignKeyToIt() throws Exception {
+        dir = Files.createTempDirectory("jpa-reader-abstract");
+        source(
+                "acme/Account.java",
+                String.join(
+                        "\n",
+                        "package acme;",
+                        "import jakarta.persistence.*;",
+                        "@Entity @Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)",
+                        "public abstract class Account { @Id private Long accountId; private String owner; }"));
+        source(
+                "acme/Savings.java",
+                String.join(
+                        "\n",
+                        "package acme;",
+                        "import jakarta.persistence.*;",
+                        "@Entity public class Savings extends Account { private Integer rate; }"));
+        source(
+                "acme/Transfer.java",
+                String.join(
+                        "\n",
+                        "package acme;",
+                        "import jakarta.persistence.*;",
+                        "@Entity public class Transfer {",
+                        "    @Id private Long transferId;",
+                        "    @ManyToOne private Account account;",
+                        "    @ManyToOne private Savings savings;",
+                        "}"));
+        source(
+                "acme/Party.java",
+                String.join(
+                        "\n",
+                        "package acme;",
+                        "import jakarta.persistence.*;",
+                        "@Entity @Inheritance(strategy = InheritanceType.JOINED)",
+                        "public abstract class Party { @Id private Long partyId; }"));
+        source(
+                "acme/Person.java",
+                String.join(
+                        "\n",
+                        "package acme;",
+                        "import jakarta.persistence.*;",
+                        "@Entity public class Person extends Party { private String nickname; }"));
+        source(
+                "acme/Contract.java",
+                String.join(
+                        "\n",
+                        "package acme;",
+                        "import jakarta.persistence.*;",
+                        "@Entity public class Contract { @Id private Long contractId; @ManyToOne private Party party; }"));
+
+        Schema s = read("acme.Account", "acme.Savings", "acme.Transfer", "acme.Party", "acme.Person", "acme.Contract");
+
+        assertNull(s.table("account"), s.tables().toString());
+        assertNotNull(s.table("savings").column("owner"));
+        Table transfer = s.table("transfer");
+        assertNotNull(transfer.column("account_account_id"), "the column stays, without a key to point at");
+        assertEquals(1, transfer.foreignKeys().size(), "only the one to a table that is there");
+        assertTrue(transfer.foreignKeys().stream().anyMatch(fk -> fk.table.equals("savings")));
+
+        // JOINED gives the root a table, and so a foreign key to point at.
+        assertNotNull(s.table("party"), s.tables().toString());
+        assertTrue(s.table("contract").foreignKeys().stream().anyMatch(fk -> fk.table.equals("party")));
+    }
+
     @Test
     public void kotlinEntitiesAreReadToo() throws Exception {
         dir = Files.createTempDirectory("jpa-reader-kt");

@@ -116,6 +116,7 @@ public final class JpaSchemaReader {
         Map<String, String> imports = new HashMap<String, String>();
         String superName;
         String kind;
+        boolean isAbstract;
         final List<OrmMapping.Anno> annos = new ArrayList<OrmMapping.Anno>();
         final List<JField> fields = new ArrayList<JField>();
         /** The column type a converter class says (AttributeConverter&lt;X, Y&gt;), when it is one. */
@@ -381,6 +382,7 @@ public final class JpaSchemaReader {
         for (AnnotationExpr a : t.getAnnotations()) OrmMapping.parseAnnotations(a.toString(), c.annos, imports, pkg);
         if (t instanceof ClassOrInterfaceDeclaration) {
             ClassOrInterfaceDeclaration cd = (ClassOrInterfaceDeclaration) t;
+            c.isAbstract = cd.isAbstract();
             if (!cd.getExtendedTypes().isEmpty()) c.superName = cd.getExtendedTypes().get(0).getNameAsString();
             for (com.github.javaparser.ast.type.ClassOrInterfaceType it : cd.getImplementedTypes()) {
                 if (it.getNameAsString().equals("AttributeConverter") && it.getTypeArguments().isPresent()
@@ -481,6 +483,7 @@ public final class JpaSchemaReader {
                     classes.put(c.fqcn, c);
                 }
                 c = new JClass();
+                c.isAbstract = t.matches(".*\\babstract\\s+class\\b.*");
                 c.simple = cm.group(2);
                 c.pkg = pkg;
                 c.fqcn = pkg + "." + c.simple;
@@ -576,6 +579,10 @@ public final class JpaSchemaReader {
                 }
                 continue;
             }
+            if (noTableOfItsOwn(c)) {
+                sequences(c, s);
+                continue;
+            }
             Table t = s.table(new Table(tableName(c), source(c)));
             List<Mapped> cols = new ArrayList<Mapped>();
             if (perClass) {
@@ -620,6 +627,11 @@ public final class JpaSchemaReader {
         }
         if (audited) revisionTable(s);
         return s;
+    }
+
+    /** An abstract class under TABLE_PER_CLASS has no rows of its own, and Hibernate makes no table for it. */
+    private boolean noTableOfItsOwn(JClass c) {
+        return c.isAbstract && "TABLE_PER_CLASS".equals(strategy(inheritanceRoot(c)));
     }
 
     /** A column with where it came from: a key, a relation's foreign key. */
@@ -706,7 +718,9 @@ public final class JpaSchemaReader {
                 Column col = k.column.named(name).nullable(!required);
                 // Hibernate puts a relation's @Comment on its join column when there is one.
                 if (keys.size() == 1) col = col.comment(comment(f));
-                out.add(new Mapped(col, f.has("Id"), tableName(target), k.column.name, physical(f.name), audited));
+                // Rows of several tables: no one table for a foreign key to point at.
+                String fkTable = noTableOfItsOwn(target) ? null : tableName(target);
+                out.add(new Mapped(col, f.has("Id"), fkTable, k.column.name, physical(f.name), audited));
             }
             return out;
         }
@@ -937,6 +951,7 @@ public final class JpaSchemaReader {
                     String col = physical(f.name + "_" + k.column.name);
                     t.column(k.column.named(col).nullable(false));
                     other.add(col);
+                    if (noTableOfItsOwn(target)) continue;
                     t.foreignKey(new Table.ForeignKey(Table.constraintName("fk_", name, f.name),
                             Collections.singletonList(col), tableName(target), Collections.singletonList(k.column.name)));
                 }
