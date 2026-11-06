@@ -92,7 +92,10 @@ AuditEntity:
   meta: entity @abstract
 ```
 
-**`@abstract(entity)` - 계층의 루트.** 키가 있는 추상 `@Entity` 입니다. 그 자체로는 저장되지 않고, 하위 클래스들을 리포지토리 하나와 서비스 하나로 함께 읽습니다:
+**`@abstract(entity)` - 계층의 루트.**
+> **동작:** v3 (JPA), Kotlin · **안 됨:** MyBatis (mode: mybatis) (빌드 중단); 2.x-compatible output (output = 'v2') 와 2.x generator (일반 `@abstract` 로 읽음)
+
+키가 있는 추상 `@Entity` 입니다. 그 자체로는 저장되지 않고, 하위 클래스들을 리포지토리 하나와 서비스 하나로 함께 읽습니다:
 ```yaml
 Code:
   meta: entity @abstract(entity) @expose(20) @jpa:Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)

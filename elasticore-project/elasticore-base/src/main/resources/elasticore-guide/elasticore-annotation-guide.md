@@ -92,7 +92,10 @@ AuditEntity:
   meta: entity @abstract
 ```
 
-**`@abstract(entity)` - the root of a hierarchy.** An abstract `@Entity` with a key, never stored as itself, whose subclasses one repository and one service read together:
+**`@abstract(entity)` - the root of a hierarchy.**
+> **Works in:** v3 (JPA), Kotlin · **Not in:** MyBatis (mode: mybatis) (stops the build); 2.x-compatible output (output = 'v2') and 2.x generator (read as plain `@abstract`)
+
+An abstract `@Entity` with a key, never stored as itself, whose subclasses one repository and one service read together:
 ```yaml
 Code:
   meta: entity @abstract(entity) @expose(20) @jpa:Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
