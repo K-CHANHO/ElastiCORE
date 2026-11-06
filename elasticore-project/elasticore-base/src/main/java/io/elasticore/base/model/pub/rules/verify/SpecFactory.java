@@ -1373,7 +1373,7 @@ public final class SpecFactory {
 
     /** The entity a DTO is a view of: its @template, or what @searchable names. */
     private static String viewedEntityOf(io.elasticore.base.model.dto.DataTransfer dto) {
-        String template = dto.getMetaInfo().getMetaAnnotationValue("template");
+        String template = io.elasticore.base.model.dto.TemplateList.namesOf(dto.getMetaInfo());
         if (template != null && !template.isEmpty()) return template;
 
         String searchable = dto.getMetaInfo().getMetaAnnotationValue("searchable.entity");
@@ -1442,7 +1442,7 @@ public final class SpecFactory {
                 model.getDataTransferModels().getItems();
         for (int i = 0; i < dtos.size(); i++) {
             io.elasticore.base.model.dto.DataTransfer d = dtos.get(i);
-            String template = d.getMetaInfo().getMetaAnnotationValue("template");
+            String template = io.elasticore.base.model.dto.TemplateList.namesOf(d.getMetaInfo());
             spec.knownDto(d.getIdentity().getName(), template);
         }
     }

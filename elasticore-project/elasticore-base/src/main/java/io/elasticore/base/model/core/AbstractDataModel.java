@@ -60,7 +60,7 @@ public abstract class AbstractDataModel<T extends AbstractReplaceableModel<T>> e
 
         Annotation templateAnt = this.getMetaInfo().getMetaAnnotation(RelationType.TEMPLATE.getName());
         if(templateAnt!=null) {
-            String toName = templateAnt.getValue();
+            String toName = io.elasticore.base.model.dto.TemplateList.namesOf(this.getMetaInfo());
             if(toName !=null) {
                 rm.addRelationship(ModelRelationship.create(fromName, toName, RelationType.TEMPLATE));
                 rm.addRelationship(ModelRelationship.create(toName, fromName, RelationType.TEMPLATE_TO));
@@ -246,29 +246,39 @@ public abstract class AbstractDataModel<T extends AbstractReplaceableModel<T>> e
 
 
     private void loadFieldInfo(DataModelComponent model,ListMap<String, Field> list) {
+        loadFieldInfo(model, list, null);
+    }
 
-         if(model == this) {
+    /**
+     * The fields copied from another model: those it lists, when the DTO's
+     * {@code @template} lists any, or all. A relation's name takes the field that
+     * holds its id too (customerId, written @idof(customer) for a DDD reference).
+     * A name that finds this model itself gives its own items: asking it for all
+     * its fields again would never end.
+     */
+    @SuppressWarnings("ReferenceEquality") // the same instance is what would ask itself again
+    private void loadFieldInfo(DataModelComponent model, ListMap<String, Field> list, List<String> listed) {
+        if (model == this) {
             ModelComponentItems<Field> fields = model.getItems();
             while (fields.hasNext()) {
                 Field f = fields.next();
-                if(!list.containsKey(f.getName()))
-                    list.put(f.getName(), f);
+                if (!list.containsKey(f.getName())) list.put(f.getName(), f);
             }
-        }else {
-            ListMap<String, Field> fieldListMap = model.getAllFieldListMap();
-
-            for(Field f : fieldListMap.getList()) {
-                if(!list.containsKey(f.getName()))
-                    list.put(f.getName(), f);
-            }
+            return;
         }
+        ListMap<String, Field> fieldListMap = model.getAllFieldListMap();
 
+        for (Field f : fieldListMap.getList()) {
+            if (listed != null && !listed.contains(f.getName()) && !listed.contains(f.getAnnotationValue("idof")))
+                continue;
+            if (!list.containsKey(f.getName())) list.put(f.getName(), f);
+        }
     }
 
     private String getReferenceModelNames() {
         MetaInfo meta = this.getMetaInfo();
 
-        String templateNames = meta.getMetaAnnotationValue(DataTransferAnnotation.META_TEMPLATE);
+        String templateNames = io.elasticore.base.model.dto.TemplateList.namesOf(meta);
         String extendNames = meta.getMetaAnnotationValue(DataTransferAnnotation.META_EXTEND);
         String searchNames = meta.getMetaAnnotationValue(DataTransferAnnotation.META_SEARCHABLE_NAME);
         String srchResultNames = meta.getMetaAnnotationValue( DataTransferAnnotation.META_SEARCH_RESULT_NAME);
@@ -403,11 +413,12 @@ public abstract class AbstractDataModel<T extends AbstractReplaceableModel<T>> e
 
             if (templates != null && templates.length() > 0) {
                 String[] templateNmArray = templates.split(",");
+                io.elasticore.base.model.dto.TemplateList lists =
+                        io.elasticore.base.model.dto.TemplateList.of(getMetaInfo());
 
                 for (String templateNm : templateNmArray) {
                     DataModelComponent model = findModelFromAllDomain(templateNm);
-                    if(model!=null)
-                        loadFieldInfo(model, fieldListMap);
+                    if (model != null) loadFieldInfo(model, fieldListMap, lists.fieldsOf(templateNm));
                 }
 
                 /*

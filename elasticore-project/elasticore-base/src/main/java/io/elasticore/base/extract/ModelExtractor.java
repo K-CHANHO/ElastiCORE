@@ -147,6 +147,13 @@ public class ModelExtractor {
                         Entity e = items.get(i);
                         if (e == null) continue;
                         validateFieldTypes(e.getIdentity().getName(), e.getItems(), domainName, typeRegistry);
+                        if (io.elasticore.base.model.dto.TemplateList.of(e.getMetaInfo())
+                                .hasLists()) {
+                            refuse(
+                                    domainName,
+                                    e.getIdentity().getName()
+                                            + ": a @template lists the fields of a DTO, and this is an entity");
+                        }
                     }
                 }
 
@@ -159,6 +166,38 @@ public class ModelExtractor {
                         if (d == null) continue;
                         validateFieldTypes(d.getIdentity().getName(), d.getItems(), domainName, typeRegistry);
                         reportForcedRefs(d, domainName, allContexts);
+                        for (String problem : io.elasticore.base.model.dto.TemplateList.problemsOf(d, allContexts))
+                            refuse(domainName, problem);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * A name a DTO's @template lists that would give it no field stops the run,
+     * as a misspelt one does. Apart from validateGlobalTypeReferences because
+     * the rule engine rewrites its references in between, and a relation's name
+     * then keeps the field that holds its id.
+     *
+     * @param valueObjects whether a DTO of the model carries a value object whole
+     */
+    public static void validateListedNames(
+            List<ECoreModelContext> allContexts, java.util.function.Predicate<ECoreModel> valueObjects) {
+        if (allContexts == null) return;
+        for (ECoreModelContext ctx : allContexts) {
+            String[] domainNames = ctx.getInternalDomainNames();
+            if (domainNames == null) continue;
+            for (String domainName : domainNames) {
+                ModelDomain domain = ctx.getDomain(domainName);
+                ECoreModel model = domain == null ? null : domain.getModel();
+                DataTransferModels dms = model == null ? null : model.getDataTransferModels();
+                if (dms == null) continue;
+                ModelComponentItems<DataTransfer> items = dms.getItems();
+                for (int i = 0; i < items.size(); i++) {
+                    for (String problem : io.elasticore.base.model.dto.TemplateList.emptyNamesOf(
+                            items.get(i), allContexts, valueObjects.test(model))) {
+                        refuse(domainName, problem);
                     }
                 }
             }
@@ -173,12 +212,15 @@ public class ModelExtractor {
     private static void reportForcedRefs(DataTransfer dto, String domainName, List<ECoreModelContext> allContexts) {
         io.elasticore.base.model.dto.ForcedRefCheck.Findings found =
                 io.elasticore.base.model.dto.ForcedRefCheck.of(dto, allContexts);
-        for (String problem : found.refused) {
-            String message = "[" + domainName + "] " + problem;
-            ConsoleLog.storeLog("DSL_WARN", message);
-            io.elasticore.base.model.pub.rules.ModelCheck.failSaid(message);
-        }
+        for (String problem : found.refused) refuse(domainName, problem);
         for (String warning : found.warned) ConsoleLog.printWarn("[" + domainName + "] " + warning);
+    }
+
+    /** What stops the run: 2.x on the DSL warning, the rule engine on the failure, said once. */
+    private static void refuse(String domainName, String problem) {
+        String message = "[" + domainName + "] " + problem;
+        ConsoleLog.storeLog("DSL_WARN", message);
+        io.elasticore.base.model.pub.rules.ModelCheck.failSaid(message);
     }
 
     private static void registerType(Map<String, List<String>> registry, String typeName, String domainName) {
@@ -473,6 +515,7 @@ public class ModelExtractor {
 
         // Phase 1.5: Validate type references and detect duplicates across all loaded domains
         validateGlobalTypeReferences(allContexts);
+        validateListedNames(allContexts, model -> false);
         io.elasticore.base.model.pub.rules.RulesConfig.settleSpringBoot(allContexts);
 
         // Collect and generate schema (skip in validation mode).
@@ -582,6 +625,7 @@ public class ModelExtractor {
 
         // Validate type references and detect duplicates across all loaded domains
         validateGlobalTypeReferences(contextList);
+        validateListedNames(contextList, model -> false);
         io.elasticore.base.model.pub.rules.RulesConfig.settleSpringBoot(contextList);
 
         // Collect schema information from all domains. All DSL is loaded regardless of
