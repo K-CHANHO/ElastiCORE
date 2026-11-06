@@ -463,6 +463,8 @@ CREATE TABLE shop_ticket (
     subject VARCHAR2(100 CHAR) NOT NULL,
     status VARCHAR2(3 CHAR),
     billing VARCHAR2(3 CHAR),
+    closed_at TIMESTAMP(6) WITH TIME ZONE,
+    deleted_at TIMESTAMP(6) WITH TIME ZONE,
     total NUMBER(14,2),
     PRIMARY KEY (ticket_id)
 );
@@ -474,6 +476,7 @@ CREATE TABLE shop_ticket_entry (
     hours NUMBER(10) NOT NULL,
     rate NUMBER(12,2),
     amount NUMBER(14,2),
+    deleted_at TIMESTAMP(6) WITH TIME ZONE,
     PRIMARY KEY (entry_id)
 );
 
