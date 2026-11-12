@@ -53,6 +53,23 @@ public final class PortRows {
         return all.isEmpty() ? null : all.get(0);
     }
 
+    /**
+     * Rows as a generic type the method answers a list of, by its class -
+     * Map.class for a List&lt;Map&lt;String, Object&gt;&gt;. A generic type has
+     * no class of its own to name it by; the generated adapter's return type
+     * names it, which is what the type parameter is for.
+     */
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
+    public static <O> List<O> listOf(List<? extends Map<String, Object>> rows, Class<?> type) {
+        return (List<O>) list(rows, type);
+    }
+
+    /** The first row as a generic type the method answers, by its class; null for none (see listOf). */
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
+    public static <O> O firstOf(List<? extends Map<String, Object>> rows, Class<?> type) {
+        return (O) first(rows, type);
+    }
+
     /** A value of the type a method answers one of, converted as the port runtime converts it. */
     @SuppressWarnings("unchecked")
     public static <O> O value(Object value, Class<O> type) {
@@ -76,10 +93,21 @@ public final class PortRows {
         return map;
     }
 
-    /** The ORDER BY body the call's sort code names, checked term by term; null when it names none. */
+    /**
+     * The ORDER BY body the call's sort names, checked term by term; null when
+     * it names none. The sort is a sort code (sortCode, or sortColumn and
+     * sortAscending), else the order of a Pageable or a Sort - the input
+     * itself, or one of its values by name.
+     */
     public static String orderBy(Object input) {
         String clause = SqlPortGateway.toOrderByClause(SqlPortGateway.sortCodeOf(input));
         return clause.isEmpty() ? null : clause;
+    }
+
+    /** The ORDER BY body of an object's sort code, else of the Pageable or Sort the method takes besides it. */
+    public static String orderBy(Object input, Object paging) {
+        String clause = orderBy(input);
+        return clause != null ? clause : orderBy(paging);
     }
 
     /**
@@ -88,8 +116,8 @@ public final class PortRows {
      * names none (as DbmsServiceProxyFactory reads it).
      */
     public static Pageable pageable(Object input) {
-        if (input instanceof Pageable) {
-            return (Pageable) input;
+        if (input instanceof Pageable asked) {
+            return paged(asked);
         }
         int defaultPage = 0;
         int defaultPageSize = 50;
@@ -109,7 +137,7 @@ public final class PortRows {
         if (input instanceof Map) {
             Map<?, ?> map = (Map<?, ?>) input;
             for (Object v : map.values()) {
-                if (v instanceof Pageable) return (Pageable) v;
+                if (v instanceof Pageable asked) return paged(asked);
             }
             Object pageVal = map.get("pageNumber");
             if (pageVal == null) pageVal = map.get("page");
@@ -134,5 +162,14 @@ public final class PortRows {
             }
         }
         return PageRequest.of(defaultPage, defaultPageSize);
+    }
+
+    /**
+     * A Pageable a page can be cut by: Pageable.unpaged() - every row - has no
+     * offset or size to ask, so it is the first page of as many rows as there
+     * can be, in its order.
+     */
+    public static Pageable paged(Pageable pageable) {
+        return pageable.isPaged() ? pageable : PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort());
     }
 }
