@@ -34,13 +34,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.sql.init.data-locations=optional:classpath:none.sql",
         "spring.sql.init.continue-on-error=false"})
 @AutoConfigureMockMvc
-@org.springframework.context.annotation.Import({AbstractEntityCheck.class, SoftDeleteHierarchyCheck.class})
+@org.springframework.context.annotation.Import({
+    AbstractEntityCheck.class, SoftDeleteHierarchyCheck.class, IntegrityKindCheck.class, LikeSearchCheck.class
+})
 abstract class SchemaValidateOnDatabase {
 
     @Autowired MockMvc mvc;
     @Autowired AbstractEntityCheck codes;
     @Autowired SoftDeleteHierarchyCheck kept;
     @Autowired JdbcTemplate jdbc;
+    @Autowired IntegrityKindCheck integrity;
+    @Autowired LikeSearchCheck like;
     @Autowired io.elasticore.sample.petstore.infrastructure.persistence.CategoryRepository categories;
 
     /** What the export writes in the portable language runs here: each metric of a dataset, over its table. */
@@ -99,6 +103,18 @@ abstract class SchemaValidateOnDatabase {
                 .isEqualTo(icon);
         assertThat(categories.findById(id).orElseThrow().getStory()).isEqualTo(story);
         categories.deleteById(id);
+    }
+
+    /** CHECK, UNIQUE and FOREIGN KEY each answered as their kind, from this database's own exception (issue 167). */
+    @Test
+    void eachIntegrityRuleIsAnsweredAsItsKind() {
+        integrity.eachRuleIsAnsweredAsItsKind();
+    }
+
+    /** A % or _ in a like search is a character, with the escape every database reads (issue 159). */
+    @Test
+    void aLikeSearchFindsTheValueAsWritten() throws Exception {
+        like.searchesTheValueAsWritten(mvc);
     }
 
     /** An abstract entity's rows are in its subclasses' tables, and one repository reads them together. */
