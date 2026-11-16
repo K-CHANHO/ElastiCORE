@@ -79,11 +79,11 @@ config:
 
 쉼표로 구분하여 여러 모드를 동시 실행한다. 각 모드의 산출물이 모두 생성된다.
 
-> **3.0 규칙 엔진(`elcore3` - 플러그인의 기본값)은 `jpa` 와 `mybatis` 코드를 씁니다.** 둘 다 없는 도메인
-> (`mode: mongo` 등)은 `elcore3` 가 아무 소스도 쓰지 않고 거절하므로, 그런 프로젝트는
-> `elasticore { output = 'v2' }` 로 2.x 생성기를 씁니다(빌드가 `elcore` 를 부름). 함께 적은 `uml`·`dsl` 은
-> `elcore3` 가 쓰지 않고 경고만 냅니다 - 그 산출물은 `./gradlew elcore` 로 만듭니다. `jpa` 와 `mybatis` 를 함께 적으면
-> JPA 코드를 씁니다(한 도메인은 한 저장 방식).
+> **3.0 규칙 엔진(`elcore3` - 플러그인의 기본값)은 `jpa`, `mybatis`, `mongo` 코드를 씁니다**(`mongo` 는 레이어드
+> Java 만 - 2.4 절). 셋 다 없는 도메인(`mode: uml` 단독 등)은 `elcore3` 가 아무 소스도 쓰지 않고 거절하므로, 그런
+> 프로젝트는 `elasticore { output = 'v2' }` 로 2.x 생성기를 씁니다(빌드가 `elcore` 를 부름). 함께 적은 `uml`·`dsl` 은
+> `elcore3` 가 쓰지 않고 경고만 냅니다 - 그 산출물은 `./gradlew elcore` 로 만듭니다. 저장 방식을 여럿 적으면(`jpa,mongo`)
+> jpa, mybatis, mongo 순으로 앞의 것 하나를 씁니다(한 도메인은 한 저장 방식).
 
 ### 2.3 MyBatis 모드 (3.0)
 > **동작:** v3, Java (layered, ddd, hexagonal) · **안 됨:** Kotlin, 2.x-compatible output (output = 'v2') (빌드 중단)
@@ -300,14 +300,47 @@ Oracle·PostgreSQL·SQL Server).
 `@formula` 필드는 엔티티에 남지만 MyBatis 가 읽지 않아 값이 null 이고, 검색 조건에서도 빠집니다(경고).
 
 ### 2.4 MongoDB 모드
-> **동작:** 2.x generator · **안 됨:** v3 (빌드 중단)
+> **동작:** v3 레이어드 Java (Spring Boot 3 에서 실행 확인), 2.x generator · **안 됨:** v3 Kotlin, ddd, hexagonal (빌드 중단)
+
+MongoDB 에 저장하는 도메인. **모델(DSL)은 그대로이고 `mode` 한 단어만 바꿉니다.** Since: 3.0 (미출시)
 
 ```yaml
 config:
   mode: mongo
 ```
 
-**생성 항목:** MongoDB Document 엔티티, Spring Data MongoDB Repository, 서비스 클래스
+**생성되는 것** - DTO, 검색 DTO, 컨트롤러, 접근 검사, `@deleted`, API 오류 응답, 매퍼는 JPA 와 같습니다. 저장 쪽만
+다르고, 프로젝트는 JPA 대신 `spring-boot-starter-data-mongodb` 를 선언합니다.
+
+| 파일 | 내용 |
+|---|---|
+| `<Entity>.java` | `@Document(collection = "<테이블 이름>")`, `@Id`, `@Version`, `@CreatedDate`..., `@unique` 는 `@Indexed(unique = true, sparse = true)`, `@index` 는 `@CompoundIndex`, `@Field` 는 이름을 준 `@column` 에만 |
+| `<Entity>Repository.java` | `extends MongoRepository<Entity, Id>` 와 검색: `criteria(searchDTO, owner)`, `hasCondition`, `sort` (`SORT_FIELDS` 만) |
+| `<Entity>CoreService.java` | JPA 판과 **메서드 이름·시그니처가 같은** 서비스. 저장소와 `MongoTemplate` 위에서 동작(검색은 Criteria 의 `Query`, 페이지) |
+
+**모델이 저장되는 모양**
+
+| DSL | 문서 안 |
+|---|---|
+| `@expose` / `@service` / `@repository` 가 있는 엔티티 | 자기 컬렉션 |
+| `customer: Customer @ManyToOne` (Customer 는 자기 컬렉션) | 고객의 id, 읽을 때 지연 로딩 (`@DocumentReference(lazy = true)`) |
+| `lines: List<OrderLine> @OneToMany(mappedBy=...)` (OrderLine 은 서비스 없음) | 주문 문서 안의 라인; 되돌아가는 관계(`order`)는 저장 안 함 (`@Transient`) |
+| 관계의 반대쪽(자기 컬렉션으로의 `mappedBy`), `@joinBy`, `@formula` | 저장 안 함 (`@Transient`) |
+| `@embeddable` 값 | 중첩 문서 |
+| `@db(code)` enum, `money`, `quantity` | JPA 변환기가 쓰는 값 (`AttributeValueConverter`) - `NEW` 가 아니라 코드 `"N"` |
+| `decimal` | `Decimal128` - 숫자로 비교·정렬 |
+| `long @sequence` | `elasticore_sequences` 컬렉션의 번호(`MongoSequences`, `$inc`), 1 부터 - 멤버도 |
+
+검색 조건: `eq`, `!=`, `>` `>=` `<` `<=`, `between`, `in`, `isnull`, 텍스트(`like`, 접두, 접미, 대소문자 무시)는 값의
+문자를 이스케이프한 정규식. 검색 경로는 문서의 값, 임베디드 값의 값, 참조의 id(`customer.customerId`)까지이고 그보다
+먼 것(`customer.name`)은 빌드를 멈춥니다.
+
+인덱스는 `spring.data.mongodb.auto-index-creation=true` 일 때만 만들어집니다(Spring Data 기본값은 off).
+쓰기는 문서 하나 단위이고 여러 문서를 묶는 트랜잭션은 없습니다(일괄 수정은 문서를 하나씩).
+
+**아직 안 됨** (빌드 중단, 또는 적은 대로): Kotlin, ddd, hexagonal; 복합 키; `@abstract(entity)` 계층;
+`@ManyToMany`; `mappedBy` 없는 다른 컬렉션 문서의 컬렉션; `@count`, `@onDelete`; DDL (쓰지 않음).
+`elasticore-template-mongo` 가 상점을 생성·컴파일하고 실제 MongoDB(Testcontainers)에서 API 를 돌립니다.
 
 ### 2.5 UML 모드
 > **동작:** 2.x generator · **안 됨:** v3 에서 `jpa`·`mybatis` 와 함께 (경고); v3 에서 단독 (빌드 중단)
@@ -603,6 +636,40 @@ config:
     `publishes` 한 줄에 남음
   - 팀/조직 경계와 컨텍스트를 맞추고, `context-map.md` 로 의존 관계를 문서화
 
+### 6.1.5 GraphQL API (`graphql:`, 3.0)
+> **동작:** v3 (JPA와 MyBatis, Java와 Kotlin, Spring Boot 3과 4) · **미지원:** 2.x 생성기
+
+```yaml
+config:
+  graphql:
+    enable: true          # REST 컨트롤러마다 GraphQL 컨트롤러를 하나씩 (기본값: false)
+    mutations: true       # false: 조회만
+    path: /graphql        # spring.graphql.path. 이 값을 쓰는 도메인은 모두 같은 값을 써야 합니다
+```
+
+- REST API가 제공하는 엔티티마다 `control` 패키지에 `<Entity>GraphQlController`를 생성합니다. 대상은 키가 있는 `@expose` 엔티티이고,
+  ddd·hexagonal 번들에서는 각 루트입니다. 같은 서비스(헥사곤에서는 유스케이스)를 호출하므로
+  접근 권한, 검증, 불변식, `@deleted`, lifecycle이 REST와 똑같이 적용됩니다.
+- 연산 이름은 엔티티 이름을 따릅니다: `member(memberId)`, `members(search)`(검색 DTO가 페이징하면 페이지),
+  `createMember(input)`, `updateMember(input)`, `deleteMember(memberId)`, 그리고 커맨드마다 mutation 하나(`shipOrder(orderId, command)`).
+  `@readonly`, `@expose(methods=...)`, `@restExclude`는 REST에서와 같은 연산을 뺍니다.
+- **스키마는 빌드가 컴파일된 클래스에서 씁니다**: 컴파일이 끝나면 `elcoreGraphQl`이 컨트롤러와, 컨트롤러가 받고 돌려주는 DTO를
+  읽어 `src/main/resources/graphql/<domain>.graphqls`(그 도메인의 `extend type Query/Mutation`과 그 도메인만 쓰는 타입)와
+  `elasticore.graphqls`(루트 타입, 스칼라, 여러 도메인이 함께 쓰는 타입)를 씁니다. 필드는 클래스에 있기 때문에 스키마에 들어갑니다.
+  그래서 setter 없는 값 객체, `@JsonProperty(access = WRITE_ONLY)` 비밀번호(보내기만 하고 응답에는 없음),
+  `Long`·`BigDecimal`·`Date`·`DateTime`·`Money` 같은 스칼라가 모두 클래스를 따릅니다. 이어서 `graphql/` 아래의 모든 `.graphqls`를
+  (직접 쓴 파일 포함) 하나의 스키마로 빌드해 보고, 빌드되지 않으면 파일과 이유를 출력하고 빌드를 멈춥니다.
+- 거부는 GraphQL 오류가 되고, `extensions`에 REST와 같은 상태와 코드를 담습니다: `NOT_FOUND` 404, `FORBIDDEN` 403, `BAD_REQUEST` 400,
+  `CONFLICT` 409(중복, 오래된 버전, 커맨드를 허용하지 않는 상태), `UNPROCESSABLE` 422.
+- 여러 도메인이 스키마 하나와 엔드포인트 하나를 함께 씁니다. `path`가 서로 다르거나, 그런 두 도메인이 같은 이름의 엔티티를
+  제공하면 빌드(`elcore3`)가 두 도메인을 밝히고 멈춥니다. 직접 쓰는 `.graphqls`에는 `type Query`가 아니라 `extend type Query`를 씁니다.
+- 의존성: `implementation 'org.springframework.boot:spring-boot-starter-graphql'`
+  (테스트: `testImplementation 'org.springframework.graphql:spring-graphql-test'`).
+- 아직 없음: subscription, 커서(Connection) 페이지, GraphQL용 TypeScript 클라이언트.
+- 활용 예: 주문 한 페이지를 주문 라인까지 한 번에 가져오고 싶은 화면, 같은 REST API 옆에서 GraphQL을 선호하는 파트너,
+  스키마를 읽고 쿼리를 쓰는 AI·BI 도구.
+- 예제: `elasticore-template-ddd`의 `shop`과 `billing`(`GraphQlApiTest`), `elasticore-template-kt`의 `shop`(`ShopGraphQlTest`).
+
 ### 6.2 테스트 코드 생성
 > **동작:** 2.x generator, 2.x-compatible output (output = 'v2'), Kotlin · **안 됨:** v3 Java (layered, ddd, hexagonal), MyBatis (mode: mybatis) (생성 안 됨)
 
@@ -695,6 +762,7 @@ elasticore:
 | `ts-model` | 브라우저용 DTO, enum, 타입 있는 REST 클라이언트 |
 | `mybatis-springboot` | 레이어드 Java 를 MyBatis 로 (`mode: mybatis` 인 도메인이 저절로 받음 - 2.3 절) |
 | `ddd-mybatis-springboot` / `hexagonal-mybatis-springboot` | 도메인 모델·헥사고날을 MyBatis 로 (`architecture` 가 ddd·hexagonal 이고 `mode: mybatis` 인 도메인이 저절로 받음 - 2.3 절) |
+| `mongo-springboot` | 레이어드 Java 를 Spring Data MongoDB 로 (`mode: mongo` 인 도메인이 저절로 받음 - 2.4 절) |
 
 번들은 개별 룰셋의 이름 목록이므로 직접 조합해도 됩니다:
 

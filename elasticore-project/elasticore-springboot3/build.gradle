@@ -61,6 +61,11 @@ dependencies {
     // the database id they page by, used where the application has MyBatis.
     compileOnly 'org.mybatis:mybatis:3.5.19'
     testImplementation 'org.mybatis:mybatis:3.5.19'
+    // Only compiled against: the generated MongoDB code's sequences and value
+    // converter (io.elasticore.springboot3.mongo), used where the application has it.
+    compileOnly 'org.springframework.data:spring-data-mongodb'
+    testImplementation 'org.springframework.data:spring-data-mongodb'
+    testImplementation 'org.mongodb:mongodb-driver-sync'
     // Only compiled against: BeanValidation checks for a provider at run time
     // and does nothing where the application has none.
     compileOnly 'jakarta.validation:jakarta.validation-api'
@@ -74,6 +79,11 @@ dependencies {
     compileOnly 'org.springframework:spring-webmvc'
     // RunAsSystemExtension, for the generated service tests; a project has JUnit on its test path.
     compileOnly 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    // Only compiled against: the GraphQL scalars, errors and schema writer (graphql/) are used where
+    // the application turned GraphQL on - and declares spring-boot-starter-graphql itself.
+    compileOnly 'org.springframework.graphql:spring-graphql'
+    testImplementation 'org.springframework.graphql:spring-graphql'
+    testImplementation 'org.springframework.graphql:spring-graphql-test'
     testImplementation 'jakarta.servlet:jakarta.servlet-api'
     testImplementation 'org.springframework:spring-webmvc'
     testImplementation 'jakarta.validation:jakarta.validation-api'
