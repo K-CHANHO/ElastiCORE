@@ -44,5 +44,5 @@
   - Without the clean after a command's move, `BoardHtmlTest` fails: the `onerror` handler is stored.
 - Files: `HtmlRules` (new), `SpecFactory.prepareHtml`, `RulesGenRunner`, `AbstractModelLoader`, `DddCommandRules`,
   `TypeScriptDtoFileRules`, `MyBatisServiceFileRules`, `RuleCatalog` (`jpa-html`, every bundle), template
-  `v3/mybatis_service.tmpl`; runtime `Html` (new) and the jsoup `compileOnly` in springboot3 and springboot4; the DSL
+  `v3/mybatis_service.tmpl` and `v3/mongo_service.tmpl` (`jpa-html` in `mongo-springboot` too; `HtmlFieldTest.mongoCleansInItsSavePath`); runtime `Html` (new) and the jsoup `compileOnly` in springboot3 and springboot4; the DSL
   guide's types and annotations, the annotation guide's "html / @safe / @plain" and the rule guide (en, ko).

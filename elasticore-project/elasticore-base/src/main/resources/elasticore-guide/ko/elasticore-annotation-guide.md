@@ -2336,7 +2336,7 @@ PurchaseOrder:
 - **`@formula` 와 다릅니다**: `@formula("...")` 는 DB 가 계산하는 Hibernate SQL 식입니다.
 
 ## html / @safe / @plain — 허용 목록으로 거른 마크업 (v3)
-> **동작:** v3, Kotlin, MyBatis (mode: mybatis), TypeScript 클라이언트 (`html: true`) · **미동작:** 2.x 호환 출력 (output = 'v2') (빌드 중단); 2.x 생성기 (빌드 중단)
+> **동작:** v3, Kotlin, MyBatis (mode: mybatis), MongoDB (mode: mongo), TypeScript 클라이언트 (`html: true`) · **미동작:** 2.x 호환 출력 (output = 'v2') (빌드 중단); 2.x 생성기 (빌드 중단)
 
 ```yaml
 Post:

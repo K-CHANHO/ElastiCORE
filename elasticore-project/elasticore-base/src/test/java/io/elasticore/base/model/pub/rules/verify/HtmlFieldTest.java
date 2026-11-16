@@ -158,6 +158,20 @@ public class HtmlFieldTest {
         }
     }
 
+    /** A MongoDB domain (mongo-springboot) cleans on the same three writes, before beforeSave. */
+    @Test
+    public void mongoCleansInItsSavePath() throws Exception {
+        String model = MODEL.substring(0, MODEL.indexOf("    states:"));
+        File project = run("elcore-html-mongo", "layered", "java", "mongo", model, false, 0, new String[1]);
+        String core = found(project, "HtPostCoreService.java");
+        assertEquals(3, occurrences(core, CALL), core);
+        String save = section(core, "public HtPostDTO save(HtPostDTO dto) {");
+        assertTrue(save.indexOf(CALL) < save.indexOf("beforeSave(entity, dto);"), save);
+        String update = section(core, "public HtPostDTO update(HtPostDTO dto) {");
+        assertTrue(update.indexOf(CALL) < update.indexOf("beforeSave(entity, dto);"), update);
+        assertTrue(found(project, "HtPost.java").contains(METHOD), found(project, "HtPost.java"));
+    }
+
     /**
      * A command's parameter is kept by the move inside the entity, past the save path: the service cleans after the
      * move. Under the DDD rule sets the setters are the entity's own, which is why the cleaning is its method.
@@ -207,7 +221,7 @@ public class HtmlFieldTest {
                 "      noteId: long @id @sequence",
                 "      body:   text",
                 "");
-        for (String mode : new String[] {"jpa", "mybatis"}) {
+        for (String mode : new String[] {"jpa", "mybatis", "mongo"}) {
             File project = run("elcore-html-none-" + mode, "layered", "java", mode, model, false, 0, new String[1]);
             String core = found(project, "HtNoteCoreService.java");
             assertFalse(core.contains("Html."), core);

@@ -706,6 +706,7 @@ public final class RuleCatalog {
                 "jpa-service-access",
                 "jpa-on-delete",
                 "jpa-count",
+                "jpa-html",
                 "port",
                 "proto",
                 "grpc-stub");

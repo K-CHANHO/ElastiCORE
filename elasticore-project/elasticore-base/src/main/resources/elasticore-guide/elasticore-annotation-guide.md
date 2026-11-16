@@ -2336,7 +2336,7 @@ PurchaseOrder:
 - **It is different from `@formula`**: `@formula("...")` is a Hibernate SQL expression that the database calculates.
 
 ## html / @safe / @plain - markup kept to an allow-list (v3)
-> **Works in:** v3, Kotlin, MyBatis (mode: mybatis), TypeScript client (`html: true`) · **Not in:** 2.x-compatible output (output = 'v2') (build stops); 2.x generator (build stops)
+> **Works in:** v3, Kotlin, MyBatis (mode: mybatis), MongoDB (mode: mongo), TypeScript client (`html: true`) · **Not in:** 2.x-compatible output (output = 'v2') (build stops); 2.x generator (build stops)
 
 ```yaml
 Post:
