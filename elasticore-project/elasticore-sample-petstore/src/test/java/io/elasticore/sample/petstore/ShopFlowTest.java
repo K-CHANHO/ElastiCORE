@@ -314,6 +314,48 @@ class ShopFlowTest {
         mvc.perform(post("/api/petstore/purchaseOrder/" + id + "/cancel").session(other)).andExpect(status().isNotFound());
     }
 
+    /**
+     * {@code @signin(refresh=request)}: each request reads the signed-in customer again. A role the
+     * administrator changes is the session's from the next request on, and a deleted customer's
+     * session ends - neither waits for the next sign-in.
+     */
+    @Test
+    void theSessionFollowsTheCustomersRow() throws Exception {
+        MockHttpSession han = signUp("han");
+        long id = ((Number) com.jayway.jsonpath.JsonPath.read(mvc.perform(get("/api/petstore/customer/me").session(han))
+                .andReturn().getResponse().getContentAsString(), "$.customerId")).longValue();
+        // A user's customer search finds themselves alone (read=owner).
+        mvc.perform(json(post("/api/petstore/customer/search"), "{}").session(han))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)));
+
+        MockHttpSession admin = signIn("admin", "admin");
+        mvc.perform(json(put("/api/petstore/customer"), "{\"customerId\":" + id + ",\"role\":\"A\"}").session(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("A"));
+        // The same session, not signed in again: the administrator's search, every customer.
+        mvc.perform(json(post("/api/petstore/customer/search"), "{}").session(han))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(org.hamcrest.Matchers.greaterThan(1)));
+
+        mvc.perform(json(put("/api/petstore/customer"), "{\"customerId\":" + id + ",\"role\":\"U\"}").session(admin))
+                .andExpect(status().isOk());
+        mvc.perform(json(post("/api/petstore/customer/search"), "{}").session(han))
+                .andExpect(jsonPath("$.content", hasSize(1)));
+
+        // Deleted: the session ends, so the next request is a visitor's.
+        mvc.perform(delete("/api/petstore/customer/" + id).session(admin))
+                .andExpect(status().isOk());
+        mvc.perform(json(post("/api/petstore/customer/search"), "{}").session(han))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/petstore/customer/me").session(han))
+                .andExpect(status().isUnauthorized());
+        // The administrator's own session is untouched.
+        mvc.perform(get("/api/petstore/customer/me").session(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.login").value("admin"));
+    }
+
     @Test
     void aNewCustomerSignsUpAsAUserAndThePasswordIsNeverShown() throws Exception {
         MockHttpSession session = signUp("luke");

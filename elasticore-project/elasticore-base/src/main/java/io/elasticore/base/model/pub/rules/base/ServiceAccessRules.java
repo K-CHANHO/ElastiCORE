@@ -878,6 +878,7 @@ public class ServiceAccessRules implements CodeRules {
     void signInCheck(EntitySpec e) {
         String why = whyNoSignIn(e);
         if (why != null) warnSignIn(e, "@signin generates no sign-in: " + why);
+        for (String problem : signInOptionProblems(e)) warnSignIn(e, problem);
         String login = loginField(e);
         boolean serviced = e.hasMeta("expose") || e.hasMeta("service");
         if (login != null && serviced && !e.hasMeta("signin") && !loginUnique(e)) {
@@ -979,16 +980,14 @@ public class ServiceAccessRules implements CodeRules {
             if (f.hasDsl("password")) password = f.name();
         }
         FieldSpec pk = e.pkFields().get(0);
-        FieldSpec role = roleField(e);
+        String role = roleText(e, kt, "signedIn");
+        String roles = role == null ? "" : ", " + role;
         String body = entity + "SignIn";
         String req = "jakarta.servlet.http.HttpServletRequest";
         String session = RT + "SessionCurrentUser";
         String refused = RT + "NotSignedInException";
         StringBuilder m = new StringBuilder();
         if (kt) {
-            String roles = role == null ? ""
-                    : e.isKnownEnum(simple(role.typeName())) ? ", signedIn." + role.name() + "?.name"
-                    : ", signedIn." + role.name() + "?.toString()";
             m.append("    /** What signin is sent: the ").append(login).append(" and the password. */\n")
              .append("    class ").append(body).append("(var ").append(login).append(": String? = null, var ")
              .append(password).append(": String? = null)\n\n")
@@ -1013,10 +1012,6 @@ public class ServiceAccessRules implements CodeRules {
              .append("    fun me(): ").append(dto).append(" =\n")
              .append("        ").append(service).append(".me().orElseThrow { ").append(refused).append("(\"Sign in first\") }");
         } else {
-            String roles = role == null ? ""
-                    : e.isKnownEnum(simple(role.typeName()))
-                    ? String.format(", signedIn.%s() == null ? null : signedIn.%s().name()", getterName(role.name()), getterName(role.name()))
-                    : String.format(", signedIn.%s() == null ? null : String.valueOf(signedIn.%s())", getterName(role.name()), getterName(role.name()));
             m.append("    /** What signin is sent: the ").append(login).append(" and the password. */\n")
              .append("    public record ").append(body).append("(String ").append(login).append(", String ").append(password).append(") {\n")
              .append("    }\n\n")
@@ -1043,6 +1038,55 @@ public class ServiceAccessRules implements CodeRules {
              .append("    }");
         }
         c.addMethod(m.toString());
+    }
+
+    /**
+     * The role a row holds, as text for the session: the @role field's value
+     * (an enum's name, or the string), or null. Null when there is no such
+     * field, which means the session holds no role. The sign-in and
+     * {@code @signin(refresh=request)} read it the same way.
+     */
+    static String roleText(EntitySpec e, boolean kt, String row) {
+        FieldSpec role = roleField(e);
+        if (role == null) return null;
+        boolean isEnum = e.isKnownEnum(simple(role.typeName()));
+        if (kt) return row + "." + role.name() + (isEnum ? "?.name" : "?.toString()");
+        String get = row + "." + getterName(role.name()) + "()";
+        return isEnum
+                ? get + " == null ? null : " + get + ".name()"
+                : get + " == null ? null : String.valueOf(" + get + ")";
+    }
+
+    /**
+     * Whether a signed-in session is brought up to date with its row on each
+     * request: @signin(refresh=request) on the entity that signs in. A
+     * generated filter reads the row again through me(). When the row is
+     * gone, the session ends; when the role has changed, the session takes
+     * the new one.
+     */
+    public static boolean refreshesPerRequest(EntitySpec e) {
+        return signsIn(e) && "request".equals(trim(e.metaProperty("signin", "refresh")));
+    }
+
+    /** What @signin is given that it does not take, one sentence each. */
+    static List<String> signInOptionProblems(EntitySpec e) {
+        List<String> out = new ArrayList<String>();
+        if (!e.hasMeta("signin")) return out;
+        String bare = trim(e.metaValue("signin"));
+        if (bare != null && !bare.isEmpty()) {
+            out.add("@signin(" + bare + "): @signin takes refresh=request; " + bare + " is ignored.");
+        }
+        for (Map.Entry<String, String> p : e.metaProperties("signin").entrySet()) {
+            String key = p.getKey();
+            String value = trim(p.getValue());
+            if (!"refresh".equals(key)) {
+                out.add("@signin(" + key + "=...): @signin takes refresh=request; " + key + " is ignored.");
+            } else if (!"request".equals(value)) {
+                out.add("@signin(refresh=" + value + "): refresh takes request (the row read again on each"
+                        + " request); the session keeps what the sign-in put in it.");
+            }
+        }
+        return out;
     }
 
     /** The @login field's name when the entity also has exactly one @password, else null. */

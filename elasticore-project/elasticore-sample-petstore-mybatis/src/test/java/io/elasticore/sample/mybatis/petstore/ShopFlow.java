@@ -213,7 +213,10 @@ abstract class ShopFlow {
                 .andExpect(jsonPath("$.content", hasSize(0)));
     }
 
-    /** A page of orders with their lines is three statements, however many orders: no N+1. */
+    /**
+     * A page of orders with their lines is three statements, however many orders: no N+1. The
+     * request makes one more before them: @signin(refresh=request) reads the signed-in customer again.
+     */
     @Test
     void aPageOfOrdersAndTheirLinesIsThreeStatements() throws Exception {
         MockHttpSession buyer = signUp("pager");
@@ -224,8 +227,11 @@ abstract class ShopFlow {
                 .andExpect(jsonPath("$.content", hasSize(3)))
                 .andExpect(jsonPath("$.totalElements").value(4))
                 .andExpect(jsonPath("$.content[*].lines", everyItem(hasSize(2))));
-        assertThat(statements.sql).hasSize(3);
-        assertThat(statements.sql.get(2)).contains("ps_order_line").contains(" IN ");
+        assertThat(statements.sql).hasSize(4);
+        assertThat(statements.sql.get(0)).contains("ps_customer").contains("customer_id = ?").doesNotContain("JOIN");
+        List<String> page = statements.sql.subList(1, 4);
+        assertThat(page.get(0)).contains("COUNT(*)").contains("ps_purchase_order");
+        assertThat(page.get(2)).contains("ps_order_line").contains(" IN ");
         // The second page reads the rest.
         mvc.perform(json(post("/api/petstore/purchaseOrder/search"), "{\"pageSize\":3,\"pageNumber\":1}").session(buyer))
                 .andExpect(status().isOk())
@@ -316,6 +322,46 @@ abstract class ShopFlow {
                 .andExpect(jsonPath("$.homeAddress.city").value("Anchorhead"));
         assertThat(jdbc.queryForObject("SELECT city FROM ps_customer WHERE customer_id = ?", String.class, id))
                 .isEqualTo("Anchorhead");
+    }
+
+    /**
+     * {@code @signin(refresh=request)}: each request reads the signed-in customer again. A role the
+     * administrator changes is the session's from the next request on, and a deleted customer's
+     * session ends - neither waits for the next sign-in.
+     */
+    @Test
+    void theSessionFollowsTheCustomersRow() throws Exception {
+        MockHttpSession han = signUp("han");
+        long id = ((Number) com.jayway.jsonpath.JsonPath.read(mvc.perform(get("/api/petstore/customer/me").session(han))
+                .andReturn().getResponse().getContentAsString(), "$.customerId")).longValue();
+        mvc.perform(json(post("/api/petstore/customer/search"), "{}").session(han))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)));
+
+        MockHttpSession admin = signIn("admin", "admin");
+        mvc.perform(json(put("/api/petstore/customer"), "{\"customerId\":" + id + ",\"role\":\"A\"}").session(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("A"));
+        // The same session, not signed in again: the administrator's search, every customer.
+        mvc.perform(json(post("/api/petstore/customer/search"), "{}").session(han))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(org.hamcrest.Matchers.greaterThan(1)));
+
+        mvc.perform(json(put("/api/petstore/customer"), "{\"customerId\":" + id + ",\"role\":\"U\"}").session(admin))
+                .andExpect(status().isOk());
+        mvc.perform(json(post("/api/petstore/customer/search"), "{}").session(han))
+                .andExpect(jsonPath("$.content", hasSize(1)));
+
+        // Deleted: the session ends, so the next request is a visitor's.
+        mvc.perform(delete("/api/petstore/customer/" + id).session(admin))
+                .andExpect(status().isOk());
+        mvc.perform(json(post("/api/petstore/customer/search"), "{}").session(han))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/petstore/customer/me").session(han))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/petstore/customer/me").session(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.login").value("admin"));
     }
 
     @Test

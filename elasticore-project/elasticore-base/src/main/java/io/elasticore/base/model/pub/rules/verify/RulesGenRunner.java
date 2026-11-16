@@ -312,9 +312,15 @@ public final class RulesGenRunner {
     static boolean needsV3(String rule) {
         if (rule == null) return false;
         String r = rule.trim();
-        return r.startsWith("ddd-") || r.startsWith("hexagonal-") || r.startsWith("hex-")
-                || r.endsWith("-v3") || r.equals("jpa-write-guard") || r.equals("spring-api-errors")
-                || r.equals("jpa-value-object-boundary") || r.equals("jpa-service-access");
+        return r.startsWith("ddd-")
+                || r.startsWith("hexagonal-")
+                || r.startsWith("hex-")
+                || r.endsWith("-v3")
+                || r.equals("jpa-write-guard")
+                || r.equals("spring-api-errors")
+                || r.equals("jpa-value-object-boundary")
+                || r.equals("jpa-service-access")
+                || r.equals("spring-signin-refresh");
     }
 
     /** Where an artifact of the language being generated goes. */

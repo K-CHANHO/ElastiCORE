@@ -2109,6 +2109,14 @@ and **only an enum or string field with `@access(admin)`** is used (for an enum 
 `adminRole`). If it is not an admin-only field, a new user could send `"role":"ADMIN"`, sign in and become the admin,
 so the build gives a DSL warning and signs in without a role. Without a role field, everyone is an ordinary user.
 
+**`@signin(refresh=request)` - the session follows the row.** Without it, the session keeps the key and the role from sign-in until the next
+sign-in: a role the admin changes waits for that sign-in, and a deleted member keeps a working session. With it, the entity also gets
+`CustomerSessionRefresh`, a filter beside the controller (regenerated with the model, so it works whatever you did to the controller). Before each
+request whose session holds a signed-in key, it reads the row again through `me()` - a row kept under `@deleted` counts as gone. No row: the session
+ends and the request goes on as a visitor's (what needs a signed-in user answers 401). A changed role: the session takes it from this request on and
+keeps its id. It costs one read of the row per such request. A session with no signed-in key (a visitor, or a `CurrentUser` of the application's
+own) is not read. `@signin` takes no other option - another is a DSL warning.
+
 - **Update level.** Every request that writes a row (`PUT`, `PUT /batch`, conditional update) asks for the `update` level - `update`, else `*`,
   else `admin`, and `public` if there is no `@access` at all. The sign-in API is generated only when this is `admin` or `none`, or `owner` with `@owner` being the key.
   If it is `public` or `user`, or `owner` on a field that is not the key, someone else could change the admin's password and sign in as the admin,
