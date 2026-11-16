@@ -2164,6 +2164,128 @@ SessionCurrentUser.signOut(request);
 Spring Security 를 쓰면 `io.elasticore.springboot3.security.CurrentUser` 빈을 등록하고 `@signin` 은 쓰지 않습니다
 (`authenticate` 는 남음).
 
+### 생성된 로그인 곁에서 — 내 코드에서 로그인시키기, 메일로 비밀번호 재설정
+
+둘 다 애플리케이션의 코드로 남습니다. 아래는 pet store 에서 실제로 돕니다 — 클래스는 그 테스트에 있고
+(`elasticore-sample-petstore/src/test/java/io/elasticore/sample/guide/signin`), `PasswordResetGuideTest` 가 HTTP 로 부릅니다.
+
+**내 코드가 확인한 사람을 로그인시키는 것** — 가입 직후, 재설정 링크로, 다른 제공자를 거친 뒤 — 은 호출 하나이고,
+생성된 `signin` 에 해당하는 것이 그대로 해당합니다:
+
+- 누구인지 내 코드가 확실해진 뒤에 `SessionCurrentUser.signIn(request, key, role)` 을 부릅니다. 요청이 가져온 세션을
+  끝내고 새 세션을 시작하므로, 누군가 미리 심어 둔 세션 id (세션 고정) 는 그 뒤로 쓸모가 없습니다. 방문자 세션에
+  있던 것 중 남겨야 할 것 (장바구니 같은 것) 은 호출 전에 읽어 두었다가 호출 뒤에 다시 넣습니다.
+- 키는 `@signin` 엔티티의 키이고, 그 타입 그대로입니다 (`customerId` 면 `Long`): `me()` 와 모든 `@owner` 검사가
+  세션의 키를 그 엔티티의 키로 읽습니다. 제공자의 계정 id 나 다른 엔티티의 키를 넣지 않습니다 (위 참고).
+- 역할은 행에서 읽습니다 — 역할 필드의 값, enum 이면 상수 이름, 없으면 `null` — 요청이나 제공자에게서 받지
+  않습니다.
+- 다른 제공자 (OAuth) 는 ElastiCORE 밖에 둡니다: 그 프로토콜, 그리고 제공자 계정과 고객을 잇는 테이블. 그 콜백이
+  이어진 고객을 찾아 로그인시키는 것은 아래 `confirm` 과 같습니다. Spring Security 의 OAuth 클라이언트를 쓰면
+  `CurrentUser` 빈을 대신 등록하고 `@signin` 은 쓰지 않습니다.
+
+**메일로 비밀번호 재설정.** 로그인으로 요청하면 메일에 토큰이 실리고, 그 토큰과 새 비밀번호로 확인합니다. 생성된
+`CustomerService` 옆에 둔 직접 쓴 애플리케이션 서비스입니다:
+
+```java
+public void ask(String login) {
+    if (login == null || !firstAskInAWhile(login)) return;
+    Specification<Customer> byLogin = (r, q, cb) -> cb.equal(r.get("login"), login);
+    for (Customer customer : query.findAll(byLogin)) {
+        if (customer.getEmail() != null) {
+            mail.send(customer.getEmail(), tokens.issue(customer.getCustomerId(), customer.getPassword()));
+        }
+    }
+}
+
+public Optional<CustomerDTO> confirm(String token, String password) {
+    Optional<Customer> customer = tokens.customerOf(token)
+            .flatMap(repository::findById)
+            .filter(found -> tokens.matches(token, found.getPassword()));
+    if (!customer.isPresent()) return Optional.empty();
+
+    CustomerDTO change = new CustomerDTO();
+    change.setCustomerId(customer.get().getCustomerId());
+    change.setPassword(password);
+    // The customer is not signed in yet: the application writes, as itself.
+    return Optional.of(CurrentUser.callAsSystem(() -> customers.update(change)));
+}
+```
+
+- 행은 생성된 포트 (`CustomerQueryPort`, `CustomerRepositoryPort`) 로 읽습니다: 토큰은 비밀번호 해시에 묶이는데,
+  해시는 어떤 DTO 에도 없습니다 (`@password` 는 밖으로 복사되지 않음).
+- 새 비밀번호는 use case 의 `update` 로, 애플리케이션 자신으로서 씁니다 (`CurrentUser.callAsSystem` — 고객은 아직
+  로그인 전). 모든 쓰기에서처럼 거기서 해시되고, 행의 나머지는 그대로입니다.
+- 1분 안에 다시 요청하면 아무것도 보내지 않습니다. 이 기록은 인스턴스 하나의 메모리에 있습니다: 인스턴스가 여럿이거나
+  클라이언트 주소별로 제한하려면 공유 저장소에 두고, 그러면 기록이 끝없이 커지지도 않습니다. 메일을 요청 스레드 밖에서
+  보내면 로그인이 있든 없든 응답 시간도 같아집니다.
+
+토큰은 테이블이 필요 없습니다: 키, 30분 뒤의 만료, 그리고 둘과 해시에 대한 HMAC. 새 비밀번호는 — 이 재설정이든 다른
+쓰기든 — 해시를 바꾸므로, 링크는 한 번 쓰이면 더는 통하지 않습니다:
+
+```java
+public String issue(Long customerId, String passwordHash) {
+    // The entity's hash: a DTO never carries it, and a token bound to null would work forever.
+    if (passwordHash == null) throw new IllegalArgumentException("no password hash to bind the token to");
+    String payload = customerId + "." + clock.instant().plus(VALID).getEpochSecond();
+    return payload + "." + mac(payload, passwordHash);
+}
+
+public boolean matches(String token, String passwordHash) {
+    if (passwordHash == null) return false;
+    int cut = token.lastIndexOf('.');
+    byte[] expected = mac(token.substring(0, cut), passwordHash).getBytes(StandardCharsets.US_ASCII);
+    return MessageDigest.isEqual(expected, token.substring(cut + 1).getBytes(StandardCharsets.US_ASCII));
+}
+
+private String mac(String payload, String passwordHash) {
+    try {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(secret, "HmacSHA256"));
+        mac.update((payload + "\n" + passwordHash).getBytes(StandardCharsets.UTF_8));
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal());
+    } catch (GeneralSecurityException e) {
+        throw new IllegalStateException(e);
+    }
+}
+```
+
+비밀 키는 저장소가 아닌 설정에서 오는 무작위 32바이트이고, 바꾸면 보낸 링크가 모두 끝납니다:
+
+```java
+@Bean
+PasswordResetTokens passwordResetTokens(@Value("${shop.password-reset.secret}") String secret) {
+    return new PasswordResetTokens(Base64.getDecoder().decode(secret), Clock.systemUTC());
+}
+```
+
+컨트롤러는 모든 요청에 202 로 답해 누가 계정이 있는지 알려 주지 않고, 확인되면 고객을 로그인시킵니다:
+
+```java
+@PostMapping
+@ResponseStatus(HttpStatus.ACCEPTED)
+public void ask(@RequestBody Map<String, String> body) {
+    reset.ask(body.get("login"));
+}
+
+@PostMapping("/confirm")
+public CustomerDTO confirm(@RequestBody Map<String, String> body, HttpServletRequest request) {
+    String password = body.get("password");
+    if (password == null || password.length() < 8) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A password has at least 8 characters");
+    }
+    CustomerDTO customer = reset.confirm(body.get("token"), password)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "The link is invalid or has expired"));
+    SessionCurrentUser.signIn(request, customer.getCustomerId(), customer.getRole() == null ? null : customer.getRole().name());
+    return customer;
+}
+```
+
+재설정 뒤에도 다른 곳에 열린 세션은 로그인된 채 남습니다. 그것까지 끝내려면 회원의 세션을 찾을 수 있는 세션
+저장소가 필요합니다 (Spring Session 같은 것). 나머지는 `PasswordResetGuideTest` 가 확인합니다: 세션 id 가 바뀌고
+이전 것은 쓸모없음, 이전 비밀번호는 실패하고 새 비밀번호로 로그인됨, 같은 링크 두 번, 고객이 직접 비밀번호를 바꾼 뒤의
+링크, 변조된 링크, 만료된 링크는 거절, 없는 로그인도 같은 202 에 메일 없음, 1분 안의 두 번째 요청은 아무것도
+보내지 않음.
+
 ## @password / @login — 자격 증명 (v3)
 > **동작:** v3, Kotlin, TypeScript client · **안 됨:** 2.x-compatible output (output = 'v2') (경고); 2.x generator (생성 안 됨)
 

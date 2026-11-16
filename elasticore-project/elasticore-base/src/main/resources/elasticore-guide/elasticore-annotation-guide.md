@@ -2164,6 +2164,128 @@ SessionCurrentUser.signOut(request);
 If you use Spring Security, register an `io.elasticore.springboot3.security.CurrentUser` bean and do not use `@signin`
 (`authenticate` stays).
 
+### Around the generated sign-in: signing in from your own code, and a password reset by mail
+
+Both stay the application's code. What follows runs on the pet store: the classes are in its tests
+(`elasticore-sample-petstore/src/test/java/io/elasticore/sample/guide/signin`), and `PasswordResetGuideTest` calls them over HTTP.
+
+**Signing in someone your code has identified** - right after sign-up, from a reset link, after another provider - is one
+call, and what holds for the generated `signin` holds for it:
+
+- Call `SessionCurrentUser.signIn(request, key, role)` once your code is sure who it is. It ends the session the request came
+  with and starts a new one, so a session id someone fixed before (session fixation) is worthless after it. What the visitor's
+  session held and should keep (a cart, say) is read before the call and put back after it.
+- The key is the `@signin` entity's key, of its type (`Long` for `customerId`): `me()` and every `@owner` check read the
+  session's key as that entity's. Never a provider's account id, nor another entity's key (above).
+- The role comes from the row - the role field's value, an enum's constant name, `null` for none - never from the request or
+  from the provider.
+- Another provider (OAuth) stays outside ElastiCORE: its protocol, and a table linking its accounts to customers. Its callback
+  finds the linked customer and signs them in, as `confirm` below does. With Spring Security's OAuth client, register a
+  `CurrentUser` bean instead and leave `@signin` out.
+
+**A password reset by mail.** Ask with the login, and a mail carries a token; confirm with the token and a new password. An
+application service of your own, beside the generated `CustomerService`:
+
+```java
+public void ask(String login) {
+    if (login == null || !firstAskInAWhile(login)) return;
+    Specification<Customer> byLogin = (r, q, cb) -> cb.equal(r.get("login"), login);
+    for (Customer customer : query.findAll(byLogin)) {
+        if (customer.getEmail() != null) {
+            mail.send(customer.getEmail(), tokens.issue(customer.getCustomerId(), customer.getPassword()));
+        }
+    }
+}
+
+public Optional<CustomerDTO> confirm(String token, String password) {
+    Optional<Customer> customer = tokens.customerOf(token)
+            .flatMap(repository::findById)
+            .filter(found -> tokens.matches(token, found.getPassword()));
+    if (!customer.isPresent()) return Optional.empty();
+
+    CustomerDTO change = new CustomerDTO();
+    change.setCustomerId(customer.get().getCustomerId());
+    change.setPassword(password);
+    // The customer is not signed in yet: the application writes, as itself.
+    return Optional.of(CurrentUser.callAsSystem(() -> customers.update(change)));
+}
+```
+
+- The rows are read through the generated ports (`CustomerQueryPort`, `CustomerRepositoryPort`): the token is bound to the
+  password hash, and no DTO carries it (`@password` is never copied out).
+- The new password goes through the use case's `update`, as the application itself (`CurrentUser.callAsSystem` - the customer
+  is not signed in yet). It is hashed there, as on every write, and the rest of the row stays as it was.
+- Asking again within a minute sends nothing. The count is in memory, on one instance: several instances, or a limit per client
+  address, keep it in a shared store, which also keeps it from growing. Sending the mail off the request thread keeps the
+  answer's time the same whether the login exists or not.
+
+The token needs no table: the key, an expiry 30 minutes ahead and an HMAC over both and the hash. A new password - from this
+reset or any other write - changes the hash, so a link stops working once it has been used:
+
+```java
+public String issue(Long customerId, String passwordHash) {
+    // The entity's hash: a DTO never carries it, and a token bound to null would work forever.
+    if (passwordHash == null) throw new IllegalArgumentException("no password hash to bind the token to");
+    String payload = customerId + "." + clock.instant().plus(VALID).getEpochSecond();
+    return payload + "." + mac(payload, passwordHash);
+}
+
+public boolean matches(String token, String passwordHash) {
+    if (passwordHash == null) return false;
+    int cut = token.lastIndexOf('.');
+    byte[] expected = mac(token.substring(0, cut), passwordHash).getBytes(StandardCharsets.US_ASCII);
+    return MessageDigest.isEqual(expected, token.substring(cut + 1).getBytes(StandardCharsets.US_ASCII));
+}
+
+private String mac(String payload, String passwordHash) {
+    try {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(secret, "HmacSHA256"));
+        mac.update((payload + "\n" + passwordHash).getBytes(StandardCharsets.UTF_8));
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal());
+    } catch (GeneralSecurityException e) {
+        throw new IllegalStateException(e);
+    }
+}
+```
+
+The secret is 32 random bytes from the configuration, not from the repository; changing it ends every link sent:
+
+```java
+@Bean
+PasswordResetTokens passwordResetTokens(@Value("${shop.password-reset.secret}") String secret) {
+    return new PasswordResetTokens(Base64.getDecoder().decode(secret), Clock.systemUTC());
+}
+```
+
+The controller answers 202 to every ask, so the answer tells nobody who has an account, and signs the customer in on confirm:
+
+```java
+@PostMapping
+@ResponseStatus(HttpStatus.ACCEPTED)
+public void ask(@RequestBody Map<String, String> body) {
+    reset.ask(body.get("login"));
+}
+
+@PostMapping("/confirm")
+public CustomerDTO confirm(@RequestBody Map<String, String> body, HttpServletRequest request) {
+    String password = body.get("password");
+    if (password == null || password.length() < 8) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A password has at least 8 characters");
+    }
+    CustomerDTO customer = reset.confirm(body.get("token"), password)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "The link is invalid or has expired"));
+    SessionCurrentUser.signIn(request, customer.getCustomerId(), customer.getRole() == null ? null : customer.getRole().name());
+    return customer;
+}
+```
+
+Sessions open elsewhere stay signed in after a reset; ending them takes a session store that can find a member's sessions
+(Spring Session, say). `PasswordResetGuideTest` checks the rest: the session id changes and the one before is worthless; the
+old password fails and the new one signs in; the same link twice, a link after the customer changed the password themselves,
+an altered link and an expired one are refused; an unknown login gets the same 202 and no mail; a second ask within a minute
+sends nothing.
+
 ## @password / @login - credentials (v3)
 > **Works in:** v3, Kotlin, TypeScript client · **Not in:** 2.x-compatible output (output = 'v2') (warning); 2.x generator (not generated)
 
