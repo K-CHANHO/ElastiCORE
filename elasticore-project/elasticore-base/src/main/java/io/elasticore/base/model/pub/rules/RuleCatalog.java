@@ -238,6 +238,13 @@ public final class RuleCatalog {
                 return new io.elasticore.base.model.pub.rules.base.ServiceAccessRules();
             }
         });
+        // @signin(refresh=request): a filter that reads the signed-in row again on each request.
+        c.register("spring-signin-refresh", new Factory() {
+            @Override
+            public CodeRules create() {
+                return new io.elasticore.base.model.pub.rules.base.SignInRefreshRules();
+            }
+        });
         // @onDelete(cascade | restrict | setNull), carried out by the deleted row's CoreService.
         // @count(Comment.post), kept by the counted row's CoreService.
         c.register("jpa-count", new Factory() {
@@ -613,6 +620,7 @@ public final class RuleCatalog {
                 "jpa-write-guard",
                 "jpa-value-object-boundary",
                 "jpa-service-access",
+                "spring-signin-refresh",
                 "jpa-on-delete",
                 "jpa-count",
                 "port",
@@ -648,6 +656,7 @@ public final class RuleCatalog {
                 "jpa-write-guard",
                 "jpa-value-object-boundary",
                 "jpa-service-access",
+                "spring-signin-refresh",
                 "jpa-on-delete",
                 "jpa-count",
                 "mybatis-schema",
@@ -765,6 +774,7 @@ public final class RuleCatalog {
                 "jpa-write-guard",
                 "jpa-value-object-boundary",
                 "jpa-service-access",
+                "spring-signin-refresh",
                 "jpa-on-delete",
                 "jpa-count",
                 "jpa-views",

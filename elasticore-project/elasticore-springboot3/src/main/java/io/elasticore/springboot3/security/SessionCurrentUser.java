@@ -66,11 +66,30 @@ public class SessionCurrentUser implements CurrentUser {
         if (old != null) old.invalidate();
         HttpSession session = request.getSession(true);
         session.setAttribute(ID, id);
+        session.setAttribute(ROLES, held(roles));
+    }
+
+    /**
+     * Gives a signed-in session these roles and keeps the session, so its id
+     * stays the same. @signin(refresh=request) calls it when the row's role
+     * has changed since sign-in. The attribute is written only when the roles
+     * differ, so a session store that saves on every change (Spring Session)
+     * is not written on every request. A session nobody signed in to is left
+     * as it is.
+     */
+    public static void refresh(HttpServletRequest request, Collection<String> roles) {
+        HttpSession session = request.getSession(false);
+        if (session == null || session.getAttribute(ID) == null) return;
+        Set<String> held = held(roles);
+        if (!held.equals(session.getAttribute(ROLES))) session.setAttribute(ROLES, held);
+    }
+
+    private static Set<String> held(Collection<String> roles) {
         Set<String> held = new LinkedHashSet<String>();
         if (roles != null) {
             for (String role : roles) if (role != null) held.add(role);
         }
-        session.setAttribute(ROLES, held);
+        return held;
     }
 
     public static void signOut(HttpServletRequest request) {

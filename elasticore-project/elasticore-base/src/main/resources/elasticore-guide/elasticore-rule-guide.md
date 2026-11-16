@@ -127,6 +127,7 @@ In that language nullability is part of the signature, so if they do not match i
 | `ddd-state` | O | O | **O** | `states:` -> state transition per command, `canX()`, initial value, `@stamp` times. In TS it is `canShip(dto)` |
 | `ddd-derive` | O | O | - | `@snapshot`, `@compute` -> `derive(lookup)`, which the service calls before saving |
 | `jpa-service-access` | O | O | - | `@access`, `@owner`, `@password`, `@login` -> CoreService checks, hashing, `authenticate`; with `@signin`, `me()`, the controller's signin, signout, me, and the unique login column (all v3 bundles) |
+| `spring-signin-refresh` | O | O | - | `@signin(refresh=request)` -> `XxxSessionRefresh`, a filter that reads the signed-in row again on each request (all v3 bundles) |
 | `jpa-value-object-boundary` | O | O | - | The DTO's validation and JSON rules on `@embeddable` fields, `@Valid` on the DTO side (all v3 bundles) |
 | Process manager (`processManager:` of `ddd-domain-service`) | O | O | - | After the event commits, in a separate transaction |
 | `ddd-repository-port` / `-adapter` | O | O | - | The browser has no repository |
@@ -457,6 +458,9 @@ so if you fix the DSL, it reaches every entry point in the next build. For the t
   one application, in a multi-module project it is each module where a controller is generated. The reasons it cannot be produced come out as a DSL warning per entity.
   The controller is developer-owned, so nothing goes into a controller you touched, and the generation log reports a missing endpoint, and also a login
   that is still there though the DSL no longer produces it (`POST /signin`, `GET /me`, the role put in the session), as a DSL warning.
+- With `@signin(refresh=request)`, `spring-signin-refresh` writes `XxxSessionRefresh` beside the controller, regenerated with the model: before each
+  request whose session holds a signed-in key, the row is read again through `me()`; gone ends the session, a changed role is the session's
+  (runtime: `SessionRefreshFilter`, `SessionCurrentUser.refresh`). A hexagonal bundle injects the use case, as for the controller (`hex-usecase-refresh`).
 
 #### Transactional Outbox (`ddd-outbox`)
 

@@ -1,0 +1,33 @@
+package ${packageName};
+
+import ${servicePackageName}.${serviceClassName};
+import io.elasticore.springboot3.security.SessionRefreshFilter;
+import org.springframework.stereotype.Component;
+
+import java.util.Collection;
+import java.util.Optional;
+
+/**
+ * A signed-in ${entityName}'s session follows the row: @signin(refresh=request).
+ *
+ * Before each request whose session holds a signed-in ${entityName}, the row is
+ * read again through me(). When it is gone (deleted, or kept under @deleted),
+ * the session ends and the request goes on as a visitor's. When its role has
+ * changed, the session takes the new role and keeps its id.
+ *
+ * Regenerated with the model.
+ */
+@Component
+public class ${className} extends SessionRefreshFilter {
+
+	private final ${serviceClassName} service;
+
+	public ${className}(${serviceClassName} service) {
+		this.service = service;
+	}
+
+	@Override
+	protected Optional<? extends Collection<String>> signedInRoles() {
+		return service.me().map(signedIn -> ${rolesExpression});
+	}
+}

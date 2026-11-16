@@ -128,6 +128,23 @@ public class HexUseCaseRules implements CodeRules, ArtifactContributor {
     }
 
     /**
+     * The same for the filter @signin(refresh=request) writes beside the
+     * controller: it reads the row through the inbound port's me(), as the
+     * controller's GET /me does.
+     */
+    @Rule(value = "hex-usecase-refresh", target = "sessionRefresh", order = 20)
+    void sessionRefreshUsesThePort(EntitySpec e) {
+        if (!applies(e)) return;
+
+        SourceCode c = Ctx.ctx(e);
+        c.var("serviceClassName", "%sUseCase", e.getName());
+        String portPkg = inboundPortPackage(e);
+        if (portPkg != null && !portPkg.isEmpty()) {
+            c.var("servicePackageName", portPkg);
+        }
+    }
+
+    /**
      * The inbound port's name as the file naming it has to write it.
      *
      * Simple where the two share a package, which is every project that has

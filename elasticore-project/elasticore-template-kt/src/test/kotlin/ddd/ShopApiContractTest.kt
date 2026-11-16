@@ -186,4 +186,34 @@ class ShopApiContractTest {
             .content("""{"agentId":$otherId,"login":"taken"}""")).andReturn().response.status
         assertThat(rename).isEqualTo(409)
     }
+
+    @Autowired
+    private lateinit var jdbc: org.springframework.jdbc.core.JdbcTemplate
+
+    @Test
+    @DisplayName("@signin(refresh=request): a grade changed in the row is the session's at the next request; a removed agent's session ends")
+    fun theSessionFollowsTheAgentsRow() {
+        val agents = "/api/v1/shop/agent"
+        fun create(login: String) = assertThat(mvc.perform(post(agents).contentType(MediaType.APPLICATION_JSON)
+            .content("""{"login":"$login","secret":"pw-$login"}""")).andReturn().response.status).isEqualTo(200)
+        create("troi")
+        create("riker")
+        val signedIn = mvc.perform(post("$agents/signin").contentType(MediaType.APPLICATION_JSON)
+            .content("""{"login":"riker","secret":"pw-riker"}""")).andReturn()
+        val id = json.readTree(signedIn.response.contentAsString).path("agentId").asLong()
+        val session = signedIn.request.session as org.springframework.mock.web.MockHttpSession
+        fun search() = mvc.perform(post("$agents/search").session(session).contentType(MediaType.APPLICATION_JSON)
+            .content("{}")).andReturn().response
+        // Agents are read by their owner: riker's search finds riker alone.
+        assertThat(json.readTree(search().contentAsString).path("content").size()).isEqualTo(1)
+
+        // The grade changes in the row - an administrator's screen, a batch - not through this session.
+        jdbc.update("update shop_agent set grade = 'ADMIN' where agent_id = ?", id)
+        // The same session, not signed in again: the administrator's search, every agent.
+        assertThat(json.readTree(search().contentAsString).path("content").size()).isGreaterThan(1)
+
+        jdbc.update("delete from shop_agent where agent_id = ?", id)
+        assertThat(search().status).isEqualTo(401)
+        assertThat(mvc.perform(get("$agents/me").session(session)).andReturn().response.status).isEqualTo(401)
+    }
 }

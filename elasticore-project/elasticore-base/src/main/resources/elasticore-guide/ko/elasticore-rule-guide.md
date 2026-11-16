@@ -127,6 +127,7 @@ Kotlin 판은 시그니처의 널 허용까지 서비스와 맞춥니다 (`save(
 | `ddd-state` | O | O | **O** | `states:` -> 명령마다 상태 전이·`canX()`·초기값·`@stamp` 시각. TS 는 `canShip(dto)` |
 | `ddd-derive` | O | O | - | `@snapshot`·`@compute` -> `derive(lookup)`, 서비스가 저장 전에 호출 |
 | `jpa-service-access` | O | O | - | `@access`·`@owner`·`@password`·`@login` -> CoreService 검사·해시·`authenticate`, `@signin` 이면 `me()`·컨트롤러의 signin·signout·me·유일한 로그인 컬럼 (v3 번들 전부) |
+| `spring-signin-refresh` | O | O | - | `@signin(refresh=request)` -> 로그인한 행을 요청마다 다시 읽는 필터 `XxxSessionRefresh` (v3 번들 전부) |
 | `jpa-value-object-boundary` | O | O | - | `@embeddable` 필드에 DTO 의 검증·JSON 규칙, DTO 쪽 `@Valid` (v3 번들 전부) |
 | 프로세스 매니저 (`ddd-domain-service` 의 `processManager:`) | O | O | - | 이벤트 커밋 후 별도 트랜잭션 |
 | `ddd-repository-port` / `-adapter` | O | O | - | 브라우저에는 리포지터리가 없음 |
@@ -457,6 +458,9 @@ DSL 을 고치면 다음 빌드에 모든 진입점에 반영됩니다. 어노�
   하나의 애플리케이션, 멀티 모듈은 컨트롤러가 생기는 모듈마다입니다. 못 만드는 이유는 엔티티마다 DSL 경고로 나옵니다.
   컨트롤러는 개발자 소유라 손댄 컨트롤러에는 들어가지 않고, 생성 로그가 빠진 엔드포인트도, DSL 이 더는 만들지 않는데
   남아 있는 로그인(`POST /signin`·`GET /me`, 세션에 넣는 역할)도 DSL 경고로 알려 줍니다.
+- `@signin(refresh=request)` 이면 `spring-signin-refresh` 가 컨트롤러 옆에 모델과 함께 다시 생성되는 `XxxSessionRefresh` 를 씁니다. 로그인한
+  키가 든 세션의 요청마다 먼저 `me()` 로 행을 다시 읽어, 없으면 세션을 끝내고 바뀐 역할은 세션에 넣습니다
+  (런타임: `SessionRefreshFilter`, `SessionCurrentUser.refresh`). hexagonal 번들은 컨트롤러처럼 use case 를 주입합니다 (`hex-usecase-refresh`).
 
 #### 트랜잭션 Outbox (`ddd-outbox`)
 
