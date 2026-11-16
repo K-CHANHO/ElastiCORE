@@ -115,6 +115,19 @@ public class HexUseCaseRules implements CodeRules, ArtifactContributor {
     }
 
     /**
+     * The GraphQL controller is a driving adapter too: it is handed the
+     * port, whose search always answers a page.
+     */
+    @Rule(value = "hex-usecase-graphql", target = "graphql", order = 20)
+    void graphqlInjectsThePort(EntitySpec e) {
+        if (!applies(e)) return;
+        SourceCode c = Ctx.ctx(e);
+        c.var("serviceClassName", "%sUseCase", e.getName()).var("searchPage", "true");
+        String portPkg = inboundPortPackage(e);
+        if (portPkg != null && !portPkg.isEmpty()) c.var("servicePackageName", portPkg);
+    }
+
+    /**
      * The same for the filter @signin(refresh=request) writes beside the
      * controller: it reads the row through the inbound port's me(), as the
      * controller's GET /me does.
